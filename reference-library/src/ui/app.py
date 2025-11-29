@@ -5,7 +5,7 @@ import threading
 from typing import Optional
 import asyncio
 
-import config
+from src import config
 from ..cache.database import Database
 from ..search.pdf_searcher import PDFSearcher
 from ..search.result_model import SearchResult, SearchProgress
@@ -19,6 +19,8 @@ from .results_tree import ResultsTree
 from .preview_panel import PreviewPanel
 from .new_files_panel import NewFilesPanel
 from .synthesis_dialog import SynthesisDialog
+from .analytics_dialog import AnalyticsDialog
+from .project_browser_dialog import ProjectBrowserDialog
 from .styles import FONTS, PADDING
 
 
@@ -52,6 +54,7 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         # State
         self.current_query = ""
         self.search_thread: Optional[threading.Thread] = None
+        self.extraction_thread: Optional[threading.Thread] = None
         self.categorize_threads: list[threading.Thread] = []
         self.pending_results: list[SearchResult] = []
         self.selected_results: list[SearchResult] = []
@@ -101,6 +104,8 @@ class NeurosurgeryLibraryApp(ctk.CTk):
             content_frame,
             on_select=self._on_result_select,
             on_selection_change=self._on_selection_change,
+            on_extract_images=self._extract_images_from_result,
+            on_index_text=self._index_text_from_result,
             database=self.database
         )
         self.results_tree.pack(side="left", fill="both", expand=True, padx=(0, PADDING["small"]))
@@ -216,6 +221,32 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         )
         self.extract_btn.pack(side="right", padx=PADDING["small"])
 
+        # Analytics button
+        self.analytics_btn = ctk.CTkButton(
+            self.status_frame,
+            text="📊",
+            command=self._show_analytics,
+            width=40,
+            height=24,
+            font=FONTS["small"],
+            fg_color="#34495e",
+            hover_color="#2c3e50"
+        )
+        self.analytics_btn.pack(side="right", padx=PADDING["small"])
+
+        # Load Previous Project button
+        self.load_project_btn = ctk.CTkButton(
+            self.status_frame,
+            text="📂 Projects",
+            command=self._show_project_browser,
+            width=90,
+            height=24,
+            font=FONTS["small"],
+            fg_color="#8e44ad",
+            hover_color="#732d91"
+        )
+        self.load_project_btn.pack(side="right", padx=PADDING["small"])
+
     def _setup_menu(self):
         """Set up the application menu."""
         # Note: CustomTkinter doesn't have native menu support
@@ -271,10 +302,14 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         try:
             batch = []
 
+            # Get category filter from search panel intent
+            category_filter = self.search_panel.get_category_filter()
+
             for result in self.searcher.search_library(
                 query,
                 mode=mode,
-                progress_callback=self._on_search_progress
+                progress_callback=self._on_search_progress,
+                category_filter=category_filter
             ):
                 batch.append(result)
                 self.pending_results.append(result)
@@ -340,19 +375,43 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         self.search_panel.set_searching(False)
 
         result_count = len(self.results_tree.results)
+
+        # Count results by category group
+        surgical_count = sum(
+            1 for r in self.results_tree.results.values()
+            if getattr(r, 'category_group', None) == "Surgical/Anatomical"
+        )
+        theoretical_count = sum(
+            1 for r in self.results_tree.results.values()
+            if getattr(r, 'category_group', None) == "Theoretical"
+        )
+
         self._show_status(f"Search complete: {result_count} matches found")
 
         if result_count > 0:
             self.export_btn.configure(state="normal")
 
-        # Save to search history
-        self.database.save_search_history(self.current_query, result_count)
+        # Save to search history with category counts
+        search_mode = self.search_panel.get_mode()
+        self.database.save_search_history(
+            self.current_query,
+            result_count,
+            surgical_count=surgical_count,
+            theoretical_count=theoretical_count,
+            search_mode=search_mode
+        )
 
     def _cancel_search(self):
         """Cancel the current search."""
         self.searcher.cancel()
         self.search_panel.set_searching(False)
         self._show_status("Search cancelled")
+
+    def _cancel_extraction(self):
+        """Cancel the current extraction."""
+        self.scanner.cancel_extraction()
+        self.extract_btn.configure(state="normal", text="Extract Figures")
+        self._show_status("Extraction cancelled")
 
     def _on_result_select(self, result: SearchResult):
         """Handle result selection in tree."""
@@ -439,7 +498,16 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         """Sync library on startup to detect new files."""
         def _do_sync():
             try:
-                result = self.scanner.sync_library()
+                # Progress callback for real-time updates
+                def on_progress(current: int, total: int):
+                    self.after(0, lambda c=current, t=total: self._show_status(
+                        f"Scanning library: {c}/{t} PDFs processed"
+                    ))
+
+                result = self.scanner.sync_library(
+                    max_workers=8,
+                    progress_callback=on_progress
+                )
                 self.after(0, lambda: self._on_sync_complete(result))
             except Exception as e:
                 self.after(0, lambda: self._show_status(f"Sync error: {e}", "error"))
@@ -563,51 +631,119 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         self._show_status(f"Text indexed: {text_count} pages", "success")
 
     def _extract_figures_slow(self):
-        """Extract figures from PDFs one at a time (prevents freezing)."""
+        """Extract figures from PDFs in parallel (4 concurrent)."""
+        from concurrent.futures import ThreadPoolExecutor, as_completed
         from ..utils.neurosynth_imports import NEUROSYNTH_AVAILABLE
 
         if not NEUROSYNTH_AVAILABLE:
             self._show_status("Figure extraction unavailable (install NeuroSynth dependencies)", "error")
             return
 
+        # Reset cancellation flag for new extraction
+        self.scanner.reset_extraction()
+
         self.extract_btn.configure(state="disabled", text="Extracting...")
-        self._show_status("Starting figure extraction...")
+        self._show_status("Starting parallel figure extraction...")
 
         def _do_extract():
-            import time
             from pathlib import Path
 
             # Get all PDFs
             pdfs = list(config.LIBRARY_PATH.rglob("*.pdf"))
             total = len(pdfs)
             total_figures = 0
+            processed = 0
 
-            for i, pdf_path in enumerate(pdfs):
-                # Update progress
-                self.after(0, lambda p=pdf_path.name, idx=i+1, t=total:
-                    self._show_status(f"Extracting {idx}/{t}: {p[:30]}...")
-                )
-
+            # Worker function for each PDF
+            def extract_single_pdf(pdf_path: Path) -> tuple[Path, int]:
                 try:
-                    # Extract from single PDF
                     figures = self.scanner.extract_figures(pdf_path, force=False)
-                    total_figures += len(figures)
-
-                    # Small delay to keep UI responsive
-                    time.sleep(0.1)
-
+                    return (pdf_path, len(figures))
                 except Exception as e:
                     print(f"Error extracting from {pdf_path.name}: {e}")
-                    continue
+                    return (pdf_path, 0)
+
+            # Parallel extraction with ThreadPoolExecutor (4 workers)
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                # Submit all tasks
+                future_to_path = {
+                    executor.submit(extract_single_pdf, pdf): pdf
+                    for pdf in pdfs
+                }
+
+                # Process results as they complete
+                for future in as_completed(future_to_path):
+                    # Check cancellation flag
+                    if self.scanner._cancelled:
+                        # Cancel all pending futures
+                        for f in future_to_path:
+                            f.cancel()
+                        self.after(0, lambda: self._show_status("Extraction cancelled", "warning"))
+                        self.after(0, lambda: self.extract_btn.configure(state="normal", text="Extract Figures"))
+                        return  # Exit early
+
+                    pdf_path, fig_count = future.result()
+                    total_figures += fig_count
+                    processed += 1
+
+                    # Update progress
+                    self.after(0, lambda p=pdf_path.name, idx=processed, t=total, fc=fig_count:
+                        self._show_status(
+                            f"Extracting {idx}/{t}: {p[:30]}... ({fc} figs)"
+                        )
+                    )
 
             self.after(0, lambda: self._on_extract_complete(total, total_figures))
 
-        threading.Thread(target=_do_extract, daemon=True).start()
+        self.extraction_thread = threading.Thread(target=_do_extract, daemon=True)
+        self.extraction_thread.start()
 
     def _on_extract_complete(self, pdfs_processed: int, figures_extracted: int):
         """Handle figure extraction completion."""
         self.extract_btn.configure(state="normal", text="Extract Figures")
         self._show_status(f"Extracted {figures_extracted} figures from {pdfs_processed} PDFs", "success")
+
+    def _extract_images_from_result(self, result: SearchResult):
+        """Extract images from a single PDF (context menu action)."""
+        from ..utils.neurosynth_imports import NEUROSYNTH_AVAILABLE
+        if not NEUROSYNTH_AVAILABLE:
+            self._show_status("Extraction unavailable (missing dependencies)", "error")
+            return
+
+        pdf_path = result.pdf_path
+        self._show_status(f"Extracting images from {pdf_path.name}...")
+
+        def _do_single_extract():
+            try:
+                figures = self.scanner.extract_figures(pdf_path, force=True)
+                count = len(figures)
+                self.after(0, lambda: self._show_status(
+                    f"Extracted {count} figures from {pdf_path.name}", 
+                    "success" if count > 0 else "info"
+                ))
+                # Refresh tree to show new figure count
+                self.after(0, lambda: self.results_tree.update())
+            except Exception as e:
+                self.after(0, lambda: self._show_status(f"Extraction error: {e}", "error"))
+
+        threading.Thread(target=_do_single_extract, daemon=True).start()
+
+    def _index_text_from_result(self, result: SearchResult):
+        """Index text for a single PDF (context menu action)."""
+        pdf_path = result.pdf_path
+        self._show_status(f"Indexing text for {pdf_path.name}...")
+
+        def _do_single_index():
+            try:
+                pages = self.searcher.index_pdf_semantic(pdf_path)
+                self.after(0, lambda: self._show_status(
+                    f"Indexed {pages} pages from {pdf_path.name}", 
+                    "success" if pages > 0 else "info"
+                ))
+            except Exception as e:
+                self.after(0, lambda: self._show_status(f"Indexing error: {e}", "error"))
+
+        threading.Thread(target=_do_single_index, daemon=True).start()
 
     def _on_index_complete(self, text_count: int, figure_stats: dict = None, captions_indexed: int = 0, extraction_warning: str = None):
         """Handle semantic indexing completion (legacy, kept for compatibility)."""
@@ -684,8 +820,15 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         # Use current query as default topic
         topic = self.current_query if self.current_query else "Neurosurgical Chapter"
 
-        # Get options from dialog
-        dialog = SynthesisDialog(self, initial_topic=topic)
+        # Get selected results for template recommendation
+        selected_results = self.results_tree.get_selected_results()
+
+        # Get options from dialog with selected results for smart recommendation
+        dialog = SynthesisDialog(
+            self,
+            initial_topic=topic,
+            selected_results=selected_results
+        )
         result = dialog.get_input()
 
         if not result:
@@ -742,6 +885,17 @@ class NeurosurgeryLibraryApp(ctk.CTk):
             self._show_status(f"Synthesis failed: {result.error}", "error")
             if result.log:
                 print(f"NeuroSynth log:\n{result.log}")
+
+    def _show_analytics(self):
+        """Show search analytics dialog."""
+        AnalyticsDialog(self, self.database)
+
+    def _show_project_browser(self):
+        """Show the project browser dialog to load previous projects."""
+        dialog = ProjectBrowserDialog(self)
+        selected = dialog.get_selected_project()
+        if selected:
+            self._show_status(f"Opened project: {selected.name}", "success")
 
 
 def run_app():

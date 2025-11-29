@@ -23,6 +23,119 @@ console = Console()
 
 
 @dataclass
+class ImageFilterResult:
+    """Result of medical image filtering."""
+    is_valid: bool
+    rejection_reason: str = ""
+    confidence: float = 1.0
+
+
+def _is_medical_image(
+    width: int,
+    height: int,
+    file_size_bytes: int = 0,
+    image_type: ImageType = ImageType.UNKNOWN,
+) -> ImageFilterResult:
+    """Filter out logos, separators, and non-medical decorative images.
+
+    This heuristic analyzes image properties to distinguish meaningful
+    medical/anatomical figures from junk images like:
+    - Publisher logos
+    - Separator bars/lines
+    - Tiny icons
+    - Solid color blocks
+
+    Args:
+        width: Image width in pixels
+        height: Image height in pixels
+        file_size_bytes: Size of image data (0 to skip this check)
+        image_type: Classified image type (for context-aware filtering)
+
+    Returns:
+        ImageFilterResult with is_valid flag and rejection reason
+    """
+    # Calculate metrics
+    aspect_ratio = width / height if height > 0 else 0
+    area = width * height
+
+    # Rule 1: Reject if BOTH dimensions are too small (tiny icons)
+    # Single dimension can be small for panoramic surgical views
+    if width < 150 and height < 150:
+        return ImageFilterResult(
+            is_valid=False,
+            rejection_reason=f"Too small: {width}x{height}px (both dims < 150px)",
+            confidence=0.95
+        )
+
+    # Rule 2: Reject extreme aspect ratios (separator bars, banners, lines)
+    # Medical images rarely exceed 4:1 aspect ratio
+    if aspect_ratio > 6.0:
+        return ImageFilterResult(
+            is_valid=False,
+            rejection_reason=f"Horizontal bar: aspect ratio {aspect_ratio:.1f}:1 (> 6:1)",
+            confidence=0.90
+        )
+    if aspect_ratio < (1 / 6):
+        return ImageFilterResult(
+            is_valid=False,
+            rejection_reason=f"Vertical bar: aspect ratio 1:{1/aspect_ratio:.1f} (> 6:1)",
+            confidence=0.90
+        )
+
+    # Rule 3: Reject very small total area (decorative elements)
+    # A meaningful figure should be at least ~170x170 equivalent
+    if area < 30_000:
+        return ImageFilterResult(
+            is_valid=False,
+            rejection_reason=f"Small area: {width}x{height} = {area:,}px² (< 30,000)",
+            confidence=0.85
+        )
+
+    # Rule 4: Reject suspiciously small file sizes (solid color blocks, simple shapes)
+    # A real medical image with detail should be > 5KB
+    if file_size_bytes > 0 and file_size_bytes < 5_000:
+        # Exception: very small images that passed other checks might be valid thumbnails
+        if area > 50_000:
+            return ImageFilterResult(
+                is_valid=False,
+                rejection_reason=f"Low complexity: {file_size_bytes:,} bytes for {area:,}px²",
+                confidence=0.80
+            )
+
+    # Rule 5: Reject typical logo dimensions (common publisher logo sizes)
+    # Many logos are exactly these dimensions or close to them
+    logo_dimensions = [
+        (300, 100), (200, 50), (150, 50), (100, 30),  # Horizontal logos
+        (50, 50), (100, 100), (64, 64), (32, 32),     # Square icons
+    ]
+    for logo_w, logo_h in logo_dimensions:
+        if abs(width - logo_w) < 20 and abs(height - logo_h) < 20:
+            # Could be a logo, but check if it's classified as medical
+            if image_type in (ImageType.UNKNOWN, ImageType.ILLUSTRATION):
+                return ImageFilterResult(
+                    is_valid=False,
+                    rejection_reason=f"Logo-like dimensions: {width}x{height}px",
+                    confidence=0.70
+                )
+
+    # Rule 6: Accept images classified as medical imaging with relaxed constraints
+    # MRI/CT/X-ray images should pass even if they're borderline on other metrics
+    if image_type in (ImageType.IMAGING, ImageType.SURGICAL_STEP, ImageType.ANATOMICAL):
+        return ImageFilterResult(
+            is_valid=True,
+            rejection_reason="",
+            confidence=0.95
+        )
+
+    # Default: Accept the image
+    return ImageFilterResult(
+        is_valid=True,
+        rejection_reason="",
+        confidence=0.80
+    )
+
+
+@dataclass
 class CaptionCandidate:
     """A potential caption found near an image."""
 
@@ -278,6 +391,21 @@ class ImageExtractor:
 
                 # Classify image type
                 image_type, type_conf = self._classify_image_type(caption, context_text)
+
+                # Apply medical image filter BEFORE saving
+                # This filters out logos, separator bars, and decorative elements
+                filter_result = _is_medical_image(
+                    width=width,
+                    height=height,
+                    file_size_bytes=len(image_bytes),
+                    image_type=image_type,
+                )
+                if not filter_result.is_valid:
+                    console.print(
+                        f"    [dim]Filtered: {pdf_path.stem} p{page_num + 1} i{img_index + 1} - "
+                        f"{filter_result.rejection_reason}[/dim]"
+                    )
+                    continue
 
                 # Generate perceptual hash for deduplication
                 visual_hash = self._compute_visual_hash(pil_image)

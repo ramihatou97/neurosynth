@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Optional
 from PIL import Image
 
-import config
+from src import config
 
 # Thumbnail sizes
 THUMB_SIZE_SMALL = (80, 80)

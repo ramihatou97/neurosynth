@@ -128,6 +128,10 @@ class Settings(BaseSettings):
         default=Path.home() / ".neurosynth" / "embedding_cache",
         description="Path for persistent embedding cache",
     )
+    embedding_cache_max_size_mb: int = Field(
+        default=500,
+        description="Maximum cache size in MB. Oldest entries evicted when exceeded. Set to 0 for unlimited.",
+    )
 
     # Verification Configuration
     enable_verification: bool = Field(
@@ -154,6 +158,9 @@ class Settings(BaseSettings):
 # Global settings instance (lazy loaded)
 _settings: Settings | None = None
 
+# Track the project config path for YAML overrides
+_project_config_path: Path | None = None
+
 
 def get_settings() -> Settings:
     """Get the global settings instance."""
@@ -168,3 +175,76 @@ def reload_settings() -> Settings:
     global _settings
     _settings = Settings()
     return _settings
+
+
+def load_project_config(project_dir: Path) -> dict:
+    """Load project-specific configuration from neurosynth.yaml.
+
+    This merges YAML config values with environment-based settings.
+    YAML values override environment defaults for runtime.
+
+    Args:
+        project_dir: Project directory containing neurosynth.yaml
+
+    Returns:
+        Dictionary of configuration values loaded from YAML
+    """
+    global _settings, _project_config_path
+    import yaml
+
+    config_path = project_dir / "neurosynth.yaml"
+    if not config_path.exists():
+        return {}
+
+    _project_config_path = config_path
+
+    try:
+        config = yaml.safe_load(config_path.read_text())
+        if not config:
+            return {}
+
+        # Get current settings and override with YAML values
+        settings = get_settings()
+
+        # Processing settings from YAML
+        if "chunk_size" in config:
+            settings.chunk_size = int(config["chunk_size"])
+        if "chunk_overlap" in config:
+            settings.chunk_overlap = int(config["chunk_overlap"])
+        if "similarity_threshold" in config:
+            settings.similarity_threshold = float(config["similarity_threshold"])
+
+        # Output settings from YAML
+        if "output_format" in config:
+            if config["output_format"] in ("latex", "markdown"):
+                settings.output_format = config["output_format"]
+
+        # Visual extraction settings from YAML
+        if "enable_visual_extraction" in config:
+            settings.enable_visual_extraction = bool(config["enable_visual_extraction"])
+        if "min_image_size" in config:
+            settings.min_image_size = int(config["min_image_size"])
+        if "max_image_size" in config:
+            settings.max_image_size = int(config["max_image_size"])
+
+        # Verification settings from YAML
+        if "enable_verification" in config:
+            settings.enable_verification = bool(config["enable_verification"])
+
+        # Concurrency settings from YAML
+        if "merge_concurrency" in config:
+            settings.merge_concurrency = int(config["merge_concurrency"])
+        if "synthesis_concurrency" in config:
+            settings.synthesis_concurrency = int(config["synthesis_concurrency"])
+
+        return config
+
+    except Exception as e:
+        from rich.console import Console
+        Console().print(f"[yellow]Warning: Error reading neurosynth.yaml: {e}[/yellow]")
+        return {}
+
+
+def get_project_config_path() -> Path | None:
+    """Get the path to the currently loaded project config."""
+    return _project_config_path

@@ -142,9 +142,13 @@ class VisualElement:
             parts.append(f"p.{self.page_number}")
         return ", ".join(parts) if parts else "Unknown location"
 
-    def to_dict(self) -> dict:
-        """Convert to dictionary for serialization."""
-        return {
+    def to_dict(self, include_embedding: bool = True) -> dict:
+        """Convert to dictionary for serialization.
+
+        Args:
+            include_embedding: Whether to include visual embedding (large).
+        """
+        data = {
             "id": self.id,
             "image_path": str(self.image_path) if self.image_path else None,
             "format": self.format,
@@ -161,12 +165,16 @@ class VisualElement:
             "associated_chunk_ids": self.associated_chunk_ids,
             "context_text": self.context_text[:200],  # Truncate for storage
             "visual_hash": self.visual_hash,
+            "relevance_score": self.relevance_score,
         }
+        if include_embedding and self.visual_embedding is not None:
+            data["visual_embedding"] = self.visual_embedding.tolist()
+        return data
 
     @classmethod
     def from_dict(cls, data: dict) -> "VisualElement":
         """Create from dictionary."""
-        return cls(
+        element = cls(
             id=data.get("id", ""),
             image_path=Path(data["image_path"]) if data.get("image_path") else None,
             format=data.get("format", "png"),
@@ -183,7 +191,12 @@ class VisualElement:
             associated_chunk_ids=data.get("associated_chunk_ids", []),
             context_text=data.get("context_text", ""),
             visual_hash=data.get("visual_hash", ""),
+            relevance_score=data.get("relevance_score", 0.0),
         )
+        # Restore visual embedding if present
+        if "visual_embedding" in data and data["visual_embedding"] is not None:
+            element.visual_embedding = np.array(data["visual_embedding"])
+        return element
 
 
 @dataclass

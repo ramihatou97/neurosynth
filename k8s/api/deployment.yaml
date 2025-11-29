@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: neurosynth-api
+  namespace: neurosynth
+  labels:
+    app.kubernetes.io/name: neurosynth-api
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: neurosynth
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: neurosynth-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: neurosynth-api
+        app.kubernetes.io/component: api
+    spec:
+      containers:
+        - name: api
+          image: neurosynth-api:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: neurosynth-config
+          resources:
+            requests:
+              cpu: 250m
+              memory: 128Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: jobs-data
+              mountPath: /data/jobs
+      volumes:
+        - name: jobs-data
+          persistentVolumeClaim:
+            claimName: jobs-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jobs-pvc
+  namespace: neurosynth
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi

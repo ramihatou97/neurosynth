@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: neurosynth-config
+  namespace: neurosynth
+  labels:
+    app.kubernetes.io/name: neurosynth
+data:
+  REDIS_URL: "redis://redis:6379"
+  LOG_LEVEL: "info"
+  CHUNK_SIZE: "1000"
+  SIMILARITY_THRESHOLD: "0.92"
+  GEMINI_MODEL: "gemini-2.0-flash-exp"
+  CLAUDE_MODEL: "claude-sonnet-4-20250514"
+  VOYAGE_MODEL: "voyage-large-2-instruct"

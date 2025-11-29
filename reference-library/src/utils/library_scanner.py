@@ -6,7 +6,7 @@ import fitz  # PyMuPDF
 
 from ..search.result_model import ChapterMetadata, BookSeries, LibraryIndex
 from ..cache.database import Database
-import config
+from src import config
 
 # Visual extraction imports (lazy loaded)
 _visual_imports_loaded = False
@@ -25,6 +25,7 @@ class LibraryScanner:
     def __init__(self, library_path: Path, database: Optional[Database] = None):
         self.library_path = library_path
         self.database = database
+        self._cancelled = False  # Extraction cancellation flag
 
     def scan_library(self, use_cache: bool = True) -> LibraryIndex:
         """Build complete library index from directory structure."""
@@ -232,12 +233,22 @@ class LibraryScanner:
 
         return changes
 
-    def sync_library(self) -> dict:
+    def sync_library(
+        self,
+        max_workers: int = 8,
+        progress_callback: Optional[Callable[[int, int], None]] = None,
+    ) -> dict:
         """
         Sync the library: track all files and detect changes.
         Call this on app launch.
         FAST VERSION: Skips filesystem scan if database is populated.
+
+        Args:
+            max_workers: Number of parallel workers (default 8)
+            progress_callback: Optional callback(current, total) for progress updates
         """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
         if not self.database:
             raise ValueError("Database required for sync")
 
@@ -256,24 +267,55 @@ class LibraryScanner:
         all_pdfs = self.get_all_pdfs()
         is_first_sync = True
 
-        # Collect all new files data for batch insert
-        files_data = []
-        for pdf_path in all_pdfs:
-            if str(pdf_path) not in tracked_paths:
+        # Filter to new files only
+        new_pdfs = [p for p in all_pdfs if str(p) not in tracked_paths]
+
+        if not new_pdfs:
+            return {
+                'total_files': len(all_pdfs),
+                'new_files': 0,
+                'unindexed': 0
+            }
+
+        # Worker function for parallel metadata collection
+        def _scan_single_pdf(pdf_path: Path) -> dict | None:
+            try:
                 # FAST: Get metadata without opening PDF (skip page count)
                 metadata = self._get_metadata_fast(pdf_path)
                 # FAST: Use size+mtime instead of reading file content
                 checksum = self.database.get_fast_checksum(pdf_path)
-                files_data.append({
+                return {
                     "pdf_path": pdf_path,
                     "checksum": checksum,
                     "file_size": pdf_path.stat().st_size,
                     "book_series": metadata.book_series,
                     "chapter_title": metadata.chapter_title,
                     "page_count": 0
-                })
+                }
+            except Exception:
+                return None
 
-        # Batch insert all new files at once
+        # PARALLEL metadata collection with ThreadPoolExecutor
+        files_data = []
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all tasks
+            future_to_path = {
+                executor.submit(_scan_single_pdf, p): p for p in new_pdfs
+            }
+
+            # Collect results as they complete (enables progress reporting)
+            completed = 0
+            for future in as_completed(future_to_path):
+                result = future.result()
+                if result:
+                    files_data.append(result)
+                completed += 1
+
+                # Report progress
+                if progress_callback:
+                    progress_callback(completed, len(new_pdfs))
+
+        # Batch insert all new files at once (single-threaded for SQLite safety)
         if files_data:
             self.database.track_files_batch(files_data, is_indexed=is_first_sync)
 
@@ -282,6 +324,14 @@ class LibraryScanner:
             'new_files': len(files_data),
             'unindexed': self.database.get_new_files_count()
         }
+
+    def cancel_extraction(self):
+        """Cancel ongoing extraction."""
+        self._cancelled = True
+
+    def reset_extraction(self):
+        """Reset cancellation flag for new extraction."""
+        self._cancelled = False
 
     def _get_metadata_fast(self, pdf_path: Path) -> ChapterMetadata:
         """Get metadata without opening PDF (no page count)."""
@@ -438,8 +488,8 @@ class LibraryScanner:
             }
             figures.append(fig_dict)
 
-        # Batch cache to database
-        self.database.cache_visual_elements_batch(figures, checksum)
+        # Batch cache to database (pass pdf_path for zero-figure marker)
+        self.database.cache_visual_elements_batch(figures, checksum, pdf_path)
 
         # Generate thumbnails for extracted figures
         self._generate_thumbnails(figures)

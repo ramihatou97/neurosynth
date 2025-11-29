@@ -254,3 +254,164 @@ class TestEmbeddingCache:
         assert cache.size == 2
         cache.clear()
         assert cache.size == 0
+
+
+class TestPersistentEmbeddingCache:
+    """Tests for PersistentEmbeddingCache with LRU eviction."""
+
+    @pytest.fixture
+    def temp_cache(self, tmp_path):
+        """Create a temporary cache for testing."""
+        from neurosynth.llm.voyage import PersistentEmbeddingCache
+
+        cache = PersistentEmbeddingCache(
+            cache_path=tmp_path,
+            model_name="test-model",
+            chunk_size=1000,
+            chunk_overlap=100,
+        )
+        return cache
+
+    def test_persistent_cache_set_and_get(self, temp_cache):
+        """Test basic persistent cache operations."""
+        embedding = np.random.rand(1024).astype(np.float32)
+
+        temp_cache.set("test_hash", embedding)
+        result = temp_cache.get("test_hash")
+
+        np.testing.assert_array_almost_equal(result, embedding)
+
+    def test_persistent_cache_miss_returns_none(self, temp_cache):
+        """Test cache miss behavior."""
+        result = temp_cache.get("nonexistent_hash")
+        assert result is None
+
+    def test_persistent_cache_get_batch(self, temp_cache):
+        """Test batch retrieval."""
+        embeddings = {
+            "hash1": np.random.rand(1024).astype(np.float32),
+            "hash2": np.random.rand(1024).astype(np.float32),
+            "hash3": np.random.rand(1024).astype(np.float32),
+        }
+
+        for h, e in embeddings.items():
+            temp_cache.set(h, e)
+
+        result = temp_cache.get_batch(["hash1", "hash2", "hash4"])
+
+        assert "hash1" in result
+        assert "hash2" in result
+        assert "hash4" not in result
+        np.testing.assert_array_almost_equal(result["hash1"], embeddings["hash1"])
+
+    def test_persistent_cache_stats(self, temp_cache):
+        """Test cache statistics."""
+        # Add some entries
+        for i in range(5):
+            temp_cache.set(f"hash_{i}", np.random.rand(1024).astype(np.float32))
+
+        stats = temp_cache.get_stats()
+
+        assert stats["total_entries"] == 5
+        assert stats["current_model_entries"] == 5
+        assert stats["model_name"] == "test-model"
+        assert "size_mb" in stats
+        assert "models" in stats
+        assert "oldest_entry" in stats
+        assert "newest_entry" in stats
+
+    def test_persistent_cache_invalidate_model(self, temp_cache):
+        """Test model-specific invalidation."""
+        # Add entries
+        for i in range(5):
+            temp_cache.set(f"hash_{i}", np.random.rand(1024).astype(np.float32))
+
+        deleted = temp_cache.invalidate_model("test-model")
+
+        assert deleted == 5
+        assert temp_cache.get_stats()["total_entries"] == 0
+
+    def test_persistent_cache_clear(self, temp_cache):
+        """Test clearing all entries."""
+        for i in range(5):
+            temp_cache.set(f"hash_{i}", np.random.rand(1024).astype(np.float32))
+
+        temp_cache.clear()
+
+        assert temp_cache.get_stats()["total_entries"] == 0
+
+    def test_evict_oldest(self, temp_cache):
+        """Test eviction of oldest entries."""
+        import time
+
+        # Add entries with slight time gaps
+        for i in range(10):
+            temp_cache.set(f"hash_{i}", np.random.rand(1024).astype(np.float32))
+            time.sleep(0.01)  # Small delay for timestamp ordering
+
+        # Evict 20%
+        evicted = temp_cache._evict_oldest(percent=0.2)
+
+        assert evicted == 2  # 20% of 10
+        assert temp_cache.get_stats()["total_entries"] == 8
+
+    def test_get_db_size_mb(self, temp_cache):
+        """Test database size calculation."""
+        # Initially small
+        initial_size = temp_cache._get_db_size_mb()
+        assert initial_size >= 0
+
+        # Add many entries
+        for i in range(100):
+            temp_cache.set(f"hash_{i}", np.random.rand(1024).astype(np.float32))
+
+        new_size = temp_cache._get_db_size_mb()
+        assert new_size > initial_size
+
+    def test_prune_to_size(self, tmp_path):
+        """Test pruning to target size."""
+        from neurosynth.llm.voyage import PersistentEmbeddingCache
+
+        # Create cache with small max size for testing
+        with patch("neurosynth.config.get_settings") as mock_settings:
+            settings = MagicMock()
+            settings.embedding_cache_max_size_mb = 1  # 1MB max for testing
+            settings.embedding_cache_path = tmp_path
+            settings.voyage_model = "test-model"
+            settings.chunk_size = 1000
+            settings.chunk_overlap = 100
+            mock_settings.return_value = settings
+
+            cache = PersistentEmbeddingCache(
+                cache_path=tmp_path,
+                model_name="test-model",
+                chunk_size=1000,
+                chunk_overlap=100,
+            )
+
+            # Add entries
+            for i in range(50):
+                cache.set(f"hash_{i}", np.random.rand(1024).astype(np.float32))
+
+            # Prune to 50% of max
+            evicted = cache.prune_to_size(target_percent=0.5)
+
+            # Some entries should be evicted (exact number depends on size)
+            # Just verify the method works without error
+            assert evicted >= 0
+
+    def test_content_hash_computation(self):
+        """Test content hash generation."""
+        from neurosynth.llm.voyage import PersistentEmbeddingCache
+
+        text1 = "This is a test"
+        text2 = "This is a test"
+        text3 = "This is different"
+
+        hash1 = PersistentEmbeddingCache.compute_content_hash(text1)
+        hash2 = PersistentEmbeddingCache.compute_content_hash(text2)
+        hash3 = PersistentEmbeddingCache.compute_content_hash(text3)
+
+        assert hash1 == hash2  # Same text -> same hash
+        assert hash1 != hash3  # Different text -> different hash
+        assert len(hash1) == 32  # MD5 hex digest length

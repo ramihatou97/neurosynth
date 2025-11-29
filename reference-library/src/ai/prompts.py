@@ -13,6 +13,40 @@ TEXT EXCERPT:
 {context}
 ---
 
+DECISION TREE (Apply in order):
+
+1. VOICE & VERB ANALYSIS
+   - Contains IMPERATIVE verbs (position, make, identify, dissect, resect, place, insert)?
+     → Likely SURGICAL/ANATOMICAL
+   - Contains DESCRIPTIVE language (the patient presents, studies show, incidence is)?
+     → Likely THEORETICAL
+
+2. CONTENT STRUCTURE
+   - Describes STEP-BY-STEP actions with anatomical landmarks?
+     → Likely SURGICAL/ANATOMICAL (Surgical Approach or Technique)
+   - Describes WHAT a condition is, WHY it occurs, or HOW to diagnose?
+     → Likely THEORETICAL (Pathophysiology, Clinical Presentation, etc.)
+
+3. SPECIFIC INDICATORS
+
+   SURGICAL/ANATOMICAL Indicators:
+   - Imperative voice: "Position the patient in lateral decubitus"
+   - Anatomical navigation: "Identify the sigmoid sinus medially"
+   - Instrument mentions: "Use bipolar cautery to coagulate..."
+   - Sequential procedural steps: "After dural opening, inspect the cerebellum"
+   - Positioning details: "Place the head in three-point fixation"
+   - Incision descriptions: "Make a curvilinear incision..."
+   - Dissection planes: "Develop the subgaleal plane..."
+
+   THEORETICAL Indicators:
+   - Descriptive voice: "The tumor typically presents with..."
+   - Statistical data: "Incidence is 1 per 100,000"
+   - Diagnostic criteria: "MRI shows enhancement on T1..."
+   - Outcome data: "5-year survival is approximately..."
+   - Disease mechanisms: "The pathophysiology involves..."
+   - Clinical signs: "Patients commonly experience..."
+   - Treatment paradigms: "Management options include..."
+
 CATEGORY SYSTEM (Choose ONE):
 
 ## SURGICAL/ANATOMICAL (Procedural content showing how to do something)
@@ -43,13 +77,24 @@ CATEGORY SYSTEM (Choose ONE):
 - Other: Content that doesn't fit the above categories
 
 INSTRUCTIONS:
-1. Determine if content is primarily PROCEDURAL (how-to) or KNOWLEDGE-BASED (what/why)
-2. Assign the SINGLE most specific subcategory
-3. Provide confidence 0.0-1.0 (0.8+ clear, 0.5-0.8 reasonable, <0.5 uncertain)
-4. Give brief reasoning
+1. Apply the DECISION TREE above to determine group (Surgical/Anatomical vs Theoretical)
+2. Look for specific indicators (imperative verbs, anatomical navigation, etc.)
+3. Assign the SINGLE most specific subcategory within that group
+4. Provide confidence 0.0-1.0:
+   - 0.9-1.0: Very clear indicators, unambiguous
+   - 0.7-0.9: Clear category with strong evidence
+   - 0.5-0.7: Reasonable assignment with some ambiguity
+   - <0.5: Uncertain, mixed signals
+5. Give brief reasoning citing specific indicators
+
+IMPORTANT DISTINCTIONS:
+- "Surgical Approach" = ACCESS (incision, exposure, craniotomy, laminectomy)
+- "Surgical Technique" = TARGET MANIPULATION (tumor resection, aneurysm clipping, decompression)
+- "Complications" = Problems that can occur (intraoperative, postoperative)
+- "Postoperative Management" = Care after surgery (ICU, floor, rehabilitation)
 
 Respond with JSON only:
-{{"group": "<Surgical/Anatomical|Theoretical>", "category": "<subcategory>", "confidence": <float>, "reasoning": "<1 sentence>"}}"""
+{{"group": "<Surgical/Anatomical|Theoretical>", "category": "<subcategory>", "confidence": <float>, "reasoning": "<1 sentence citing specific indicators>"}}"""
 
 
 BATCH_CATEGORIZATION_PROMPT = """You are a neurosurgical content analyst. Categorize each excerpt according to standard neurosurgical textbook chapter structure.

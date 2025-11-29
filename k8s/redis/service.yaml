@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: neurosynth
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/component: cache
+    app.kubernetes.io/part-of: neurosynth
+spec:
+  type: ClusterIP
+  ports:
+    - port: 6379
+      targetPort: 6379
+      name: redis
+  selector:
+    app.kubernetes.io/name: redis

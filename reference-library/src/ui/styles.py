@@ -1,5 +1,5 @@
 """UI styles and theming for CustomTkinter."""
-import config
+from src import config
 
 # Font configurations
 FONTS = {

@@ -5,7 +5,7 @@ from typing import Callable, Optional
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileModifiedEvent, FileDeletedEvent
 
-import config
+from src import config
 
 
 class PDFEventHandler(FileSystemEventHandler):

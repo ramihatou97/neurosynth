@@ -25,18 +25,9 @@ anthropic = "^0.39.0"
 google-generativeai = "^0.8.0"
 voyageai = "^0.2.0"
 
-# ML/Embeddings
+# ML/Embeddings (core)
 numpy = "^1.26.0"
 scikit-learn = "^1.4.0"
-
-# ColPali Vision-Language Model
-torch = "^2.0.0"
-colpali-engine = "^0.3.0"
-transformers = "^4.40.0"
-pillow = "^10.0.0"
-
-# Vector Database
-qdrant-client = "^1.16.0"
 
 # LaTeX
 Jinja2 = "^3.1.0"
@@ -52,6 +43,17 @@ tenacity = "^8.2.0"
 # Async
 aiofiles = "^23.2.0"
 httpx = "^0.27.0"
+
+# Optional: Visual processing (install with `pip install neurosynth[visual]`)
+torch = {version = "^2.0.0", optional = true}
+colpali-engine = {version = "^0.3.0", optional = true}
+transformers = {version = "^4.40.0", optional = true}
+pillow = {version = "^10.0.0", optional = true}
+qdrant-client = {version = "^1.16.0", optional = true}
+
+[tool.poetry.extras]
+visual = ["torch", "colpali-engine", "transformers", "pillow", "qdrant-client"]
+full = ["torch", "colpali-engine", "transformers", "pillow", "qdrant-client"]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.0"
@@ -69,37 +71,63 @@ version = "0.1.0"
 description = "Neurosurgical Knowledge Synthesis System"
 requires-python = ">=3.11"
 dependencies = [
+    # Document Parsing
     "PyMuPDF>=1.23.0",
     "pymupdf4llm>=0.0.8",
     "ebooklib>=0.18",
     "python-docx>=1.1.0",
     "beautifulsoup4>=4.12.0",
     "lxml>=4.9.0",
+    # LLM APIs
     "anthropic>=0.39.0",
     "google-generativeai>=0.8.0",
     "voyageai>=0.2.0",
+    # ML/Embeddings (core)
     "numpy>=1.26.0",
     "scikit-learn>=1.4.0",
-    "torch>=2.0.0",
-    "colpali-engine>=0.3.0",
-    "transformers>=4.40.0",
-    "pillow>=10.0.0",
-    "qdrant-client>=1.16.0",
+    # LaTeX
     "Jinja2>=3.1.0",
+    # CLI & Utils
     "typer[all]>=0.9.0",
     "rich>=13.7.0",
     "pydantic>=2.5.0",
     "pydantic-settings>=2.1.0",
     "python-dotenv>=1.0.0",
     "tenacity>=8.2.0",
+    # Async
     "aiofiles>=23.2.0",
     "httpx>=0.27.0",
 ]
 
 [project.optional-dependencies]
+# API service dependencies
+api = [
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "redis>=5.0.0",
+    "python-multipart>=0.0.6",
+]
+# Worker service dependencies
+worker = [
+    "redis>=5.0.0",
+]
+# Visual content processing with ColPali embeddings (~1.6GB)
+visual = [
+    "torch>=2.0.0",
+    "transformers>=4.40.0",
+    "colpali-engine>=0.3.0",
+    "pillow>=10.0.0",
+    "qdrant-client>=1.16.0",
+]
+# Full installation with all features
+full = [
+    "neurosynth[api,worker,visual]",
+]
+# Development tools
 dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
     "black>=23.0.0",
     "ruff>=0.1.0",
 ]
@@ -117,3 +145,14 @@ target-version = ['py311']
 [tool.ruff]
 line-length = 100
 select = ["E", "F", "I", "N", "W"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+markers = [
+    "integration: marks tests as integration tests (require real fixtures)",
+    "slow: marks tests as slow-running (may take >10 seconds)",
+]
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]

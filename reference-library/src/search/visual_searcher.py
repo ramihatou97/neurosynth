@@ -1,7 +1,7 @@
 """Visual similarity search using ColPali embeddings and Qdrant vector store."""
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-import config
+from src import config
 
 # Visual search availability check
 VISUAL_SEARCH_AVAILABLE = False

@@ -1,21 +1,56 @@
 version: '3.8'
 
+# NeuroSynth Production Docker Compose
+# Multi-service architecture with API, Worker, and Redis
+
 services:
-  neurosynth:
+  # =============================================================================
+  # API Service - FastAPI HTTP interface
+  # =============================================================================
+  api:
     build:
       context: .
-      dockerfile: Dockerfile
-    container_name: neurosynth
-    volumes:
-      # Mount local data directories
-      - ./data/sources:/data/sources
-      - ./data/processed:/data/processed
-      - ./data/output:/data/output
-      # Mount logs for debugging
-      - ./logs:/home/neurosynth/.neurosynth/logs
-      # Mount host directory for ad-hoc file access
-      - .:/host
+      dockerfile: docker/Dockerfile.api
+      args:
+        BUILD_DATE: ${BUILD_DATE:-}
+        GIT_SHA: ${GIT_SHA:-}
+        VERSION: ${VERSION:-latest}
+    image: neurosynth-api:${VERSION:-latest}
+    container_name: neurosynth-api
+    ports:
+      - "8000:8000"
     environment:
+      - REDIS_URL=redis://redis:6379
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      - jobs-data:/data/jobs
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - neurosynth-net
+
+  # =============================================================================
+  # Worker Service - Job processor
+  # =============================================================================
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+      args:
+        BUILD_DATE: ${BUILD_DATE:-}
+        GIT_SHA: ${GIT_SHA:-}
+        VERSION: ${VERSION:-latest}
+    image: neurosynth-worker:${VERSION:-latest}
+    environment:
+      - REDIS_URL=redis://redis:6379
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - VOYAGE_API_KEY=${VOYAGE_API_KEY}
@@ -26,41 +61,140 @@ services:
       # Processing options
       - CHUNK_SIZE=${CHUNK_SIZE:-1000}
       - SIMILARITY_THRESHOLD=${SIMILARITY_THRESHOLD:-0.92}
-      - OUTPUT_FORMAT=${OUTPUT_FORMAT:-latex}
-    # Override command for interactive use
-    stdin_open: true
-    tty: true
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      - jobs-data:/data/jobs
+      - worker-cache:/home/neurosynth/.neurosynth
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import redis; import os; redis.from_url(os.environ.get('REDIS_URL', 'redis://localhost:6379')).ping()"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3
+    restart: unless-stopped
+    deploy:
+      mode: replicated
+      replicas: ${WORKER_REPLICAS:-1}
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 1G
+    networks:
+      - neurosynth-net
 
-  # Development service with live code mounting
-  neurosynth-dev:
+  # =============================================================================
+  # Redis - Job queue and state storage
+  # =============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: neurosynth-redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      start_period: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - neurosynth-net
+
+  # =============================================================================
+  # Development Services (use with --profile dev)
+  # =============================================================================
+
+  # API with hot reload
+  api-dev:
     build:
       context: .
-      dockerfile: Dockerfile
-    container_name: neurosynth-dev
-    volumes:
-      - ./src:/app/src
-      - ./data:/data
-      - ./logs:/home/neurosynth/.neurosynth/logs
+      dockerfile: docker/Dockerfile.api
+    image: neurosynth-api:dev
+    container_name: neurosynth-api-dev
+    ports:
+      - "8000:8000"
     environment:
+      - REDIS_URL=redis://redis:6379
+      - LOG_LEVEL=debug
+    volumes:
+      - ./src/neurosynth/api:/app/src/neurosynth/api
+      - jobs-data:/data/jobs
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: ["neurosynth.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    profiles:
+      - dev
+    networks:
+      - neurosynth-net
+
+  # Worker with live code
+  worker-dev:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+    image: neurosynth-worker:dev
+    container_name: neurosynth-worker-dev
+    environment:
+      - REDIS_URL=redis://redis:6379
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - VOYAGE_API_KEY=${VOYAGE_API_KEY}
-    stdin_open: true
-    tty: true
+      - LOG_LEVEL=debug
+    volumes:
+      - ./src:/app/src
+      - jobs-data:/data/jobs
+      - worker-cache:/home/neurosynth/.neurosynth
+    depends_on:
+      redis:
+        condition: service_healthy
     profiles:
       - dev
+    networks:
+      - neurosynth-net
 
+  # =============================================================================
+  # Test Service (use with --profile test)
+  # =============================================================================
   test:
     build:
       context: .
       dockerfile: Dockerfile
       target: tester
+    image: neurosynth-test:latest
+    container_name: neurosynth-test
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-test-key}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-test-key}
+      - VOYAGE_API_KEY=${VOYAGE_API_KEY:-test-key}
     volumes:
       - ./src:/app/src
       - ./tests:/app/tests
-    environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - VOYAGE_API_KEY=${VOYAGE_API_KEY}
     profiles:
       - test
+    networks:
+      - neurosynth-net
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  jobs-data:
+    driver: local
+  worker-cache:
+    driver: local
+  redis-data:
+    driver: local
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  neurosynth-net:
+    driver: bridge
+    name: neurosynth-net

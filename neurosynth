@@ -1,0 +1,3 @@
+#!/bin/bash
+# Wrapper to run NeuroSynth via Docker
+docker-compose run --rm neurosynth "$@"

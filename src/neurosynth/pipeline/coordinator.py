@@ -101,6 +101,16 @@ class Pipeline:
         self.config = config or PipelineConfig()
         self.state = PipelineState()
 
+        # Check if visual processing is available
+        from neurosynth.llm import VISUAL_AVAILABLE
+        if self.config.enable_visual_extraction and not VISUAL_AVAILABLE:
+            console.print(
+                "[yellow]Visual extraction disabled: optional dependencies not installed.\n"
+                "Install with: pip install neurosynth[visual][/yellow]"
+            )
+            self.config.enable_visual_extraction = False
+            self.config.enable_visual_embeddings = False
+
         # Callbacks for progress reporting
         self._callbacks: dict[str, list[Callable]] = {
             "stage_start": [],

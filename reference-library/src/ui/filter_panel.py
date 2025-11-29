@@ -2,7 +2,7 @@
 import customtkinter as ctk
 from typing import Callable, Optional
 
-import config
+from src import config
 from .styles import FONTS, PADDING
 
 

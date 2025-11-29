@@ -1,8 +1,9 @@
 """Dialog for starting chapter synthesis."""
 import customtkinter as ctk
-from typing import Optional
+from typing import Optional, List
 
 from .styles import FONTS, PADDING
+from ..search.result_model import SearchResult
 
 
 class SynthesisDialog(ctk.CTkToplevel):
@@ -12,22 +13,24 @@ class SynthesisDialog(ctk.CTkToplevel):
         self,
         parent,
         initial_topic: str = "",
-        title: str = "Synthesize Chapter"
+        title: str = "Synthesize Chapter",
+        selected_results: Optional[List[SearchResult]] = None
     ):
         super().__init__(parent)
         self.title(title)
-        
+
         # Center the dialog
-        width = 400
-        height = 300
+        width = 450
+        height = 350
         x = parent.winfo_x() + (parent.winfo_width() // 2) - (width // 2)
         y = parent.winfo_y() + (parent.winfo_height() // 2) - (height // 2)
         self.geometry(f"{width}x{height}+{x}+{y}")
-        
+
         self.result: Optional[tuple[str, str]] = None
-        
+        self.selected_results = selected_results or []
+
         self._setup_ui(initial_topic)
-        
+
         # Make modal
         self.transient(parent)
         self.grab_set()
@@ -52,6 +55,9 @@ class SynthesisDialog(ctk.CTkToplevel):
         self.topic_entry.insert(0, initial_topic)
         self.topic_entry.focus_set()
 
+        # Analyze selected results to recommend template
+        recommended_type, recommendation_text = self._analyze_selection()
+
         # Type Section
         ctk.CTkLabel(
             self,
@@ -59,7 +65,16 @@ class SynthesisDialog(ctk.CTkToplevel):
             font=FONTS["body_bold"]
         ).pack(anchor="w", padx=PADDING["medium"], pady=(PADDING["medium"], PADDING["small"]))
 
-        self.type_var = ctk.StringVar(value="procedural")
+        # Show recommendation if available
+        if recommendation_text:
+            ctk.CTkLabel(
+                self,
+                text=f"💡 {recommendation_text}",
+                font=FONTS["small"],
+                text_color="#95a5a6"
+            ).pack(anchor="w", padx=PADDING["medium"], pady=(0, PADDING["small"]))
+
+        self.type_var = ctk.StringVar(value=recommended_type)
 
         ctk.CTkRadioButton(
             self,
@@ -102,6 +117,50 @@ class SynthesisDialog(ctk.CTkToplevel):
 
         self.bind("<Return>", lambda e: self._on_submit())
         self.bind("<Escape>", lambda e: self._on_cancel())
+
+    def _analyze_selection(self) -> tuple[str, str]:
+        """
+        Analyze selected results to recommend a template type.
+
+        Returns:
+            Tuple of (recommended_type, recommendation_text)
+        """
+        if not self.selected_results:
+            return ("procedural", "")
+
+        # Count results by category group
+        surgical_count = sum(
+            1 for r in self.selected_results
+            if getattr(r, 'category_group', None) == "Surgical/Anatomical"
+        )
+        theoretical_count = sum(
+            1 for r in self.selected_results
+            if getattr(r, 'category_group', None) == "Theoretical"
+        )
+        total_categorized = surgical_count + theoretical_count
+
+        if total_categorized == 0:
+            return ("procedural", "No categorized sources - defaulting to Surgical")
+
+        surgical_ratio = surgical_count / total_categorized
+
+        # Determine recommendation based on ratio
+        if surgical_ratio >= 0.7:
+            return (
+                "procedural",
+                f"Recommended: Surgical ({surgical_count}/{total_categorized} surgical sources, {surgical_ratio:.0%})"
+            )
+        elif surgical_ratio <= 0.3:
+            return (
+                "theoretical",
+                f"Recommended: Clinical ({theoretical_count}/{total_categorized} clinical sources, {1-surgical_ratio:.0%})"
+            )
+        else:
+            # Mixed content - default to procedural but note the mix
+            return (
+                "procedural",
+                f"Mixed content: {surgical_count} surgical, {theoretical_count} clinical sources"
+            )
 
     def _on_submit(self):
         """Handle submit."""

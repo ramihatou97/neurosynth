@@ -4,7 +4,8 @@ import os
 from pathlib import Path
 
 # Paths
-PROJECT_ROOT = Path(__file__).parent
+# Adjusted for location in src/config.py (parent is src, parent.parent is root)
+PROJECT_ROOT = Path(__file__).parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 TEMPLATES_DIR = PROJECT_ROOT / "templates"
 USER_CONFIG_FILE = DATA_DIR / "user_config.json"
@@ -158,7 +159,20 @@ MAX_CONCURRENT_API_CALLS = 3  # Parallel Claude API calls
 
 # Semantic Search Configuration
 SEMANTIC_SEARCH_ENABLED = True
-EMBEDDING_MODEL = "all-MiniLM-L6-v2"  # Fast, 384-dim, good for medical text
+
+# Embedding model selection
+# Options: "general" (fast), "medical" (domain-specific), "retrieval" (optimized), "large" (best quality)
+EMBEDDING_MODEL_TYPE = os.environ.get("NEUROSYNTH_EMBEDDING_MODEL", "medical")
+
+# Model mapping
+_EMBEDDING_MODELS = {
+    "general": "all-MiniLM-L6-v2",  # Fast, general-purpose
+    "medical": "pritamdeka/S-PubMedBert-MS-MARCO",  # Medical domain-specific
+    "retrieval": "BAAI/bge-small-en-v1.5",  # Optimized for retrieval
+    "large": "BAAI/bge-large-en-v1.5",  # Higher quality, slower
+}
+
+EMBEDDING_MODEL = _EMBEDDING_MODELS.get(EMBEDDING_MODEL_TYPE, _EMBEDDING_MODELS["medical"])
 CHROMA_DB_PATH = DATA_DIR / "chroma"
 
 # AI Model Configuration

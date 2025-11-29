@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
 
-import config
+from src import config
 from ..search.result_model import SearchResult
 
 

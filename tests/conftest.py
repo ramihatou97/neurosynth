@@ -104,3 +104,35 @@ def mock_voyage_response():
     mock_response = MagicMock()
     mock_response.embeddings = [np.random.rand(1024).tolist() for _ in range(3)]
     return mock_response
+
+
+@pytest.fixture
+def fixtures_dir():
+    """Return path to test fixtures directory."""
+    return Path(__file__).parent / "fixtures"
+
+
+@pytest.fixture
+def sample_pdf_path(fixtures_dir):
+    """Return path to sample PDF fixture.
+
+    Note: You must add a real PDF file at tests/fixtures/sample_chapter.pdf
+    for integration tests to work.
+    """
+    pdf_path = fixtures_dir / "sample_chapter.pdf"
+    if not pdf_path.exists():
+        pytest.skip(f"Sample PDF not found: {pdf_path}")
+    return pdf_path
+
+
+@pytest.fixture
+def sample_pdf_with_images(fixtures_dir):
+    """Return path to sample PDF with images.
+
+    Note: You must add a real PDF file at tests/fixtures/sample_images.pdf
+    for visual integration tests to work.
+    """
+    pdf_path = fixtures_dir / "sample_images.pdf"
+    if not pdf_path.exists():
+        pytest.skip(f"Sample PDF with images not found: {pdf_path}")
+    return pdf_path

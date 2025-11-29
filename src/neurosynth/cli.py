@@ -2,7 +2,6 @@
 
 import asyncio
 import shutil
-import sys
 from pathlib import Path
 from typing import Optional
 
@@ -199,9 +198,19 @@ async def _process_async(project: Path, use_cache: bool):
     from neurosynth.dedup import ClusterMerger, EmbeddingGenerator, SemanticClusterer
     from neurosynth.dedup.embeddings import ExactDeduplicator
     from neurosynth.parsers import ParserFactory
+    from neurosynth.config import load_project_config, get_settings
 
     sources_dir = project / "sources"
     processed_dir = project / "processed"
+
+    # Load project config from neurosynth.yaml
+    # This ensures chunk_size, chunk_overlap, similarity_threshold are applied
+    load_project_config(project)
+    settings = get_settings()
+
+    console.print(f"[dim]Config: chunk_size={settings.chunk_size}, "
+                  f"chunk_overlap={settings.chunk_overlap}, "
+                  f"similarity_threshold={settings.similarity_threshold}[/dim]")
 
     if not sources_dir.exists():
         console.print("[red]Error: sources/ directory not found[/red]")
@@ -269,11 +278,13 @@ async def _process_async(project: Path, use_cache: bool):
     await merger.merge_all_clusters(result.clusters)
     progress_log("Cluster merging complete")
 
-    # Save processed data
-    import pickle
+    # Save processed data as JSON (portable, debuggable)
+    import json
+    from neurosynth.utils.serialization import NumpyEncoder
 
-    with open(processed_dir / "clusters.pkl", "wb") as f:
-        pickle.dump(result.clusters, f)
+    clusters_data = [c.to_dict() for c in result.clusters]
+    with open(processed_dir / "clusters.json", "w", encoding="utf-8") as f:
+        json.dump(clusters_data, f, cls=NumpyEncoder, indent=2)
 
     # Summary
     table = Table(title="Processing Summary")
@@ -340,26 +351,44 @@ async def _synthesize_async(
         SectionSynthesizer,
         CategoryAwareOutlineGenerator,
     )
+    from neurosynth.config import load_project_config, get_settings
 
     processed_dir = project / "processed"
     output_dir = project / "output"
 
-    # Load config
-    config_path = project / "neurosynth.yaml"
-    if config_path.exists():
-        config = yaml.safe_load(config_path.read_text())
-        topic = topic or config.get("topic", "Neurosurgical Chapter")
-    else:
-        topic = topic or "Neurosurgical Chapter"
+    # Load project config from neurosynth.yaml
+    # This merges YAML settings with environment defaults
+    config = load_project_config(project)
 
-    # Load clusters
-    clusters_path = processed_dir / "clusters.pkl"
-    if not clusters_path.exists():
+    # Get the topic from config or default
+    topic = topic or config.get("topic", "Neurosurgical Chapter")
+
+    # Log loaded config values for transparency
+    settings = get_settings()
+    console.print(f"[dim]Config: chunk_size={settings.chunk_size}, "
+                  f"chunk_overlap={settings.chunk_overlap}, "
+                  f"similarity_threshold={settings.similarity_threshold}[/dim]")
+
+    # Load clusters (auto-detect format: .json preferred, .pkl for legacy)
+    from neurosynth.models.knowledge import KnowledgeCluster
+
+    clusters_json = processed_dir / "clusters.json"
+    clusters_pkl = processed_dir / "clusters.pkl"
+
+    if clusters_json.exists():
+        # New JSON format
+        import json
+        with open(clusters_json, "r", encoding="utf-8") as f:
+            clusters_data = json.load(f)
+        clusters = [KnowledgeCluster.from_dict(c) for c in clusters_data]
+    elif clusters_pkl.exists():
+        # Legacy pickle format (backward compatibility)
+        console.print("[yellow]Note: Loading legacy .pkl format. Consider re-running 'neurosynth process'.[/yellow]")
+        with open(clusters_pkl, "rb") as f:
+            clusters = pickle.load(f)
+    else:
         console.print("[red]Error: Run 'neurosynth process' first[/red]")
         return
-
-    with open(clusters_path, "rb") as f:
-        clusters = pickle.load(f)
 
     console.print(f"[blue]Synthesizing chapter: {topic}[/blue]")
     progress_log(f"Synthesizing chapter: {topic}")
@@ -561,11 +590,18 @@ async def _run_full_pipeline(
         await _process_async(project, use_cache=True)
         checkpoint._update_stage_status("processing", "completed")
 
-        # Save clusters to checkpoint
-        clusters_path = project / "processed" / "clusters.pkl"
-        if clusters_path.exists():
+        # Save clusters to checkpoint (prefer JSON, fall back to pickle)
+        clusters_json = project / "processed" / "clusters.json"
+        clusters_pkl = project / "processed" / "clusters.pkl"
+
+        if clusters_json.exists():
+            import json
+            with open(clusters_json, "r", encoding="utf-8") as f:
+                clusters_data = json.load(f)
+            checkpoint.save_stage("clusters", clusters_data)
+        elif clusters_pkl.exists():
             import pickle
-            with open(clusters_path, "rb") as f:
+            with open(clusters_pkl, "rb") as f:
                 clusters_data = pickle.load(f)
             checkpoint.save_stage("clusters", clusters_data)
 
@@ -759,6 +795,133 @@ def status(
         table.add_row("Output", "○", "Directory not found")
 
     console.print(table)
+
+
+@app.command()
+def cache(
+    action: str = typer.Argument(
+        ...,
+        help="Action: stats, clear, or prune",
+    ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="Target specific model (for clear action)",
+    ),
+    target_percent: float = typer.Option(
+        0.8,
+        "--target",
+        "-t",
+        help="Target percentage for prune (0.0-1.0)",
+    ),
+):
+    """Manage embedding cache.
+
+    Actions:
+      stats - Show cache statistics
+      clear - Clear all cached embeddings (or specific model with --model)
+      prune - Force eviction to target percentage of max size
+    """
+    from neurosynth.llm.voyage import get_persistent_cache
+
+    if action == "stats":
+        # Show cache statistics
+        cache = get_persistent_cache()
+        stats = cache.get_stats()
+
+        if "error" in stats:
+            console.print(f"[red]Error getting cache stats: {stats['error']}[/red]")
+            return
+
+        table = Table(title="Embedding Cache Statistics")
+        table.add_column("Metric", style="cyan")
+        table.add_column("Value", style="green")
+
+        table.add_row("Database Path", str(cache.db_path))
+        table.add_row("Total Entries", str(stats.get("total_entries", 0)))
+        table.add_row("Current Model Entries", str(stats.get("current_model_entries", 0)))
+        table.add_row("Memory Cache Size", str(stats.get("memory_cache_size", 0)))
+        table.add_row(
+            "Size",
+            f"{stats.get('size_mb', 0):.2f} MB / {stats.get('max_size_mb', 'unlimited')} MB"
+        )
+        table.add_row("Current Model", stats.get("model_name", "N/A"))
+        table.add_row("Chunk Config", stats.get("chunk_config", "N/A"))
+
+        models = stats.get("models", [])
+        table.add_row("Models in Cache", ", ".join(models) if models else "None")
+
+        oldest = stats.get("oldest_entry")
+        newest = stats.get("newest_entry")
+        table.add_row("Oldest Entry", str(oldest) if oldest else "N/A")
+        table.add_row("Newest Entry", str(newest) if newest else "N/A")
+
+        console.print(table)
+
+        # Capacity warning
+        size_mb = stats.get("size_mb", 0)
+        max_size_mb = stats.get("max_size_mb", 0)
+        if max_size_mb > 0 and size_mb > max_size_mb * 0.9:
+            console.print(
+                f"\n[yellow]⚠ Cache is at {size_mb/max_size_mb*100:.0f}% capacity. "
+                f"Consider running 'neurosynth cache prune'[/yellow]"
+            )
+
+    elif action == "clear":
+        cache = get_persistent_cache()
+
+        if model:
+            # Clear specific model
+            deleted = cache.invalidate_model(model)
+            console.print(f"[green]Cleared {deleted} entries for model: {model}[/green]")
+        else:
+            # Clear all
+            confirm = typer.confirm(
+                "This will clear ALL cached embeddings. Continue?",
+                default=False,
+            )
+            if confirm:
+                cache.clear()
+                console.print("[green]Cleared all cached embeddings[/green]")
+            else:
+                console.print("[yellow]Aborted[/yellow]")
+
+    elif action == "prune":
+        cache = get_persistent_cache()
+        stats = cache.get_stats()
+
+        max_size_mb = stats.get("max_size_mb", 0)
+        if max_size_mb <= 0:
+            console.print(
+                "[yellow]Cannot prune: max_size_mb is set to unlimited (0). "
+                "Set EMBEDDING_CACHE_MAX_SIZE_MB in config.[/yellow]"
+            )
+            return
+
+        current_size = stats.get("size_mb", 0)
+        target_size = max_size_mb * target_percent
+
+        console.print(
+            f"[blue]Pruning cache from {current_size:.1f}MB to {target_size:.1f}MB "
+            f"({target_percent*100:.0f}% of max)...[/blue]"
+        )
+
+        evicted = cache.prune_to_size(target_percent)
+
+        if evicted > 0:
+            new_stats = cache.get_stats()
+            console.print(
+                f"[green]Pruned {evicted} entries. "
+                f"New size: {new_stats.get('size_mb', 0):.2f}MB[/green]"
+            )
+        else:
+            console.print("[green]No pruning needed - cache is within target size[/green]")
+
+    else:
+        console.print(f"[red]Unknown action: {action}[/red]")
+        console.print("Valid actions: stats, clear, prune")
+        raise typer.Exit(1)
 
 
 def _chapter_to_markdown(chapter) -> str:

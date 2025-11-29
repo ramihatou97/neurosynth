@@ -36,6 +36,25 @@ class Perspective:
         """Formatted citation for this perspective."""
         return f"({self.source.citation_key})"
 
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "claim": self.claim,
+            "source": self.source.to_dict(),
+            "chunk_id": self.chunk.id,
+            "confidence": self.confidence,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict, chunk_lookup: dict) -> "Perspective":
+        """Create Perspective from dictionary."""
+        return cls(
+            claim=data["claim"],
+            source=Source.from_dict(data["source"]),
+            chunk=chunk_lookup.get(data["chunk_id"]),
+            confidence=data.get("confidence", 1.0),
+        )
+
 
 @dataclass
 class Conflict:
@@ -76,6 +95,27 @@ class Conflict:
             # Generic conflict presentation
             views = [f"{p.claim} {p.citation}" for p in sorted_persp]
             return f"Perspectives differ: {' However, '.join(views)}."
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "type": self.type.value,
+            "description": self.description,
+            "perspectives": [p.to_dict() for p in self.perspectives],
+            "suggested_resolution": self.suggested_resolution,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict, chunk_lookup: dict) -> "Conflict":
+        """Create Conflict from dictionary."""
+        return cls(
+            type=ConflictType(data["type"]),
+            description=data["description"],
+            perspectives=[
+                Perspective.from_dict(p, chunk_lookup) for p in data.get("perspectives", [])
+            ],
+            suggested_resolution=data.get("suggested_resolution"),
+        )
 
 
 @dataclass
@@ -171,6 +211,66 @@ class KnowledgeCluster:
             v for v in self.visual_elements
             if v.image_type in (ImageType.SURGICAL_STEP, ImageType.ANATOMICAL)
         ]
+
+    def to_dict(self, include_embeddings: bool = True) -> dict:
+        """Convert to dictionary for JSON serialization.
+
+        Args:
+            include_embeddings: Whether to include chunk embeddings (large).
+        """
+        return {
+            "id": self.id,
+            "chunks": [c.to_dict(include_embedding=include_embeddings) for c in self.chunks],
+            "merged_content": self.merged_content,
+            "conflicts": [c.to_dict() for c in self.conflicts],
+            "topic": self.topic,
+            "subtopic": self.subtopic,
+            "target_section": self.target_section,
+            "visual_element_ids": [v.id for v in self.visual_elements],
+            "source_count": self.source_count,
+            "similarity_score": self.similarity_score,
+        }
+
+    @classmethod
+    def from_dict(
+        cls,
+        data: dict,
+        visual_lookup: dict | None = None,
+    ) -> "KnowledgeCluster":
+        """Create KnowledgeCluster from dictionary.
+
+        Args:
+            data: Dictionary with cluster data
+            visual_lookup: Optional dict mapping visual IDs to VisualElement objects
+        """
+        # First reconstruct chunks to build chunk_lookup for conflicts
+        chunks = [
+            ContentChunk.from_dict(c, visual_lookup)
+            for c in data.get("chunks", [])
+        ]
+        chunk_lookup = {c.id: c for c in chunks}
+
+        cluster = cls(
+            id=data.get("id", ""),
+            chunks=chunks,
+            merged_content=data.get("merged_content", ""),
+            conflicts=[
+                Conflict.from_dict(c, chunk_lookup) for c in data.get("conflicts", [])
+            ],
+            topic=data.get("topic", ""),
+            subtopic=data.get("subtopic", ""),
+            target_section=data.get("target_section"),
+            source_count=data.get("source_count", 0),
+            similarity_score=data.get("similarity_score", 0.0),
+        )
+
+        # Restore visual elements if lookup provided
+        if visual_lookup and "visual_element_ids" in data:
+            for vid in data["visual_element_ids"]:
+                if vid in visual_lookup:
+                    cluster.visual_elements.append(visual_lookup[vid])
+
+        return cluster
 
 
 @dataclass

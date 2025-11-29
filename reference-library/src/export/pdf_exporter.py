@@ -4,7 +4,7 @@ from datetime import datetime
 from collections import defaultdict
 from fpdf import FPDF
 
-import config
+from src import config
 from ..search.result_model import SearchResult
 
 

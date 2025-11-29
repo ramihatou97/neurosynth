@@ -61,7 +61,7 @@ def check_dependencies():
 
 def check_api_key():
     """Check if Anthropic API key is set, with graceful degradation."""
-    import config
+    from src import config
 
     if not config.AI_ENABLED:
         logger.warning("AI features disabled: ANTHROPIC_API_KEY not set or AI disabled via environment")
@@ -80,19 +80,19 @@ def check_api_key():
 
 def check_library_path():
     """Check if library path is configured and valid."""
-    from config import ensure_library_path, LIBRARY_PATH
+    from src.config import ensure_library_path, LIBRARY_PATH
 
     print(f"Library path: {LIBRARY_PATH}")
     if not LIBRARY_PATH.exists():
         print("Library path not found. Opening folder picker...")
         ensure_library_path()
-        from config import LIBRARY_PATH as updated_path
+        from src.config import LIBRARY_PATH as updated_path
         print(f"Library path set to: {updated_path}")
 
 
 def migrate_category_system():
     """Migrate to hierarchical category system (one-time)."""
-    import config
+    from src import config
     from src.cache.database import Database
 
     # Check if migration marker exists

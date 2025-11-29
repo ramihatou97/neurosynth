@@ -9,7 +9,7 @@ from .prompts import CATEGORIZATION_PROMPT
 from .category_model import CategoryResult
 from ..search.result_model import SearchResult
 from ..cache.database import Database
-import config
+from src import config
 
 
 class ContentCategorizer:

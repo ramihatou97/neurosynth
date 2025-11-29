@@ -406,6 +406,11 @@ class PersistentEmbeddingCache:
                        VALUES (?, ?, ?, ?)""",
                     (*key, pickle.dumps(embedding)),
                 )
+
+            # Check size limit and evict if needed (every 100 writes)
+            if len(self._memory_cache) % 100 == 0:
+                self._enforce_size_limit()
+
         except Exception as e:
             logger.warning(f"Cache write failed: {e}")
 
@@ -507,16 +512,175 @@ class PersistentEmbeddingCache:
                 )
                 current_model = cursor.fetchone()[0]
 
+                # Get distinct models in cache
+                cursor = conn.execute(
+                    "SELECT DISTINCT model_name FROM embeddings"
+                )
+                models = [row[0] for row in cursor.fetchall()]
+
+                # Get oldest and newest entries
+                cursor = conn.execute(
+                    "SELECT MIN(created_at), MAX(created_at) FROM embeddings"
+                )
+                row = cursor.fetchone()
+                oldest_entry = row[0] if row else None
+                newest_entry = row[1] if row else None
+
+                # Get settings for max size
+                settings = get_settings()
+                max_size_mb = settings.embedding_cache_max_size_mb
+
                 return {
                     "total_entries": total,
                     "current_model_entries": current_model,
                     "memory_cache_size": len(self._memory_cache),
                     "model_name": self.model_name,
                     "chunk_config": self.chunk_config_hash,
+                    "size_mb": self._get_db_size_mb(),
+                    "max_size_mb": max_size_mb,
+                    "models": models,
+                    "oldest_entry": oldest_entry,
+                    "newest_entry": newest_entry,
                 }
         except Exception as e:
             logger.warning(f"Failed to get cache stats: {e}")
             return {"error": str(e)}
+
+    def _get_db_size_mb(self) -> float:
+        """Get database file size in MB."""
+        if self.db_path.exists():
+            return self.db_path.stat().st_size / (1024 * 1024)
+        return 0.0
+
+    def _enforce_size_limit(self) -> int:
+        """Evict oldest entries if cache exceeds max size.
+
+        Returns:
+            Number of entries evicted
+        """
+        settings = get_settings()
+        max_size_mb = settings.embedding_cache_max_size_mb
+
+        # 0 means unlimited
+        if max_size_mb <= 0:
+            return 0
+
+        current_size = self._get_db_size_mb()
+        if current_size <= max_size_mb:
+            return 0
+
+        # Evict oldest 20% of entries
+        evicted = self._evict_oldest(percent=0.2)
+        if evicted > 0:
+            logger.info(
+                f"Cache size limit exceeded ({current_size:.1f}MB > {max_size_mb}MB). "
+                f"Evicted {evicted} oldest entries."
+            )
+
+            # VACUUM to reclaim disk space
+            try:
+                with sqlite3.connect(self.db_path) as conn:
+                    conn.execute("VACUUM")
+            except Exception as e:
+                logger.warning(f"Failed to vacuum database: {e}")
+
+        return evicted
+
+    def _evict_oldest(self, percent: float = 0.2) -> int:
+        """Delete oldest entries by created_at timestamp.
+
+        Args:
+            percent: Fraction of entries to delete (0.0-1.0)
+
+        Returns:
+            Number of entries deleted
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                # Get total count
+                cursor = conn.execute("SELECT COUNT(*) FROM embeddings")
+                total = cursor.fetchone()[0]
+
+                if total == 0:
+                    return 0
+
+                # Calculate how many to delete
+                to_delete = max(1, int(total * percent))
+
+                # Get the content hashes of entries to delete for memory cache cleanup
+                cursor = conn.execute(
+                    """SELECT content_hash, model_name, chunk_config FROM embeddings
+                       ORDER BY created_at ASC LIMIT ?""",
+                    (to_delete,),
+                )
+                keys_to_remove = [tuple(row) for row in cursor.fetchall()]
+
+                # Delete oldest entries
+                cursor = conn.execute(
+                    """DELETE FROM embeddings WHERE rowid IN
+                       (SELECT rowid FROM embeddings ORDER BY created_at ASC LIMIT ?)""",
+                    (to_delete,),
+                )
+                deleted = cursor.rowcount
+
+                # Clear memory cache entries
+                for key in keys_to_remove:
+                    self._memory_cache.pop(key, None)
+
+                logger.debug(f"Evicted {deleted} oldest cache entries")
+                return deleted
+
+        except Exception as e:
+            logger.error(f"Cache eviction failed: {e}")
+            return 0
+
+    def prune_to_size(self, target_percent: float = 0.8) -> int:
+        """Force prune cache to target percentage of max size.
+
+        Args:
+            target_percent: Target size as fraction of max_size_mb (e.g., 0.8 = 80%)
+
+        Returns:
+            Total number of entries evicted
+        """
+        settings = get_settings()
+        max_size_mb = settings.embedding_cache_max_size_mb
+
+        if max_size_mb <= 0:
+            logger.warning("Cannot prune: max_size_mb is unlimited (0)")
+            return 0
+
+        target_size_mb = max_size_mb * target_percent
+        total_evicted = 0
+
+        while self._get_db_size_mb() > target_size_mb:
+            evicted = self._evict_oldest(percent=0.1)
+            if evicted == 0:
+                break
+            total_evicted += evicted
+
+            # VACUUM periodically to actually reclaim space
+            if total_evicted % 100 == 0:
+                try:
+                    with sqlite3.connect(self.db_path) as conn:
+                        conn.execute("VACUUM")
+                except Exception:
+                    pass
+
+        # Final vacuum
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute("VACUUM")
+        except Exception:
+            pass
+
+        if total_evicted > 0:
+            logger.info(
+                f"Pruned cache: evicted {total_evicted} entries, "
+                f"new size: {self._get_db_size_mb():.1f}MB"
+            )
+
+        return total_evicted
 
 
 class EmbeddingCache:

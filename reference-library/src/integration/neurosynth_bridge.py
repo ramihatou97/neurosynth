@@ -1,12 +1,101 @@
 """Bridge to NeuroSynth for document synthesis."""
 import re
 import subprocess
-import tempfile
+import sys
 import shutil
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, Callable, TYPE_CHECKING
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+
+@dataclass
+class ProjectDirectory:
+    """Represents a persistent NeuroSynth project directory structure.
+
+    Structure:
+        ~/Documents/NeuroSynth/projects/{topic_name}/
+        ├── sources/          # Extracted source PDFs (mini-PDFs with relevant pages)
+        ├── images/           # Filtered medical images extracted from sources
+        ├── output/           # Generated chapters (PDF, LaTeX, Markdown)
+        ├── manifest.json     # Metadata linking sources to synthesis
+        └── project.json      # Project metadata (creation date, settings, etc.)
+    """
+    root: Path
+    sources_dir: Path = field(init=False)
+    images_dir: Path = field(init=False)
+    output_dir: Path = field(init=False)
+    manifest_path: Path = field(init=False)
+    project_meta_path: Path = field(init=False)
+
+    def __post_init__(self):
+        self.sources_dir = self.root / "sources"
+        self.images_dir = self.root / "images"
+        self.output_dir = self.root / "output"
+        self.manifest_path = self.root / "manifest.json"
+        self.project_meta_path = self.root / "project.json"
+
+    def create(self) -> "ProjectDirectory":
+        """Create the directory structure."""
+        self.sources_dir.mkdir(parents=True, exist_ok=True)
+        self.images_dir.mkdir(parents=True, exist_ok=True)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        return self
+
+    def save_project_meta(
+        self,
+        topic: str,
+        search_query: str = "",
+        search_mode: str = "keyword",
+        template_type: str = None
+    ):
+        """Save project metadata."""
+        meta = {
+            "topic": topic,
+            "created_at": datetime.now().isoformat(),
+            "search_query": search_query,
+            "search_mode": search_mode,
+            "template_type": template_type,
+            "version": "1.0"
+        }
+        with open(self.project_meta_path, 'w', encoding='utf-8') as f:
+            json.dump(meta, f, indent=2, ensure_ascii=False)
+
+
+def _create_project_directory(topic: str, base_dir: Optional[Path] = None) -> ProjectDirectory:
+    """Create a persistent project directory for the given topic.
+
+    Args:
+        topic: The synthesis topic (will be sanitized for filesystem)
+        base_dir: Base directory for projects (default: ~/Documents/NeuroSynth/projects)
+
+    Returns:
+        ProjectDirectory with all subdirectories created
+    """
+    if base_dir is None:
+        base_dir = Path.home() / "Documents" / "NeuroSynth" / "projects"
+
+    # Create safe directory name from topic
+    safe_topic = re.sub(r'[^\w\s\-]', '', topic)  # Remove special chars
+    safe_topic = safe_topic.lower().replace(' ', '_')[:50]  # Limit length
+
+    # Add timestamp suffix if directory exists to avoid overwriting
+    project_dir = base_dir / safe_topic
+    if project_dir.exists():
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        project_dir = base_dir / f"{safe_topic}_{timestamp}"
+
+    return ProjectDirectory(root=project_dir).create()
+
+
+def _get_subprocess_kwargs() -> dict:
+    """Get platform-specific subprocess kwargs to prevent terminal windows."""
+    kwargs = {"stdin": subprocess.DEVNULL}
+    if sys.platform == "win32":
+        # Prevent console window on Windows
+        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+    return kwargs
 
 
 def _sanitize_topic(topic: str) -> str:
@@ -117,93 +206,154 @@ class NeuroSynthBridge:
                 error=str(e)
             )
 
-        # Set up output directory
-        if output_dir is None:
-            output_dir = Path.home() / "Documents" / "NeuroSynth"
-        output_dir.mkdir(parents=True, exist_ok=True)
+        # Create persistent project directory structure
+        # ~/Documents/NeuroSynth/projects/{topic}/
+        project = _create_project_directory(topic, output_dir)
 
-        # Create temporary working directory
-        with tempfile.TemporaryDirectory(prefix="neurosynth_") as tmpdir:
-            work_dir = Path(tmpdir)
-            sources_dir = work_dir / "sources"
-            sources_dir.mkdir()
+        if on_progress:
+            on_progress(f"Created project: {project.root.name}")
 
-            # Extract relevant pages from selected PDFs
-            if on_progress:
-                on_progress("Extracting relevant pages...")
+        # Save project metadata
+        project.save_project_meta(
+            topic=topic,
+            search_query=search_query,
+            search_mode=search_mode,
+            template_type=template_type
+        )
 
-            try:
-                extracted = extract_relevant_pages(
-                    results=results,
-                    output_dir=sources_dir,
-                    context_pages=context_pages,
-                    database=self.database
-                )
-            except Exception as e:
-                return SynthesisResult(
-                    success=False,
-                    error=f"Failed to extract pages: {e}"
-                )
+        # Extract relevant pages from selected PDFs into project sources
+        if on_progress:
+            on_progress("Extracting relevant pages...")
 
-            if not extracted:
-                return SynthesisResult(
-                    success=False,
-                    error="No pages could be extracted from selected results"
-                )
-
-            # Generate enhanced manifest with search context
-            manifest_path = work_dir / "manifest.json"
-            generate_manifest(
-                topic=topic,
-                sources=extracted,
-                output_path=manifest_path,
-                search_query=search_query,
-                search_mode=search_mode,
-                template_type=template_type
+        try:
+            extracted = extract_relevant_pages(
+                results=results,
+                output_dir=project.sources_dir,
+                context_pages=context_pages,
+                database=self.database
+            )
+        except Exception as e:
+            return SynthesisResult(
+                success=False,
+                error=f"Failed to extract pages: {e}"
             )
 
-            if on_progress:
-                on_progress(f"Extracted {len(extracted)} source documents")
-
-            # Determine output file path
-            safe_topic = topic.lower().replace(" ", "_")
-            output_pdf = output_dir / f"{safe_topic}.pdf"
-
-            # Handle existing files
-            counter = 1
-            while output_pdf.exists():
-                output_pdf = output_dir / f"{safe_topic}_{counter}.pdf"
-                counter += 1
-
-            # Run NeuroSynth
-            if on_progress:
-                on_progress("Running NeuroSynth synthesis...")
-
-            result = self._run_neurosynth(
-                topic=topic,
-                sources_dir=sources_dir,
-                output_path=output_pdf,
-                manifest_path=manifest_path,
-                on_progress=on_progress
+        if not extracted:
+            return SynthesisResult(
+                success=False,
+                error="No pages could be extracted from selected results"
             )
 
-            # Copy manifest to output for reference
-            if result.success and output_pdf.exists():
-                manifest_dest = output_pdf.with_suffix(".manifest.json")
-                shutil.copy2(manifest_path, manifest_dest)
+        # Copy medical images from extracted sources to project images directory
+        if on_progress:
+            on_progress("Collecting medical images...")
 
-            # Log synthesis to history
-            self._log_synthesis(
-                topic=topic,
-                search_query=search_query,
-                search_mode=search_mode,
-                extracted=extracted,
-                output_path=output_pdf if result.success else None,
-                result=result,
-                manifest_path=manifest_path
-            )
+        image_count = self._collect_project_images(extracted, project.images_dir)
+        if on_progress and image_count > 0:
+            on_progress(f"Collected {image_count} medical images")
 
-            return result
+        # Generate enhanced manifest with search context
+        generate_manifest(
+            topic=topic,
+            sources=extracted,
+            output_path=project.manifest_path,
+            search_query=search_query,
+            search_mode=search_mode,
+            template_type=template_type
+        )
+
+        if on_progress:
+            on_progress(f"Extracted {len(extracted)} source documents")
+
+        # Determine output file path in project output directory
+        safe_topic = topic.lower().replace(" ", "_")
+        output_pdf = project.output_dir / f"{safe_topic}.pdf"
+
+        # Run NeuroSynth
+        if on_progress:
+            on_progress("Running NeuroSynth synthesis...")
+
+        result = self._run_neurosynth(
+            topic=topic,
+            sources_dir=project.sources_dir,
+            output_path=output_pdf,
+            manifest_path=project.manifest_path,
+            on_progress=on_progress
+        )
+
+        # Update result with project directory info
+        if result.success:
+            result.output_path = output_pdf
+            # Also create a copy of output in the legacy location for backward compatibility
+            legacy_output_dir = Path.home() / "Documents" / "NeuroSynth"
+            legacy_output_dir.mkdir(parents=True, exist_ok=True)
+            if output_pdf.exists():
+                legacy_pdf = legacy_output_dir / output_pdf.name
+                counter = 1
+                while legacy_pdf.exists():
+                    legacy_pdf = legacy_output_dir / f"{safe_topic}_{counter}.pdf"
+                    counter += 1
+                shutil.copy2(output_pdf, legacy_pdf)
+
+        # Log synthesis to history
+        self._log_synthesis(
+            topic=topic,
+            search_query=search_query,
+            search_mode=search_mode,
+            extracted=extracted,
+            output_path=output_pdf if result.success else None,
+            result=result,
+            manifest_path=project.manifest_path
+        )
+
+        return result
+
+    def _collect_project_images(
+        self,
+        extracted: list[ExtractedSource],
+        images_dir: Path
+    ) -> int:
+        """Collect medical images from extracted sources into project images directory.
+
+        Args:
+            extracted: List of ExtractedSource objects with figure info
+            images_dir: Directory to copy images to
+
+        Returns:
+            Number of images collected
+        """
+        collected = 0
+
+        for source in extracted:
+            for fig in source.figures:
+                image_path = fig.get("image_path")
+                if not image_path:
+                    continue
+
+                src_path = Path(image_path)
+                if not src_path.exists():
+                    continue
+
+                # Create destination path with source context
+                # e.g., "youmans_ch26_p15_fig1.png"
+                dest_name = src_path.name
+                dest_path = images_dir / dest_name
+
+                # Handle collisions
+                counter = 1
+                while dest_path.exists():
+                    stem = src_path.stem
+                    suffix = src_path.suffix
+                    dest_path = images_dir / f"{stem}_{counter}{suffix}"
+                    counter += 1
+
+                try:
+                    shutil.copy2(src_path, dest_path)
+                    collected += 1
+                except Exception as e:
+                    print(f"Warning: Failed to copy image {src_path}: {e}")
+
+        return collected
 
     def _run_neurosynth(
         self,
@@ -256,7 +406,8 @@ class NeuroSynthBridge:
                 text=True,
                 env=env,
                 cwd=cwd,
-                bufsize=1  # Line buffered
+                bufsize=1,  # Line buffered
+                **_get_subprocess_kwargs()
             )
 
             log_lines = []
@@ -432,7 +583,8 @@ class NeuroSynthBridge:
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=10,
+                **_get_subprocess_kwargs()
             )
             if result.returncode == 0:
                 version = result.stdout.strip()

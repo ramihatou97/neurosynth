@@ -24,11 +24,25 @@ CREATE TABLE IF NOT EXISTS categorization_cache (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Search history for autocomplete
+-- Query intent classification cache
+CREATE TABLE IF NOT EXISTS query_intent_cache (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    query TEXT UNIQUE NOT NULL,
+    intent TEXT NOT NULL,  -- "SURGICAL_TECHNIQUE", "CLINICAL_KNOWLEDGE", or "MIXED"
+    confidence REAL NOT NULL,
+    reasoning TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Search history for autocomplete with category tracking
 CREATE TABLE IF NOT EXISTS search_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     query TEXT NOT NULL,
     result_count INTEGER,
+    surgical_count INTEGER DEFAULT 0,
+    theoretical_count INTEGER DEFAULT 0,
+    dominant_category TEXT,  -- "Surgical/Anatomical", "Theoretical", or "Mixed"
+    search_mode TEXT,  -- "keyword", "semantic", "hybrid"
     searched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

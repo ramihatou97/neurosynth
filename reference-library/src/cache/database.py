@@ -77,6 +77,31 @@ class Database:
             """, (str(pdf_path), page_num, text, checksum, datetime.now()))
             conn.commit()
 
+    def cache_pdf_text_batch(self, pdf_path: Path, pages: dict[int, str], checksum: str):
+        """Batch cache all pages of a PDF for efficiency.
+
+        Uses a single transaction instead of one per page, significantly faster
+        for PDFs with many pages.
+
+        Args:
+            pdf_path: Path to the PDF file
+            pages: Dict mapping page_num -> text content
+            checksum: File checksum for cache invalidation
+        """
+        if not pages:
+            return
+
+        now = datetime.now()
+        path_str = str(pdf_path)
+
+        with self._get_connection() as conn:
+            conn.executemany("""
+                INSERT OR REPLACE INTO pdf_text_cache
+                (pdf_path, page_number, text_content, file_checksum, created_at)
+                VALUES (?, ?, ?, ?, ?)
+            """, [(path_str, page_num, text, checksum, now) for page_num, text in pages.items()])
+            conn.commit()
+
     def get_cached_text(self, pdf_path: Path, page_num: int, checksum: str) -> Optional[str]:
         """Retrieve cached text if PDF unchanged."""
         with self._get_connection() as conn:
@@ -140,33 +165,95 @@ class Database:
             conn.commit()
         print("Categorization cache cleared for new taxonomy.")
 
-    # Search History Methods
+    # Query Intent Cache Methods
 
-    def save_search_history(self, query: str, result_count: int):
-        """Track search history for autocomplete."""
+    def cache_query_intent(self, query: str, intent: str, confidence: float, reasoning: str):
+        """Cache query intent classification result."""
         with self._get_connection() as conn:
             conn.execute("""
-                INSERT INTO search_history (query, result_count, searched_at)
-                VALUES (?, ?, ?)
-            """, (query, result_count, datetime.now()))
+                INSERT OR REPLACE INTO query_intent_cache
+                (query, intent, confidence, reasoning, created_at)
+                VALUES (?, ?, ?, ?, ?)
+            """, (query, intent, confidence, reasoning, datetime.now()))
             conn.commit()
 
-    def get_search_suggestions(self, prefix: str, limit: int = 10) -> list[str]:
-        """Return past searches matching prefix."""
+    def get_cached_query_intent(self, query: str) -> Optional[dict]:
+        """Get cached query intent classification."""
         with self._get_connection() as conn:
             cursor = conn.execute("""
-                SELECT DISTINCT query FROM search_history
-                WHERE query LIKE ?
-                ORDER BY searched_at DESC
-                LIMIT ?
-            """, (f"{prefix}%", limit))
+                SELECT intent, confidence, reasoning FROM query_intent_cache
+                WHERE query = ?
+            """, (query,))
+            row = cursor.fetchone()
+            if row:
+                return {
+                    "intent": row["intent"],
+                    "confidence": row["confidence"],
+                    "reasoning": row["reasoning"]
+                }
+            return None
+
+    def clear_query_intent_cache(self):
+        """Clear all query intent cache."""
+        with self._get_connection() as conn:
+            conn.execute("DELETE FROM query_intent_cache")
+            conn.commit()
+        print("Query intent cache cleared.")
+
+    # Search History Methods
+
+    def save_search_history(self, query: str, result_count: int,
+                           surgical_count: int = 0, theoretical_count: int = 0,
+                           search_mode: str = "keyword"):
+        """Track search history for autocomplete with category information."""
+        # Determine dominant category
+        total_categorized = surgical_count + theoretical_count
+        if total_categorized == 0:
+            dominant = None
+        elif surgical_count > theoretical_count * 1.5:
+            dominant = "Surgical/Anatomical"
+        elif theoretical_count > surgical_count * 1.5:
+            dominant = "Theoretical"
+        else:
+            dominant = "Mixed"
+
+        with self._get_connection() as conn:
+            conn.execute("""
+                INSERT INTO search_history
+                (query, result_count, surgical_count, theoretical_count,
+                 dominant_category, search_mode, searched_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (query, result_count, surgical_count, theoretical_count,
+                  dominant, search_mode, datetime.now()))
+            conn.commit()
+
+    def get_search_suggestions(self, prefix: str, limit: int = 10,
+                              category_filter: Optional[str] = None) -> list[str]:
+        """Return past searches matching prefix, optionally filtered by category."""
+        with self._get_connection() as conn:
+            if category_filter:
+                cursor = conn.execute("""
+                    SELECT DISTINCT query FROM search_history
+                    WHERE query LIKE ? AND dominant_category = ?
+                    ORDER BY searched_at DESC
+                    LIMIT ?
+                """, (f"{prefix}%", category_filter, limit))
+            else:
+                cursor = conn.execute("""
+                    SELECT DISTINCT query FROM search_history
+                    WHERE query LIKE ?
+                    ORDER BY searched_at DESC
+                    LIMIT ?
+                """, (f"{prefix}%", limit))
             return [row["query"] for row in cursor]
 
     def get_recent_searches(self, limit: int = 20) -> list[dict]:
-        """Get recent searches with result counts."""
+        """Get recent searches with result counts and category information."""
         with self._get_connection() as conn:
             cursor = conn.execute("""
-                SELECT query, result_count, searched_at FROM search_history
+                SELECT query, result_count, surgical_count, theoretical_count,
+                       dominant_category, search_mode, searched_at
+                FROM search_history
                 ORDER BY searched_at DESC
                 LIMIT ?
             """, (limit,))
@@ -209,6 +296,9 @@ class Database:
             cursor = conn.execute("SELECT COUNT(*) as count FROM categorization_cache")
             stats["cached_categorizations"] = cursor.fetchone()["count"]
 
+            cursor = conn.execute("SELECT COUNT(*) as count FROM query_intent_cache")
+            stats["cached_query_intents"] = cursor.fetchone()["count"]
+
             cursor = conn.execute("SELECT COUNT(*) as count FROM search_history")
             stats["total_searches"] = cursor.fetchone()["count"]
 
@@ -224,6 +314,8 @@ class Database:
                 conn.execute("DELETE FROM pdf_text_cache")
             if cache_type in ("all", "categorization"):
                 conn.execute("DELETE FROM categorization_cache")
+            if cache_type in ("all", "intent"):
+                conn.execute("DELETE FROM query_intent_cache")
             if cache_type in ("all", "history"):
                 conn.execute("DELETE FROM search_history")
             if cache_type in ("all", "structure"):
@@ -594,12 +686,23 @@ class Database:
             ))
             conn.commit()
 
-    def cache_visual_elements_batch(self, elements: list[dict], checksum: str):
+    def cache_visual_elements_batch(self, elements: list[dict], checksum: str, pdf_path: Path | None = None):
         """Batch cache visual elements for efficiency."""
-        if not elements:
-            return
-
         with self._get_connection() as conn:
+            if not elements and pdf_path:
+                # Insert marker row for "0 figures extracted"
+                # This ensures we don't re-extract PDFs with no figures
+                conn.execute("""
+                    INSERT OR REPLACE INTO visual_elements
+                    (id, pdf_path, page_number, format, caption, file_checksum, extracted_at)
+                    VALUES (?, ?, 0, 'marker', 'ZERO_FIGURES', ?, ?)
+                """, (f"{pdf_path.stem}_ZERO_FIGURES", str(pdf_path), checksum, datetime.now()))
+                conn.commit()
+                return
+            elif not elements:
+                # No elements and no pdf_path - nothing to cache
+                return
+
             rows = []
             for e in elements:
                 bbox_json = json.dumps(list(e.get("bbox", []))) if e.get("bbox") else None
@@ -730,6 +833,15 @@ class Database:
                     SELECT COUNT(*) as count FROM visual_elements
                     WHERE pdf_path = ?
                 """, (str(pdf_path),))
+            return cursor.fetchone()["count"]
+
+    def get_page_figure_count(self, pdf_path: Path, page_number: int) -> int:
+        """Get count of figures for a specific page of a PDF."""
+        with self._get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT COUNT(*) as count FROM visual_elements
+                WHERE pdf_path = ? AND page_number = ?
+            """, (str(pdf_path), page_number))
             return cursor.fetchone()["count"]
 
     def is_pdf_figures_extracted(self, pdf_path: Path, checksum: str) -> bool:

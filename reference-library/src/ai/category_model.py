@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 from typing import Optional
 
-import config
+from src import config
 
 
 @dataclass

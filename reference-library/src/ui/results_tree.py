@@ -4,7 +4,7 @@ from tkinter import ttk
 from typing import Callable, Optional
 from pathlib import Path
 
-import config
+from src import config
 from ..search.result_model import SearchResult
 from ..ai.category_model import CategoryResult
 from .styles import FONTS, PADDING
@@ -18,13 +18,17 @@ class ResultsTree(ctk.CTkFrame):
         parent,
         on_select: Callable[[SearchResult], None],
         on_selection_change: Optional[Callable[[list[SearchResult]], None]] = None,
+        on_extract_images: Optional[Callable[[SearchResult], None]] = None,
+        on_index_text: Optional[Callable[[SearchResult], None]] = None,
         database=None,
         **kwargs
     ):
         super().__init__(parent, **kwargs)
         self.on_select = on_select
-        self.on_selection_change = on_selection_change  # Callback when checkbox selection changes
-        self.database = database  # Database for figure count queries
+        self.on_selection_change = on_selection_change
+        self.on_extract_images = on_extract_images
+        self.on_index_text = on_index_text
+        self.database = database
         self.results: dict[str, SearchResult] = {}  # item_id -> SearchResult
         self.series_items: dict[str, str] = {}  # series_name -> tree_item_id
         self.chapter_items: dict[str, str] = {}  # chapter_key -> tree_item_id
@@ -34,6 +38,9 @@ class ResultsTree(ctk.CTkFrame):
         self._detached_items: set[str] = set()  # Items currently hidden
         self._item_parents: dict[str, str] = {}  # item_id -> parent_id for reattach
         self._active_filter: list[str] = []  # Currently active category filter
+        
+        # Context menu
+        self.context_menu = None
 
         self._setup_ui()
 
@@ -152,12 +159,23 @@ class ResultsTree(ctk.CTkFrame):
         self.tree.bind("<<TreeviewSelect>>", self._on_tree_select)
         self.tree.bind("<Double-1>", self._on_double_click)
         self.tree.bind("<Button-1>", self._on_click)
+        
+        # Bind right-click for context menu (macOS uses Button-2 or Button-3 depending on config)
+        self.tree.bind("<Button-2>", self._show_context_menu)
+        self.tree.bind("<Button-3>", self._show_context_menu)
+
+        # Create context menu
+        self._create_context_menu()
 
         # Configure tag colors for categories
         for category, color in config.CATEGORY_COLORS.items():
             self.tree.tag_configure(category, foreground=color)
         # Configure uncategorized tag for results without category yet
         self.tree.tag_configure("uncategorized", foreground="#CCCCCC")
+
+        # Configure tag colors for category groups
+        self.tree.tag_configure("Surgical/Anatomical", foreground="#e74c3c")  # Red
+        self.tree.tag_configure("Theoretical", foreground="#3498db")  # Blue
 
     def clear(self):
         """Clear all results from tree."""
@@ -184,6 +202,10 @@ class ResultsTree(ctk.CTkFrame):
         # Get figure count for this page
         fig_count = self._get_figure_count(result)
 
+        # Add category badge based on group
+        category_badge = self._get_category_badge(result)
+        category_display = f"{category_badge} {result.category or '...'}"
+
         # Add match node with checkbox
         match_id = self.tree.insert(
             chapter_id,
@@ -191,7 +213,7 @@ class ResultsTree(ctk.CTkFrame):
             text=f"p.{result.page_number}: {result.match_text[:50]}...",
             values=(
                 "☐",  # Unchecked checkbox
-                result.category or "...",
+                category_display,
                 result.page_number,
                 fig_count,
                 f"{result.category_confidence:.0%}" if result.category_confidence else "..."
@@ -211,12 +233,21 @@ class ResultsTree(ctk.CTkFrame):
 
         self._update_count(len(self.results) - len(self._detached_items))
 
+    def _get_category_badge(self, result: SearchResult) -> str:
+        """Get visual badge for category group."""
+        if result.category_group == "Surgical/Anatomical":
+            return "🔴"  # Red circle for surgical
+        elif result.category_group == "Theoretical":
+            return "🔵"  # Blue circle for clinical/theoretical
+        else:
+            return "⚪"  # White circle for uncategorized
+
     def _get_figure_count(self, result: SearchResult) -> str:
         """Get figure count for a result's page."""
         if not self.database:
             return "-"
         try:
-            count = self.database.get_figure_count(result.pdf_path, result.page_number)
+            count = self.database.get_page_figure_count(result.pdf_path, result.page_number)
             return str(count) if count > 0 else "-"
         except Exception:
             return "-"
@@ -261,9 +292,9 @@ class ResultsTree(ctk.CTkFrame):
                 stored_result.category_confidence = cat_result.confidence
                 stored_result.category_reasoning = cat_result.reasoning
 
-                # Format display: shortened group prefix + category
-                group_prefix = "S" if cat_result.group == "Surgical/Anatomical" else "T"
-                display_cat = f"{group_prefix}:{cat_result.category}"
+                # Add category badge
+                category_badge = self._get_category_badge(stored_result)
+                display_cat = f"{category_badge} {cat_result.category}"
 
                 # Update tree display (preserve checkbox state and figs count)
                 current_values = self.tree.item(item_id, "values")
@@ -554,3 +585,53 @@ class ResultsTree(ctk.CTkFrame):
             if current_values:
                 current_values[0] = "☑"
                 self.tree.item(item_id, values=current_values)
+
+    def _create_context_menu(self):
+        """Create the right-click context menu."""
+        import tkinter as tk
+        self.context_menu = tk.Menu(self, tearoff=0)
+        self.context_menu.add_command(label="Extract Images from PDF", command=self._handle_extract_images)
+        self.context_menu.add_command(label="Index Text (Background)", command=self._handle_index_text)
+        self.context_menu.add_separator()
+        self.context_menu.add_command(label="Open PDF", command=self._handle_open_pdf)
+
+    def _show_context_menu(self, event):
+        """Show context menu on right click."""
+        item_id = self.tree.identify_row(event.y)
+        if item_id in self.results:
+            # Select the item first
+            self.tree.selection_set(item_id)
+            self._on_tree_select(None)
+            
+            # Show menu
+            try:
+                self.context_menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                self.context_menu.grab_release()
+
+    def _handle_extract_images(self):
+        """Handle extract images menu action."""
+        selection = self.tree.selection()
+        if selection and self.on_extract_images:
+            item_id = selection[0]
+            if item_id in self.results:
+                self.on_extract_images(self.results[item_id])
+
+    def _handle_index_text(self):
+        """Handle index text menu action."""
+        selection = self.tree.selection()
+        if selection and self.on_index_text:
+            item_id = selection[0]
+            if item_id in self.results:
+                self.on_index_text(self.results[item_id])
+
+    def _handle_open_pdf(self):
+        """Handle open PDF menu action."""
+        selection = self.tree.selection()
+        if selection:
+            item_id = selection[0]
+            if item_id in self.results:
+                result = self.results[item_id]
+                import subprocess
+                subprocess.run(["open", "-a", "Preview", str(result.pdf_path)])
+

@@ -197,7 +197,7 @@ def get_image_extractor(
     """
     # Import here to avoid circular imports
     try:
-        from config import MIN_IMAGE_SIZE, MAX_IMAGE_SIZE
+        from src.config import MIN_IMAGE_SIZE, MAX_IMAGE_SIZE
         default_min = MIN_IMAGE_SIZE
         default_max = MAX_IMAGE_SIZE
     except ImportError:
@@ -250,10 +250,10 @@ def get_qdrant_store(collection_name: str = "reference_library_visuals"):
         from neurosynth.dedup.qdrant_store import QdrantVisualStore
         # Import config for path
         try:
-            from config import QDRANT_PATH
+            from src.config import QDRANT_PATH
             path = QDRANT_PATH
         except ImportError:
-            from config import DATA_DIR
+            from src.config import DATA_DIR
             path = DATA_DIR / "qdrant"
 
         return QdrantVisualStore(

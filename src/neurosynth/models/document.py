@@ -79,6 +79,33 @@ class Source:
             parts.append(self.publisher)
         return ". ".join(parts)
 
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "path": str(self.path),
+            "format": self.format.value,
+            "title": self.title,
+            "authors": self.authors,
+            "year": self.year,
+            "edition": self.edition,
+            "publisher": self.publisher,
+            "id": self.id,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Source":
+        """Create Source from dictionary."""
+        return cls(
+            path=Path(data["path"]),
+            format=DocumentFormat(data["format"]),
+            title=data.get("title", ""),
+            authors=data.get("authors", []),
+            year=data.get("year"),
+            edition=data.get("edition"),
+            publisher=data.get("publisher"),
+            id=data.get("id", ""),
+        )
+
 
 @dataclass
 class ContentChunk:
@@ -142,6 +169,56 @@ class ContentChunk:
         """Add a visual element to this chunk."""
         self.visual_elements.append(visual)
         visual.associated_chunk_ids.append(self.id)
+
+    def to_dict(self, include_embedding: bool = True) -> dict:
+        """Convert to dictionary for JSON serialization.
+
+        Args:
+            include_embedding: Whether to include the embedding array (large).
+                              Set to False for smaller serialization.
+        """
+        data = {
+            "content": self.content,
+            "source": self.source.to_dict(),
+            "page_number": self.page_number,
+            "section_title": self.section_title,
+            "chapter_title": self.chapter_title,
+            "id": self.id,
+            "word_count": self.word_count,
+            "content_hash": self.content_hash,
+            "cluster_id": self.cluster_id,
+            "visual_element_ids": [v.id for v in self.visual_elements],
+        }
+        if include_embedding and self.embedding is not None:
+            data["embedding"] = self.embedding.tolist()
+        return data
+
+    @classmethod
+    def from_dict(cls, data: dict, visual_lookup: dict | None = None) -> "ContentChunk":
+        """Create ContentChunk from dictionary.
+
+        Args:
+            data: Dictionary with chunk data
+            visual_lookup: Optional dict mapping visual IDs to VisualElement objects
+        """
+        chunk = cls(
+            content=data["content"],
+            source=Source.from_dict(data["source"]),
+            page_number=data.get("page_number"),
+            section_title=data.get("section_title"),
+            chapter_title=data.get("chapter_title"),
+            id=data.get("id", ""),
+            cluster_id=data.get("cluster_id"),
+        )
+        # Restore embedding if present
+        if "embedding" in data and data["embedding"] is not None:
+            chunk.embedding = np.array(data["embedding"])
+        # Restore visual elements if lookup provided
+        if visual_lookup and "visual_element_ids" in data:
+            for vid in data["visual_element_ids"]:
+                if vid in visual_lookup:
+                    chunk.visual_elements.append(visual_lookup[vid])
+        return chunk
 
 
 @dataclass

@@ -7,7 +7,7 @@ import sys
 
 from PIL import Image, ImageTk
 
-import config
+from src import config
 from ..search.result_model import SearchResult
 from .styles import FONTS, PADDING
 

@@ -7,9 +7,10 @@ import fitz  # PyMuPDF
 
 from .result_model import SearchResult, PageMatch, SearchProgress, ChapterMetadata
 from .semantic_searcher import SemanticSearcher
+from .neurosurgical_synonyms import expand_query, get_all_terms_for_query
 from ..cache.database import Database
 from ..utils.library_scanner import LibraryScanner
-import config
+from src import config
 
 # Prevent tokenizers deadlock when forking
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -18,11 +19,12 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 class PDFSearcher:
     """On-demand PDF text search using PyMuPDF with optional semantic search."""
 
-    def __init__(self, library_path: Path, database: Database):
+    def __init__(self, library_path: Path, database: Database, enable_query_expansion: bool = True):
         self.library_path = library_path.resolve()
         self.database = database
         self.scanner = LibraryScanner(library_path, database)
         self.semantic = SemanticSearcher(database)
+        self.enable_query_expansion = enable_query_expansion
         self._cancelled = False
 
     def cancel(self):
@@ -53,7 +55,8 @@ class PDFSearcher:
         self,
         query: str,
         mode: str = "keyword",
-        progress_callback: Optional[Callable[[SearchProgress], None]] = None
+        progress_callback: Optional[Callable[[SearchProgress], None]] = None,
+        category_filter: Optional[str] = None
     ) -> Generator[SearchResult, None, None]:
         """
         Search entire library for query.
@@ -62,6 +65,9 @@ class PDFSearcher:
             query: Search term
             mode: "keyword", "semantic", or "hybrid"
             progress_callback: Optional callback for progress updates
+            category_filter: Optional filter for semantic search
+                           ("Surgical/Anatomical" or "Theoretical")
+                           Note: Only applies to semantic/hybrid modes
 
         Yields:
             SearchResult objects as they are found (streaming)
@@ -73,7 +79,11 @@ class PDFSearcher:
 
         # 1. Semantic Search Phase (instant, ranked by similarity)
         if mode in ["semantic", "hybrid"] and self.semantic.enabled:
-            semantic_hits = self.semantic.search(query, n_results=30)
+            semantic_hits = self.semantic.search(
+                query,
+                n_results=30,
+                category_filter=category_filter
+            )
 
             # Report semantic search phase with progress
             if progress_callback:
@@ -177,6 +187,7 @@ class PDFSearcher:
             cached_pages = self.database.get_all_cached_pages(pdf_path, checksum)
 
             # Use context manager for proper resource cleanup
+            new_pages = {}  # Track pages to batch cache
             with fitz.open(pdf_path) as doc:
                 for page_num in range(len(doc)):
                     # Get page text (from cache or extract)
@@ -185,12 +196,15 @@ class PDFSearcher:
                     else:
                         page = doc[page_num]
                         text = page.get_text()
-                        # Cache the extracted text
-                        self.database.cache_pdf_text(pdf_path, page_num, text, checksum)
+                        new_pages[page_num] = text
 
                     # Search for query (case-insensitive)
                     page_matches = self._find_matches(query, text, page_num + 1)  # 1-indexed pages
                     matches.extend(page_matches)
+
+            # Batch cache any newly extracted pages
+            if new_pages:
+                self.database.cache_pdf_text_batch(pdf_path, new_pages, checksum)
 
         except ValueError as e:
             # Path validation error - log but don't expose internal paths
@@ -205,25 +219,40 @@ class PDFSearcher:
         return matches
 
     def _find_matches(self, query: str, text: str, page_number: int) -> list[PageMatch]:
-        """Find all occurrences of query in text with context."""
+        """Find all occurrences of query in text with context, including synonyms."""
         matches = []
+        seen_positions = set()  # Track positions to avoid duplicates
 
-        # Case-insensitive search
-        pattern = re.compile(re.escape(query), re.IGNORECASE)
+        # Get query variations (original + synonyms if enabled)
+        if self.enable_query_expansion:
+            query_variations = expand_query(query, max_expansions=3)
+        else:
+            query_variations = [query]
 
-        for match in pattern.finditer(text):
-            start_pos = match.start()
-            match_text = match.group()
+        # Search for each variation
+        for query_variant in query_variations:
+            # Case-insensitive search
+            pattern = re.compile(re.escape(query_variant), re.IGNORECASE)
 
-            # Extract context window
-            context = self._extract_context(text, start_pos, len(match_text))
+            for match in pattern.finditer(text):
+                start_pos = match.start()
 
-            matches.append(PageMatch(
-                page_number=page_number,
-                match_text=match_text,
-                context=context,
-                start_pos=start_pos
-            ))
+                # Skip if we've already found a match at this position
+                if start_pos in seen_positions:
+                    continue
+                seen_positions.add(start_pos)
+
+                match_text = match.group()
+
+                # Extract context window
+                context = self._extract_context(text, start_pos, len(match_text))
+
+                matches.append(PageMatch(
+                    page_number=page_number,
+                    match_text=match_text,
+                    context=context,
+                    start_pos=start_pos
+                ))
 
         return matches
 
@@ -301,6 +330,48 @@ class PDFSearcher:
         # If query not found literally, return start of text
         return text[:config.CONTEXT_WINDOW_SIZE] + "..."
 
+    def index_pdf_semantic(self, pdf_path: Path) -> int:
+        """
+        Build semantic index for a single PDF.
+        
+        Args:
+            pdf_path: Path to PDF file
+            
+        Returns:
+            Number of pages indexed
+        """
+        import time
+        
+        if not self.semantic.enabled:
+            return 0
+
+        try:
+            # Validate path is within library
+            self._validate_path(pdf_path)
+
+            checksum = self.database.get_file_checksum(pdf_path)
+            cached_pages = self.database.get_all_cached_pages(pdf_path, checksum)
+
+            # If no cached pages, extract text first using context manager
+            if not cached_pages:
+                with fitz.open(pdf_path) as doc:
+                    for page_num in range(len(doc)):
+                        text = doc[page_num].get_text()
+                        cached_pages[page_num] = text
+                # Batch cache all pages at once (single transaction)
+                self.database.cache_pdf_text_batch(pdf_path, cached_pages, checksum)
+
+            # Batch encode all pages at once (more efficient, fewer GIL holds)
+            batch_count = self.semantic.index_pages_batch(pdf_path, cached_pages, checksum)
+            return batch_count
+
+        except (ValueError, fitz.FileDataError, OSError) as e:
+            print(f"Error indexing {pdf_path.name}: {e}")
+            return 0
+        except Exception as e:
+            print(f"Unexpected error indexing {pdf_path.name}: {type(e).__name__}")
+            return 0
+
     def index_library_semantic(
         self,
         progress_callback: Optional[Callable[[int, int], None]] = None
@@ -328,35 +399,15 @@ class PDFSearcher:
             if self._cancelled:
                 break
 
-            try:
-                # Validate path is within library
-                self._validate_path(pdf_path)
+            # Index single PDF
+            batch_count = self.index_pdf_semantic(pdf_path)
+            indexed_pages += batch_count
 
-                checksum = self.database.get_file_checksum(pdf_path)
-                cached_pages = self.database.get_all_cached_pages(pdf_path, checksum)
+            # Yield GIL between PDFs to let UI thread run
+            time.sleep(0.01)
 
-                # If no cached pages, extract text first using context manager
-                if not cached_pages:
-                    with fitz.open(pdf_path) as doc:
-                        for page_num in range(len(doc)):
-                            text = doc[page_num].get_text()
-                            self.database.cache_pdf_text(pdf_path, page_num, text, checksum)
-                            cached_pages[page_num] = text
-
-                # Batch encode all pages at once (more efficient, fewer GIL holds)
-                batch_count = self.semantic.index_pages_batch(pdf_path, cached_pages, checksum)
-                indexed_pages += batch_count
-
-                # Yield GIL between PDFs to let UI thread run
-                time.sleep(0.01)
-
-                if progress_callback:
-                    progress_callback(i + 1, total)
-
-            except (ValueError, fitz.FileDataError, OSError) as e:
-                print(f"Error indexing {pdf_path.name}: {e}")
-            except Exception as e:
-                print(f"Unexpected error indexing {pdf_path.name}: {type(e).__name__}")
+            if progress_callback:
+                progress_callback(i + 1, total)
 
         return indexed_pages
 
@@ -430,13 +481,12 @@ class PDFSearcher:
                     # Calculate checksum in main process (database operation)
                     checksum = self.database.get_file_checksum(pdf_path)
 
-                    # Cache text and index each page (main thread = safe for SQLite)
+                    # Cache text in batch (single transaction = much faster)
                     pages = result["pages"]
-                    for page_num, text in pages.items():
-                        # Cache the extracted text
-                        self.database.cache_pdf_text(pdf_path, page_num, text, checksum)
+                    self.database.cache_pdf_text_batch(pdf_path, pages, checksum)
 
-                        # Index in semantic search
+                    # Index each page in semantic search
+                    for page_num, text in pages.items():
                         if self.semantic.index_page(pdf_path, page_num + 1, text, checksum):
                             indexed_pages += 1
 

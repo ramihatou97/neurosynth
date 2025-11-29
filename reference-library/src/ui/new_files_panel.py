@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Callable, Optional
 from datetime import datetime
 
-import config
+from src import config
 from .styles import FONTS, PADDING
 
 

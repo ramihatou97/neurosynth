@@ -1,0 +1,94 @@
+# NeuroSynth Worker Service
+# Full NeuroSynth installation with LaTeX for document generation
+# Consumes jobs from Redis queue and executes synthesis pipeline
+
+ARG PYTHON_VERSION=3.11
+FROM python:${PYTHON_VERSION}-slim as builder
+
+# Build stage - install Python dependencies
+WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy dependency files
+COPY pyproject.toml requirements.txt* ./
+COPY src/ ./src/
+
+# Install all dependencies
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -e . && \
+    pip install --no-cache-dir redis>=5.0.0
+
+# Runtime stage
+FROM python:${PYTHON_VERSION}-slim
+
+# Build arguments for image traceability
+ARG BUILD_DATE
+ARG GIT_SHA
+ARG VERSION
+
+# OCI Image Labels
+LABEL org.opencontainers.image.created="${BUILD_DATE}"
+LABEL org.opencontainers.image.revision="${GIT_SHA}"
+LABEL org.opencontainers.image.version="${VERSION}"
+LABEL org.opencontainers.image.title="neurosynth-worker"
+LABEL org.opencontainers.image.description="NeuroSynth Worker Service"
+LABEL org.opencontainers.image.source="https://github.com/ramihatoum/neurosynth"
+
+# Prevent Python from writing pyc files and buffering stdout/stderr
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# Install LaTeX and runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    texlive-latex-base \
+    texlive-latex-extra \
+    texlive-fonts-recommended \
+    texlive-fonts-extra \
+    texlive-science \
+    latexmk \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Copy Python environment from builder
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Copy application code
+COPY src/ ./src/
+COPY pyproject.toml ./
+
+# Install the package (editable for worker module discovery)
+RUN pip install --no-cache-dir -e .
+
+# Create non-root user
+RUN groupadd -r neurosynth --gid=1000 && \
+    useradd -r -g neurosynth --uid=1000 --home-dir=/home/neurosynth --shell=/bin/bash neurosynth && \
+    mkdir -p /home/neurosynth/.neurosynth && \
+    chown -R neurosynth:neurosynth /home/neurosynth /app
+
+# Create data directories
+RUN mkdir -p /data/jobs /data/sources /data/processed /data/output && \
+    chown -R neurosynth:neurosynth /data
+
+# Switch to non-root user
+USER neurosynth
+
+# Set environment variables
+ENV HOME=/home/neurosynth
+ENV PYTHONPATH=/app/src
+ENV DATA_DIR=/data
+
+# Health check - verify Redis connectivity
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD python -c "import redis; import os; redis.from_url(os.environ.get('REDIS_URL', 'redis://localhost:6379')).ping()" || exit 1
+
+# Run the worker
+ENTRYPOINT ["python", "-m", "neurosynth.worker.main"]
+CMD []

@@ -9,8 +9,17 @@ try:
 except ImportError:
     SEMANTIC_AVAILABLE = False
 
-import config
+from src import config
 from ..cache.database import Database
+
+
+# Available embedding models
+EMBEDDING_MODELS = {
+    "general": "all-MiniLM-L6-v2",  # Fast, general-purpose (default)
+    "medical": "pritamdeka/S-PubMedBert-MS-MARCO",  # Medical domain-specific
+    "retrieval": "BAAI/bge-small-en-v1.5",  # Optimized for retrieval
+    "large": "BAAI/bge-large-en-v1.5",  # Higher quality, slower
+}
 
 
 class SemanticSearcher:
@@ -35,21 +44,32 @@ class SemanticSearcher:
             self.client = chromadb.PersistentClient(path=str(config.CHROMA_DB_PATH))
 
             # Create or get collection with cosine similarity for pages
+            # Collection name includes model type to avoid mixing embeddings
+            collection_name = f"neurosurgery_pages_{config.EMBEDDING_MODEL_TYPE}"
             self.collection = self.client.get_or_create_collection(
-                name="neurosurgery_pages",
-                metadata={"hnsw:space": "cosine"}
+                name=collection_name,
+                metadata={
+                    "hnsw:space": "cosine",
+                    "model": config.EMBEDDING_MODEL,
+                    "model_type": config.EMBEDDING_MODEL_TYPE
+                }
             )
 
             # Create or get collection for figure captions
+            captions_collection_name = f"figure_captions_{config.EMBEDDING_MODEL_TYPE}"
             self.captions_collection = self.client.get_or_create_collection(
-                name="figure_captions",
-                metadata={"hnsw:space": "cosine"}
+                name=captions_collection_name,
+                metadata={
+                    "hnsw:space": "cosine",
+                    "model": config.EMBEDDING_MODEL,
+                    "model_type": config.EMBEDDING_MODEL_TYPE
+                }
             )
 
-            # Load model (downloads on first run, ~80MB)
-            print(f"Loading embedding model: {config.EMBEDDING_MODEL}")
+            # Load model (downloads on first run)
+            print(f"Loading embedding model: {config.EMBEDDING_MODEL} ({config.EMBEDDING_MODEL_TYPE})")
             self.model = SentenceTransformer(config.EMBEDDING_MODEL)
-            print("Semantic search initialized successfully")
+            print(f"Semantic search initialized successfully with {config.EMBEDDING_MODEL_TYPE} model")
 
         except Exception as e:
             print(f"Failed to initialize semantic search: {e}")
@@ -207,16 +227,19 @@ class SemanticSearcher:
             print(f"Error batch indexing {pdf_path.name}: {e}")
             return 0
 
-    def search(self, query: str, n_results: int = 30) -> List[Dict[str, Any]]:
+    def search(self, query: str, n_results: int = 30,
+               category_filter: Optional[str] = None) -> List[Dict[str, Any]]:
         """
-        Perform semantic search.
+        Perform semantic search with optional category filtering.
 
         Args:
             query: Search query (natural language)
             n_results: Maximum number of results to return
+            category_filter: Optional filter by category group
+                           ("Surgical/Anatomical" or "Theoretical")
 
         Returns:
-            List of dicts with: pdf_path, page_number, score
+            List of dicts with: pdf_path, page_number, score, category_group (if available)
         """
         if not self.enabled:
             return []
@@ -225,10 +248,16 @@ class SemanticSearcher:
             # Embed the query
             query_embedding = self.model.encode(query).tolist()
 
-            # Search ChromaDB
+            # Build metadata filter if specified
+            where = None
+            if category_filter in ["Surgical/Anatomical", "Theoretical"]:
+                where = {"category_group": category_filter}
+
+            # Search ChromaDB with optional filter
             results = self.collection.query(
                 query_embeddings=[query_embedding],
                 n_results=n_results,
+                where=where,  # Apply category filter if specified
                 include=["metadatas", "distances"]
             )
 
@@ -244,7 +273,8 @@ class SemanticSearcher:
                 clean_results.append({
                     "pdf_path": Path(meta["pdf_path"]),
                     "page_number": int(meta["page_number"]),
-                    "score": score
+                    "score": score,
+                    "category_group": meta.get("category_group")  # Include if available
                 })
 
             return clean_results
@@ -252,6 +282,46 @@ class SemanticSearcher:
         except Exception as e:
             print(f"Semantic search error: {e}")
             return []
+
+    def update_page_category(self, pdf_path: Path, page_number: int,
+                            category_group: str, category: str):
+        """
+        Update category metadata for an already-indexed page.
+
+        This allows us to enrich the semantic index with category information
+        after AI categorization has been performed.
+
+        Args:
+            pdf_path: Path to the PDF
+            page_number: Page number (1-indexed)
+            category_group: "Surgical/Anatomical" or "Theoretical"
+            category: Specific subcategory
+        """
+        if not self.enabled:
+            return
+
+        try:
+            doc_id = f"{pdf_path}:{page_number}"
+
+            # Get existing metadata
+            existing = self.collection.get(ids=[doc_id], include=["metadatas"])
+            if not existing['ids']:
+                return  # Page not indexed yet
+
+            # Update metadata
+            metadata = existing['metadatas'][0]
+            metadata["category_group"] = category_group
+            metadata["category"] = category
+
+            # Update in ChromaDB (requires re-upserting with same embedding)
+            # Note: ChromaDB doesn't have a metadata-only update, so we keep the embedding
+            self.collection.update(
+                ids=[doc_id],
+                metadatas=[metadata]
+            )
+
+        except Exception as e:
+            print(f"Warning: Failed to update category for {pdf_path.name} p{page_number}: {e}")
 
     def get_indexed_count(self) -> int:
         """Get number of indexed pages in ChromaDB."""
@@ -264,6 +334,24 @@ class SemanticSearcher:
             # ValueError: Invalid collection state
             # AttributeError: Collection not properly initialized
             return 0
+
+    def get_model_info(self) -> dict:
+        """Get information about the current embedding model."""
+        if not self.enabled:
+            return {
+                "enabled": False,
+                "model": None,
+                "model_type": None,
+                "indexed_count": 0
+            }
+
+        return {
+            "enabled": True,
+            "model": config.EMBEDDING_MODEL,
+            "model_type": config.EMBEDDING_MODEL_TYPE,
+            "indexed_count": self.get_indexed_count(),
+            "collection_name": self.collection.name if self.collection else None
+        }
 
     def clear_index(self):
         """Clear the vector index (for rebuilding)."""

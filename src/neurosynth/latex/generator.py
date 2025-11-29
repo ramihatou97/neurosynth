@@ -129,13 +129,37 @@ class LaTeXGenerator:
         self,
         tex_path: Path,
         output_dir: Path | None = None,
-    ) -> Path | None:
-        """Compile LaTeX to PDF using pdflatex."""
+        validate: bool = True,
+    ) -> Path:
+        """Compile LaTeX to PDF with validation.
+
+        Args:
+            tex_path: Path to .tex file
+            output_dir: Output directory
+            validate: Whether to validate PDF after compilation
+
+        Returns:
+            Path to compiled PDF
+
+        Raises:
+            LaTeXCompilationError: If compilation fails
+            PDFValidationError: If validation fails
+            FileNotFoundError: If pdflatex not found
+        """
+        import logging
+
+        from neurosynth.latex.exceptions import (
+            LaTeXCompilationError,
+            PDFValidationError,
+        )
+
+        logger = logging.getLogger(__name__)
         output_dir = output_dir or tex_path.parent
+        log_path = output_dir / tex_path.with_suffix(".log").name
 
         try:
             # Run pdflatex twice for references
-            for _ in range(2):
+            for pass_num in range(1, 3):
                 result = subprocess.run(
                     [
                         "pdflatex",
@@ -149,24 +173,157 @@ class LaTeXGenerator:
                     timeout=120,
                 )
 
-            pdf_path = output_dir / tex_path.with_suffix(".pdf").name
+                # CRITICAL: Check return code
+                if result.returncode != 0:
+                    logger.error(
+                        f"pdflatex pass {pass_num} failed with code {result.returncode}"
+                    )
 
-            if pdf_path.exists():
-                console.print(f"[green]PDF generated: {pdf_path}[/green]")
-                return pdf_path
-            else:
-                console.print("[red]PDF compilation failed[/red]")
-                console.print(result.stderr[:500] if result.stderr else "No error output")
-                return None
+                    # Parse log file for detailed errors
+                    log_info = {}
+                    error_details = ""
+                    if log_path.exists():
+                        log_info = self.parse_latex_log(log_path)
+                        error_details = "\n".join(log_info.get("errors", []))
+                    else:
+                        error_details = "Log file not found"
+
+                    raise LaTeXCompilationError(
+                        f"LaTeX compilation failed on pass {pass_num}",
+                        returncode=result.returncode,
+                        stdout=result.stdout[-1000:] if result.stdout else None,
+                        stderr=result.stderr[-1000:] if result.stderr else None,
+                        log_path=log_path,
+                        errors=error_details,
+                    )
+
+                logger.info(f"pdflatex pass {pass_num} completed successfully")
+
+            # Check if PDF was generated
+            pdf_path = output_dir / tex_path.with_suffix(".pdf").name
+            if not pdf_path.exists():
+                raise LaTeXCompilationError(
+                    "PDF file was not generated despite successful compilation",
+                    log_path=log_path,
+                )
+
+            # Validate PDF integrity
+            if validate:
+                is_valid, error_msg = self.validate_pdf(pdf_path)
+                if not is_valid:
+                    raise PDFValidationError(
+                        f"Generated PDF failed validation: {error_msg}",
+                        pdf_path=pdf_path,
+                    )
+
+            console.print(f"[green]PDF successfully generated: {pdf_path}[/green]")
+            return pdf_path
 
         except FileNotFoundError:
-            console.print(
-                "[yellow]pdflatex not found. Install TeX distribution to compile PDFs.[/yellow]"
+            raise FileNotFoundError(
+                "pdflatex not found. Install TeX distribution to compile PDFs."
             )
-            return None
         except subprocess.TimeoutExpired:
-            console.print("[red]PDF compilation timed out[/red]")
-            return None
+            raise LaTeXCompilationError(
+                "PDF compilation timed out after 120 seconds",
+                log_path=log_path,
+            )
+
+    def validate_pdf(self, pdf_path: Path) -> tuple[bool, str]:
+        """Validate PDF file integrity.
+
+        Checks:
+        1. File exists and is not empty
+        2. Starts with PDF magic bytes (%PDF-)
+        3. Contains %%EOF marker
+        4. File size > minimum threshold
+
+        Returns:
+            (is_valid, error_message)
+        """
+        if not pdf_path.exists():
+            return False, "File does not exist"
+
+        file_size = pdf_path.stat().st_size
+        if file_size == 0:
+            return False, "File is empty (0 bytes)"
+        if file_size < 1024:
+            return False, f"File too small ({file_size} bytes, minimum 1024)"
+
+        try:
+            with open(pdf_path, "rb") as f:
+                # Check PDF magic bytes
+                header = f.read(5)
+                if header != b"%PDF-":
+                    return False, f"Invalid PDF header (expected %PDF-, found {header})"
+
+                # Check for EOF marker in last 1KB
+                f.seek(max(0, file_size - 1024))
+                tail = f.read()
+                if b"%%EOF" not in tail:
+                    return False, "Missing PDF EOF marker"
+
+        except Exception as e:
+            return False, f"Error reading file: {e}"
+
+        return True, ""
+
+    def parse_latex_log(self, log_path: Path) -> dict[str, Any]:
+        """Parse LaTeX .log file for errors and warnings.
+
+        Returns dict with:
+        - has_errors: bool
+        - errors: list of error messages
+        - missing_files: list of missing file paths
+        - missing_packages: list of missing packages
+        - page_count: int or None
+        """
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        result = {
+            "has_errors": False,
+            "errors": [],
+            "missing_files": [],
+            "missing_packages": [],
+            "page_count": None,
+        }
+
+        if not log_path.exists():
+            return result
+
+        try:
+            with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+                log_content = f.read()
+
+            # Parse for errors
+            for line in log_content.split("\n"):
+                if line.startswith("! "):
+                    result["has_errors"] = True
+                    result["errors"].append(line)
+
+                # Missing files
+                if "! File" in line and "not found" in line:
+                    match = re.search(r"File `(.+?)' not found", line)
+                    if match:
+                        result["missing_files"].append(match.group(1))
+
+                # Missing packages
+                if "! LaTeX Error: File" in line and ".sty' not found" in line:
+                    match = re.search(r"File `(.+?).sty' not found", line)
+                    if match:
+                        result["missing_packages"].append(match.group(1))
+
+            # Extract page count
+            page_match = re.search(r"Output written on .+ \((\d+) page", log_content)
+            if page_match:
+                result["page_count"] = int(page_match.group(1))
+
+        except Exception as e:
+            logger.warning(f"Could not parse log file: {e}")
+
+        return result
 
     def _get_chapter_template(self) -> Any:
         """Get or create chapter template."""
@@ -234,15 +391,30 @@ class LaTeXGenerator:
 
         # Copy image to figures directory
         if self.images_dir:
+            from neurosynth.latex.exceptions import ImagePreparationError
+
             target_path = self.images_dir / target_name
             try:
                 shutil.copy2(visual.image_path, target_path)
                 # Use relative path for LaTeX
                 latex_path = f"figures/{target_name}"
             except Exception as e:
-                console.print(f"[yellow]Warning: Could not copy image {visual.image_path}: {e}[/yellow]")
-                latex_path = str(visual.image_path)
+                # CRITICAL CHANGE: Don't fall back to absolute paths
+                # In Docker, absolute paths outside /data/jobs won't work
+                console.print(
+                    f"[red]Error: Could not copy image {visual.image_path}: {e}[/red]"
+                )
+                raise ImagePreparationError(
+                    f"Failed to copy image to figures directory: {e}",
+                    image_path=visual.image_path,
+                    target_path=target_path,
+                )
         else:
+            # No images_dir set - likely testing scenario
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.warning(f"No images_dir set, using absolute path: {visual.image_path}")
             latex_path = str(visual.image_path)
 
         # Generate caption (preserve original only, per user requirement)

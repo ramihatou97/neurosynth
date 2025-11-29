@@ -1,0 +1,80 @@
+# NeuroSynth Base Image
+# Contains Python 3.11, system dependencies, and base Python packages
+# Used as foundation for api and worker images
+
+ARG PYTHON_VERSION=3.11
+FROM python:${PYTHON_VERSION}-slim as base
+
+# Build arguments for image traceability
+ARG BUILD_DATE
+ARG GIT_SHA
+ARG VERSION
+
+# OCI Image Labels
+LABEL org.opencontainers.image.created="${BUILD_DATE}"
+LABEL org.opencontainers.image.revision="${GIT_SHA}"
+LABEL org.opencontainers.image.version="${VERSION}"
+LABEL org.opencontainers.image.title="neurosynth-base"
+LABEL org.opencontainers.image.description="NeuroSynth Base Image"
+LABEL org.opencontainers.image.source="https://github.com/ramihatoum/neurosynth"
+
+# Prevent Python from writing pyc files and buffering stdout/stderr
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+# - build-essential: Required for compiling some Python packages
+# - curl: For health checks
+# - git: For version info in builds
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Upgrade pip
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# Copy only dependency files first (for better layer caching)
+COPY pyproject.toml ./
+COPY requirements.txt* ./
+
+# Install base Python dependencies
+# This layer is cached unless pyproject.toml changes
+RUN pip install --no-cache-dir -e . 2>/dev/null || \
+    pip install --no-cache-dir \
+    pydantic>=2.5.0 \
+    pydantic-settings>=2.1.0 \
+    python-dotenv>=1.0.0 \
+    tenacity>=8.2.0 \
+    aiofiles>=23.2.0 \
+    httpx>=0.27.0 \
+    rich>=13.7.0 \
+    typer>=0.9.0
+
+# Create non-root user for security
+RUN groupadd -r neurosynth --gid=1000 && \
+    useradd -r -g neurosynth --uid=1000 --home-dir=/home/neurosynth --shell=/bin/bash neurosynth && \
+    mkdir -p /home/neurosynth && \
+    chown -R neurosynth:neurosynth /home/neurosynth
+
+# Create data directories with proper ownership
+RUN mkdir -p /data/jobs /data/sources /data/processed /data/output && \
+    chown -R neurosynth:neurosynth /data
+
+# Set ownership of app directory
+RUN chown -R neurosynth:neurosynth /app
+
+# Default to non-root user
+USER neurosynth
+
+# Set home directory
+ENV HOME=/home/neurosynth
+
+# Health check placeholder (overridden in derived images)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "print('healthy')" || exit 1

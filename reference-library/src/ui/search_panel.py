@@ -2,7 +2,7 @@
 import customtkinter as ctk
 from typing import Callable, Optional
 
-import config
+from src import config
 from .styles import FONTS, PADDING
 
 
@@ -31,9 +31,45 @@ class SearchPanel(ctk.CTkFrame):
 
     def _setup_ui(self):
         """Set up the search panel UI."""
+        # Intent selector row
+        intent_frame = ctk.CTkFrame(self, fg_color="transparent")
+        intent_frame.pack(fill="x", padx=PADDING["medium"], pady=(PADDING["medium"], PADDING["small"]))
+
+        ctk.CTkLabel(
+            intent_frame,
+            text="I'm looking for:",
+            font=FONTS["body"]
+        ).pack(side="left", padx=(0, PADDING["small"]))
+
+        self.intent_var = ctk.StringVar(value="both")
+
+        ctk.CTkRadioButton(
+            intent_frame,
+            text="🔴 Surgical Technique",
+            variable=self.intent_var,
+            value="surgical",
+            font=FONTS["small"]
+        ).pack(side="left", padx=PADDING["small"])
+
+        ctk.CTkRadioButton(
+            intent_frame,
+            text="🔵 Clinical Knowledge",
+            variable=self.intent_var,
+            value="clinical",
+            font=FONTS["small"]
+        ).pack(side="left", padx=PADDING["small"])
+
+        ctk.CTkRadioButton(
+            intent_frame,
+            text="Both",
+            variable=self.intent_var,
+            value="both",
+            font=FONTS["small"]
+        ).pack(side="left", padx=PADDING["small"])
+
         # Search row
         search_frame = ctk.CTkFrame(self, fg_color="transparent")
-        search_frame.pack(fill="x", padx=PADDING["medium"], pady=PADDING["medium"])
+        search_frame.pack(fill="x", padx=PADDING["medium"], pady=(0, PADDING["medium"]))
 
         # Search label
         ctk.CTkLabel(
@@ -122,7 +158,19 @@ class SearchPanel(ctk.CTkFrame):
         """Get current search mode."""
         return self.mode_var.get()
 
+    def get_intent(self) -> str:
+        """Get current search intent."""
+        return self.intent_var.get()
 
+    def get_category_filter(self) -> Optional[str]:
+        """Get category filter based on intent selection."""
+        intent = self.intent_var.get()
+        if intent == "surgical":
+            return "Surgical/Anatomical"
+        elif intent == "clinical":
+            return "Theoretical"
+        else:  # both
+            return None
 
     def set_searching(self, is_searching: bool):
         """Update UI for searching state."""
@@ -228,8 +276,13 @@ class SearchPanel(ctk.CTkFrame):
             self._hide_autocomplete()
             return
 
-        # Get suggestions
-        suggestions = self.database.get_search_suggestions(query, limit=7)
+        # Get suggestions filtered by intent
+        category_filter = self.get_category_filter()
+        suggestions = self.database.get_search_suggestions(
+            query,
+            limit=7,
+            category_filter=category_filter
+        )
         if not suggestions:
             self._hide_autocomplete()
             return

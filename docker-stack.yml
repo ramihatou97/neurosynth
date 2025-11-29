@@ -1,0 +1,149 @@
+version: '3.8'
+
+# NeuroSynth Docker Swarm Stack
+# Deploy with: docker stack deploy -c docker-stack.yml neurosynth
+
+services:
+  # =============================================================================
+  # API Service
+  # =============================================================================
+  api:
+    image: neurosynth-api:${VERSION:-latest}
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      - jobs-data:/data/jobs
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - neurosynth-net
+
+  # =============================================================================
+  # Worker Service
+  # =============================================================================
+  worker:
+    image: neurosynth-worker:${VERSION:-latest}
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - VOYAGE_API_KEY=${VOYAGE_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.0-flash-exp}
+      - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-sonnet-4-20250514}
+      - VOYAGE_MODEL=${VOYAGE_MODEL:-voyage-large-2-instruct}
+      - CHUNK_SIZE=${CHUNK_SIZE:-1000}
+      - SIMILARITY_THRESHOLD=${SIMILARITY_THRESHOLD:-0.92}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      - jobs-data:/data/jobs
+      - worker-cache:/home/neurosynth/.neurosynth
+    deploy:
+      replicas: ${WORKER_REPLICAS:-2}
+      update_config:
+        parallelism: 1
+        delay: 30s
+        failure_action: rollback
+        order: stop-first
+      rollback_config:
+        parallelism: 1
+        delay: 30s
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+        window: 300s
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    healthcheck:
+      test: ["CMD", "python", "-c", "import redis; import os; redis.from_url(os.environ.get('REDIS_URL')).ping()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - neurosynth-net
+
+  # =============================================================================
+  # Redis Service
+  # =============================================================================
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - neurosynth-net
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  jobs-data:
+    driver: local
+  worker-cache:
+    driver: local
+  redis-data:
+    driver: local
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  neurosynth-net:
+    driver: overlay
+    attachable: true
