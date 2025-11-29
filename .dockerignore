@@ -1,0 +1,54 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.eggs
+*.egg-info
+.venv
+venv
+.pytest_cache
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Data (mount at runtime instead)
+data/
+logs/
+
+# Build artifacts
+dist
+build
+*.egg-info
+
+# Test artifacts
+.coverage
+htmlcov
+.tox
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Other
+*.log
+*.tmp

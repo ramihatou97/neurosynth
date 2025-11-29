@@ -1,0 +1,334 @@
+"""Extract relevant pages from PDFs based on search results."""
+import fitz  # PyMuPDF
+from pathlib import Path
+from dataclasses import dataclass, field
+from collections import defaultdict
+from typing import Optional
+from datetime import datetime
+import json
+
+
+@dataclass
+class ExtractedSource:
+    """Metadata for an extracted PDF source with full categorization."""
+    extracted_path: Path
+    original_path: Path
+    original_source: str  # e.g., "Youmans Ch 26"
+    pages: list[int]
+    # Enhanced categorization fields
+    category_group: Optional[str] = None  # "Surgical/Anatomical" or "Theoretical"
+    category: Optional[str] = None        # Specific subcategory
+    confidence: Optional[float] = None    # AI confidence score 0.0-1.0
+    reasoning: Optional[str] = None       # AI categorization reasoning
+    reasoning: Optional[str] = None       # AI categorization reasoning
+    context_excerpts: list[str] = field(default_factory=list)
+    full_text: str = ""                   # Full text content of extracted pages
+    # Visual content fields
+    figures: list[dict] = field(default_factory=list)  # Figures on extracted pages
+    figure_count: int = 0
+
+
+def extract_relevant_pages(
+    results: list,  # list[SearchResult] - avoiding import for flexibility
+    output_dir: Path,
+    context_pages: int = 1,
+    database = None  # Optional database for figure lookup
+) -> list[ExtractedSource]:
+    """
+    Extract only pages containing matches from source PDFs.
+
+    Args:
+        results: List of SearchResult objects with pdf_path, page_number, etc.
+        output_dir: Directory to save extracted PDFs
+        context_pages: Number of pages before/after match to include (default 1)
+        database: Optional database instance for figure lookups
+
+    Returns:
+        List of ExtractedSource objects with paths to mini-PDFs
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Group results by source PDF
+    pdf_groups: dict[Path, list] = defaultdict(list)
+    for result in results:
+        pdf_groups[result.pdf_path].append(result)
+
+    extracted_sources: list[ExtractedSource] = []
+
+    for pdf_path, pdf_results in pdf_groups.items():
+        if not pdf_path.exists():
+            continue
+
+        try:
+            source = _extract_pages_from_pdf(
+                pdf_path=pdf_path,
+                results=pdf_results,
+                output_dir=output_dir,
+                context_pages=context_pages,
+                database=database
+            )
+            if source:
+                extracted_sources.append(source)
+        except Exception as e:
+            print(f"Error extracting from {pdf_path}: {e}")
+            continue
+
+    return extracted_sources
+
+
+def _extract_pages_from_pdf(
+    pdf_path: Path,
+    results: list,
+    output_dir: Path,
+    context_pages: int,
+    database = None
+) -> Optional[ExtractedSource]:
+    """Extract pages from a single PDF."""
+    doc = fitz.open(pdf_path)
+    total_pages = len(doc)
+
+    # Collect all relevant page numbers with context
+    page_set: set[int] = set()
+    for result in results:
+        page_num = result.page_number
+        # Add context pages before and after
+        for offset in range(-context_pages, context_pages + 1):
+            p = page_num + offset
+            if 1 <= p <= total_pages:
+                page_set.add(p)
+
+    pages = sorted(page_set)
+
+    if not pages:
+        doc.close()
+        return None
+
+    # Create new PDF with selected pages and extract text
+    new_doc = fitz.open()
+    full_text_parts = []
+    
+    for page_num in pages:
+        # fitz uses 0-indexed pages
+        new_doc.insert_pdf(doc, from_page=page_num - 1, to_page=page_num - 1)
+        
+        # Extract text from the original page
+        try:
+            page = doc.load_page(page_num - 1)
+            text = page.get_text()
+            if text.strip():
+                full_text_parts.append(f"--- Page {page_num} ---\n{text}")
+        except Exception as e:
+            print(f"Warning: Could not extract text from page {page_num}: {e}")
+
+    full_text = "\n\n".join(full_text_parts)
+
+    # Generate output filename
+    first_result = results[0]
+    safe_name = _safe_filename(first_result.chapter_title or first_result.book_title)
+    page_range = f"p{pages[0]}-{pages[-1]}" if len(pages) > 1 else f"p{pages[0]}"
+    output_name = f"{safe_name}_{page_range}.pdf"
+    output_path = output_dir / output_name
+
+    # Handle filename collisions
+    counter = 1
+    while output_path.exists():
+        output_name = f"{safe_name}_{page_range}_{counter}.pdf"
+        output_path = output_dir / output_name
+        counter += 1
+
+    new_doc.save(str(output_path))
+    new_doc.close()
+    doc.close()
+
+    # Build source reference
+    source_ref = first_result.book_series
+    if first_result.chapter_number:
+        source_ref += f" Ch {first_result.chapter_number}"
+
+    # Collect categorization with confidence weighting
+    # Use the category with highest confidence if multiple exist
+    best_category = None
+    best_group = None
+    best_confidence = 0.0
+    best_reasoning = None
+
+    for r in results:
+        if r.category and (r.category_confidence or 0) >= best_confidence:
+            best_category = r.category
+            best_group = getattr(r, 'category_group', None)
+            best_confidence = r.category_confidence or 0
+            best_reasoning = getattr(r, 'category_reasoning', None)
+
+    # Collect context excerpts
+    excerpts = [r.context for r in results if r.context][:5]  # Limit to 5
+
+    # Collect figures for extracted pages
+    figures = []
+    if database:
+        try:
+            for page_num in pages:
+                page_figures = database.get_page_figures(pdf_path, page_num)
+                for fig in page_figures:
+                    figures.append({
+                        "id": fig.get("id"),
+                        "page_number": fig.get("page_number"),
+                        "image_path": fig.get("image_path"),
+                        "image_type": fig.get("image_type"),
+                        "caption": fig.get("caption"),
+                        "caption_confidence": fig.get("caption_confidence"),
+                    })
+        except Exception as e:
+            print(f"Warning: Could not load figures for {pdf_path.name}: {e}")
+
+    return ExtractedSource(
+        extracted_path=output_path,
+        original_path=pdf_path,
+        original_source=source_ref,
+        pages=pages,
+        category_group=best_group,
+        category=best_category,
+        confidence=best_confidence if best_confidence > 0 else None,
+        reasoning=best_reasoning,
+        context_excerpts=excerpts,
+        full_text=full_text,
+        figures=figures,
+        figure_count=len(figures)
+    )
+
+
+def _safe_filename(name: str) -> str:
+    """Convert name to safe filename."""
+    # Remove/replace problematic characters
+    unsafe = '<>:"/\\|?*'
+    result = name
+    for char in unsafe:
+        result = result.replace(char, '_')
+    # Limit length
+    return result[:50].strip()
+
+
+def _compute_category_summary(sources: list[ExtractedSource]) -> dict[str, int]:
+    """Compute count of sources per category group."""
+    summary = {"Surgical/Anatomical": 0, "Theoretical": 0}
+    for source in sources:
+        if source.category_group in summary:
+            summary[source.category_group] += 1
+    return summary
+
+
+def _determine_template_type(sources: list[ExtractedSource]) -> str:
+    """Determine recommended template type based on content analysis.
+
+    Returns:
+        'procedural' for surgical/anatomical dominant content
+        'theoretical' for theoretical dominant content
+        'mixed' for balanced content
+    """
+    category_summary = _compute_category_summary(sources)
+    surgical = category_summary.get("Surgical/Anatomical", 0)
+    theoretical = category_summary.get("Theoretical", 0)
+
+    total = surgical + theoretical
+    if total == 0:
+        return "mixed"
+
+    surgical_ratio = surgical / total
+
+    if surgical_ratio >= 0.7:
+        return "procedural"
+    elif surgical_ratio <= 0.3:
+        return "theoretical"
+    else:
+        return "mixed"
+
+
+def _compute_figure_summary(sources: list[ExtractedSource]) -> dict:
+    """Compute figure statistics across all sources."""
+    total_figures = 0
+    figures_by_type = {}
+
+    for source in sources:
+        total_figures += source.figure_count
+        for fig in source.figures:
+            img_type = fig.get("image_type", "unknown")
+            figures_by_type[img_type] = figures_by_type.get(img_type, 0) + 1
+
+    return {
+        "total_figures": total_figures,
+        "figures_by_type": figures_by_type
+    }
+
+
+def generate_manifest(
+    topic: str,
+    sources: list[ExtractedSource],
+    output_path: Path,
+    search_query: str = "",
+    search_mode: str = "keyword",
+    template_type: str = None  # Override auto-detection
+) -> Path:
+    """
+    Generate an enhanced manifest.json file for NeuroSynth import.
+
+    Args:
+        topic: The synthesis topic/title
+        sources: List of ExtractedSource objects
+        output_path: Path to write manifest.json
+        search_query: Original search query from Reference Library
+        search_mode: Search mode used (keyword/semantic/hybrid)
+        template_type: Override template type (procedural/theoretical/mixed)
+
+    Returns:
+        Path to the generated manifest file
+    """
+    category_summary = _compute_category_summary(sources)
+    figure_summary = _compute_figure_summary(sources)
+
+    # Auto-detect template type if not specified
+    detected_template = _determine_template_type(sources)
+    final_template = template_type or detected_template
+
+    manifest = {
+        "topic": topic,
+        "search_query": search_query,
+        "search_mode": search_mode,
+        "generated_at": datetime.now().isoformat(),
+        "template_type": final_template,
+        "template_type_auto_detected": template_type is None,
+        "category_summary": category_summary,
+        "figure_summary": figure_summary,
+        "sources": [
+            {
+                "pdf_path": str(source.extracted_path.name),
+                "original_source": source.original_source,
+                "original_path": str(source.original_path),
+                "pages": source.pages,
+                "category_group": source.category_group,
+                "category": source.category,
+                "confidence": source.confidence,
+                "reasoning": source.reasoning,
+                "reasoning": source.reasoning,
+                "context_excerpts": source.context_excerpts,
+                "full_text": source.full_text,
+                "figure_count": source.figure_count,
+                "figures": [
+                    {
+                        "id": fig.get("id"),
+                        "page_number": fig.get("page_number"),
+                        "image_type": fig.get("image_type"),
+                        "caption": fig.get("caption"),
+                        "image_path": str(fig.get("image_path")) if fig.get("image_path") else None,
+                    }
+                    for fig in source.figures
+                ]
+            }
+            for source in sources
+        ]
+    }
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(output_path, 'w', encoding='utf-8') as f:
+        json.dump(manifest, f, indent=2, ensure_ascii=False)
+
+    return output_path

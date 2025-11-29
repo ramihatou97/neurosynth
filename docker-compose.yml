@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  neurosynth:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: neurosynth
+    volumes:
+      # Mount local data directories
+      - ./data/sources:/data/sources
+      - ./data/processed:/data/processed
+      - ./data/output:/data/output
+      # Mount logs for debugging
+      - ./logs:/home/neurosynth/.neurosynth/logs
+      # Mount host directory for ad-hoc file access
+      - .:/host
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - VOYAGE_API_KEY=${VOYAGE_API_KEY}
+      # Optional model overrides
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.0-flash-exp}
+      - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-sonnet-4-20250514}
+      - VOYAGE_MODEL=${VOYAGE_MODEL:-voyage-large-2-instruct}
+      # Processing options
+      - CHUNK_SIZE=${CHUNK_SIZE:-1000}
+      - SIMILARITY_THRESHOLD=${SIMILARITY_THRESHOLD:-0.92}
+      - OUTPUT_FORMAT=${OUTPUT_FORMAT:-latex}
+    # Override command for interactive use
+    stdin_open: true
+    tty: true
+
+  # Development service with live code mounting
+  neurosynth-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: neurosynth-dev
+    volumes:
+      - ./src:/app/src
+      - ./data:/data
+      - ./logs:/home/neurosynth/.neurosynth/logs
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - VOYAGE_API_KEY=${VOYAGE_API_KEY}
+    stdin_open: true
+    tty: true
+    profiles:
+      - dev
+
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: tester
+    volumes:
+      - ./src:/app/src
+      - ./tests:/app/tests
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - VOYAGE_API_KEY=${VOYAGE_API_KEY}
+    profiles:
+      - test

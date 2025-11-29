@@ -1,0 +1,750 @@
+"""Main application window for the Neurosurgery Reference Library."""
+import customtkinter as ctk
+from pathlib import Path
+import threading
+from typing import Optional
+import asyncio
+
+import config
+from ..cache.database import Database
+from ..search.pdf_searcher import PDFSearcher
+from ..search.result_model import SearchResult, SearchProgress
+from ..ai.categorizer import ContentCategorizer
+from ..ai.category_model import CategoryResult
+from ..utils.library_scanner import LibraryScanner
+from ..utils.file_watcher import FileWatcher
+from ..integration.neurosynth_bridge import NeuroSynthBridge
+from .search_panel import SearchPanel
+from .results_tree import ResultsTree
+from .preview_panel import PreviewPanel
+from .new_files_panel import NewFilesPanel
+from .synthesis_dialog import SynthesisDialog
+from .styles import FONTS, PADDING
+
+
+class NeurosurgeryLibraryApp(ctk.CTk):
+    """Main application window."""
+
+    def __init__(self):
+        super().__init__()
+
+        # Configure window
+        self.title("Neurosurgery Reference Library")
+        self.geometry(f"{config.WINDOW_WIDTH}x{config.WINDOW_HEIGHT}")
+
+        # Set appearance mode
+        ctk.set_appearance_mode(config.APPEARANCE_MODE)
+        ctk.set_default_color_theme("blue")
+
+        # Initialize components
+        self.database = Database(config.DATABASE_PATH)
+        self.searcher = PDFSearcher(config.LIBRARY_PATH, self.database)
+        self.semantic_searcher = self.searcher.semantic  # Reference to SemanticSearcher for indexing
+        self.categorizer = ContentCategorizer(config.ANTHROPIC_API_KEY, self.database)
+        self.scanner = LibraryScanner(config.LIBRARY_PATH, self.database)
+        self.file_watcher: Optional[FileWatcher] = None
+        self.neurosynth = NeuroSynthBridge(
+            neurosynth_path=config.NEUROSYNTH_PATH,
+            neurosynth_venv=config.NEUROSYNTH_VENV,
+            database=self.database
+        )
+
+        # State
+        self.current_query = ""
+        self.search_thread: Optional[threading.Thread] = None
+        self.categorize_threads: list[threading.Thread] = []
+        self.pending_results: list[SearchResult] = []
+        self.selected_results: list[SearchResult] = []
+
+        # Batch and throttle settings
+        self.RESULT_BATCH_SIZE = 50
+        self._categorization_semaphore = threading.Semaphore(10)  # Max 10 concurrent
+
+        # Set up UI
+        self._setup_ui()
+        self._setup_menu()
+
+        # Check library and sync
+        self._verify_library()
+        self._sync_library()
+        self._start_file_watcher()
+
+        # Clean up on close
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    def _setup_ui(self):
+        """Set up the main UI layout."""
+        # Search panel at top
+        self.search_panel = SearchPanel(
+            self,
+            on_search=self._start_search,
+            on_cancel=self._cancel_search,
+            database=self.database
+        )
+        self.search_panel.pack(fill="x", padx=PADDING["small"], pady=PADDING["small"])
+
+        # Main content area with three columns
+        content_frame = ctk.CTkFrame(self, fg_color="transparent")
+        content_frame.pack(fill="both", expand=True, padx=PADDING["small"], pady=PADDING["small"])
+
+        # New Files panel (left sidebar) - collapsible
+        self.new_files_panel = NewFilesPanel(
+            content_frame,
+            on_index_file=self._index_single_file,
+            on_index_all=self._index_all_new_files
+        )
+        self.new_files_panel.pack(side="left", fill="y", padx=(0, PADDING["small"]))
+        self.new_files_panel.configure(width=280)
+
+        # Results tree (center)
+        self.results_tree = ResultsTree(
+            content_frame,
+            on_select=self._on_result_select,
+            on_selection_change=self._on_selection_change,
+            database=self.database
+        )
+        self.results_tree.pack(side="left", fill="both", expand=True, padx=(0, PADDING["small"]))
+
+        # Preview panel (right)
+        self.preview_panel = PreviewPanel(content_frame, database=self.database)
+        self.preview_panel.pack(side="right", fill="both", expand=False, ipadx=PADDING["medium"])
+        self.preview_panel.configure(width=400)
+
+        # Status bar at bottom
+        self.status_frame = ctk.CTkFrame(self)
+        self.status_frame.pack(fill="x", side="bottom", padx=PADDING["small"], pady=PADDING["small"])
+
+        self.status_label = ctk.CTkLabel(
+            self.status_frame,
+            text="Ready",
+            font=FONTS["small"],
+            anchor="w"
+        )
+        self.status_label.pack(side="left", fill="x", expand=True)
+
+        self.progress_label = ctk.CTkLabel(
+            self.status_frame,
+            text="",
+            font=FONTS["small"]
+        )
+        self.progress_label.pack(side="right")
+
+        # Synthesis progress bar (hidden by default)
+        self.synthesis_progress = ctk.CTkProgressBar(
+            self.status_frame,
+            width=150,
+            height=12,
+            mode="indeterminate"
+        )
+        # Don't pack yet - shown only during synthesis
+
+        # Export button in status bar
+        self.export_btn = ctk.CTkButton(
+            self.status_frame,
+            text="Export Index",
+            command=self._export_index,
+            width=100,
+            height=24,
+            font=FONTS["small"],
+            state="disabled"
+        )
+        self.export_btn.pack(side="right", padx=PADDING["small"])
+
+        # Synthesize button (NeuroSynth integration)
+        self.synthesize_btn = ctk.CTkButton(
+            self.status_frame,
+            text="Synthesize Chapter",
+            command=self._synthesize_chapter,
+            width=130,
+            height=24,
+            font=FONTS["small"],
+            state="disabled",
+            fg_color="#27ae60",
+            hover_color="#219a52"
+        )
+        self.synthesize_btn.pack(side="right", padx=PADDING["small"])
+
+        # Category coverage indicator
+        self.coverage_label = ctk.CTkLabel(
+            self.status_frame,
+            text="",
+            font=FONTS["small"],
+            text_color="gray"
+        )
+        self.coverage_label.pack(side="right", padx=PADDING["small"])
+
+        # Smart selection dropdown
+        self.smart_select_var = ctk.StringVar(value="Smart Select")
+        self.smart_select_menu = ctk.CTkOptionMenu(
+            self.status_frame,
+            values=["Balanced", "High Confidence", "Diverse"],
+            command=self._on_smart_select,
+            variable=self.smart_select_var,
+            width=120,
+            height=24,
+            font=FONTS["small"],
+            fg_color="#3498db",
+            button_color="#2980b9",
+            button_hover_color="#1a5276"
+        )
+        self.smart_select_menu.pack(side="right", padx=PADDING["small"])
+        self.smart_select_menu.set("Smart Select")
+
+        # Build Semantic Index button (text only, fast)
+        self.index_btn = ctk.CTkButton(
+            self.status_frame,
+            text="Index Text",
+            command=self._build_semantic_index,
+            width=90,
+            height=24,
+            font=FONTS["small"],
+            fg_color="#9b59b6",
+            hover_color="#8e44ad"
+        )
+        self.index_btn.pack(side="right", padx=PADDING["small"])
+
+        # Extract Figures button (separate, slower)
+        self.extract_btn = ctk.CTkButton(
+            self.status_frame,
+            text="Extract Figures",
+            command=self._extract_figures_slow,
+            width=100,
+            height=24,
+            font=FONTS["small"],
+            fg_color="#e67e22",
+            hover_color="#d35400"
+        )
+        self.extract_btn.pack(side="right", padx=PADDING["small"])
+
+    def _setup_menu(self):
+        """Set up the application menu."""
+        # Note: CustomTkinter doesn't have native menu support
+        # For macOS, we could use tkinter's native menu
+        pass
+
+    def _verify_library(self):
+        """Verify the reference library exists."""
+        if not config.LIBRARY_PATH.exists():
+            self._show_status(
+                f"Library not found at: {config.LIBRARY_PATH}",
+                "error"
+            )
+        else:
+            # Use database count (fast) instead of filesystem scan (slow)
+            tracked = len(self.database.get_all_tracked_paths())
+            if tracked > 0:
+                self._show_status(f"Library loaded: {tracked} PDFs indexed")
+            else:
+                self._show_status("Library found. Indexing...")
+
+    def _start_search(self, query: str, mode: str = "keyword"):
+        """Start a search for the given query."""
+        if not query:
+            return
+
+        # Cancel any existing search
+        self._cancel_search()
+
+        self.current_query = query
+        self.pending_results = []
+
+        # Clear previous results
+        self.results_tree.clear()
+        self.preview_panel.clear()
+
+        # Update UI state
+        self.search_panel.set_searching(True)
+        mode_display = mode.capitalize()
+        self._show_status(f"Searching for '{query}' ({mode_display})...")
+        self.export_btn.configure(state="disabled")
+
+        # Start search in background thread
+        self.search_thread = threading.Thread(
+            target=self._search_thread,
+            args=(query, mode),
+            daemon=True
+        )
+        self.search_thread.start()
+
+    def _search_thread(self, query: str, mode: str = "keyword"):
+        """Background thread for searching."""
+        try:
+            batch = []
+
+            for result in self.searcher.search_library(
+                query,
+                mode=mode,
+                progress_callback=self._on_search_progress
+            ):
+                batch.append(result)
+                self.pending_results.append(result)
+
+                # Send batch to UI when full
+                if len(batch) >= self.RESULT_BATCH_SIZE:
+                    self.after(0, self._add_results_batch, batch.copy())
+                    batch.clear()
+
+            # Send remaining results
+            if batch:
+                self.after(0, self._add_results_batch, batch)
+
+            # Search complete
+            self.after(0, self._on_search_complete)
+
+        except Exception as e:
+            self.after(0, lambda: self._show_status(f"Search error: {e}", "error"))
+            self.after(0, self._on_search_complete)
+
+    def _on_search_progress(self, progress: SearchProgress):
+        """Update progress display."""
+        # Capture values by value to avoid threading race condition
+        searched = progress.searched_pdfs
+        total = progress.total_pdfs
+        matches = progress.total_matches
+        self.after(0, lambda s=searched, t=total, m=matches: self.progress_label.configure(
+            text=f"{s}/{t} PDFs | {m} matches"
+        ))
+
+    def _add_results_batch(self, results: list):
+        """Add a batch of results to the tree (called from main thread)."""
+        for result in results:
+            self.results_tree.add_result(result)
+            self._categorize_result(result)
+
+    def _categorize_result(self, result: SearchResult):
+        """Categorize a result in background with throttling."""
+        def _do_categorize():
+            with self._categorization_semaphore:
+                cat_result = self.categorizer.categorize_result(result, self.current_query)
+                self.after(0, lambda: self._on_categorized(result, cat_result))
+
+        thread = threading.Thread(target=_do_categorize, daemon=True)
+        thread.start()
+        self.categorize_threads.append(thread)
+
+    def _on_categorized(self, result: SearchResult, cat_result: CategoryResult):
+        """Handle categorization complete for a result."""
+        result.category = cat_result.category
+        result.category_confidence = cat_result.confidence
+        result.category_reasoning = cat_result.reasoning
+
+        # Update tree
+        self.results_tree.update_result_category(result, cat_result)
+
+        # Update preview if this result is selected
+        if self.preview_panel.current_result == result:
+            self.preview_panel.show_result(result)
+
+    def _on_search_complete(self):
+        """Handle search completion."""
+        self.search_panel.set_searching(False)
+
+        result_count = len(self.results_tree.results)
+        self._show_status(f"Search complete: {result_count} matches found")
+
+        if result_count > 0:
+            self.export_btn.configure(state="normal")
+
+        # Save to search history
+        self.database.save_search_history(self.current_query, result_count)
+
+    def _cancel_search(self):
+        """Cancel the current search."""
+        self.searcher.cancel()
+        self.search_panel.set_searching(False)
+        self._show_status("Search cancelled")
+
+    def _on_result_select(self, result: SearchResult):
+        """Handle result selection in tree."""
+        self.preview_panel.show_result(result)
+
+
+
+    def _export_index(self):
+        """Export search results as index."""
+        from ..export.html_exporter import HTMLExporter
+        from ..export.pdf_exporter import PDFExporter
+
+        results = self.results_tree.get_all_results()
+        if not results:
+            return
+
+        # Ask for save location
+        from tkinter import filedialog
+
+        save_path = filedialog.asksaveasfilename(
+            defaultextension=".html",
+            filetypes=[
+                ("HTML files", "*.html"),
+                ("PDF files", "*.pdf"),
+                ("All files", "*.*")
+            ],
+            initialfile=f"index_{self.current_query.replace(' ', '_')}"
+        )
+
+        if not save_path:
+            return
+
+        save_path = Path(save_path)
+
+        try:
+            if save_path.suffix.lower() == ".pdf":
+                exporter = PDFExporter()
+                exporter.export(results, self.current_query, save_path)
+            else:
+                exporter = HTMLExporter()
+                exporter.export(results, self.current_query, save_path)
+
+            self._show_status(f"Exported to {save_path.name}")
+
+            # Also export the other format
+            if save_path.suffix.lower() == ".html":
+                pdf_path = save_path.with_suffix(".pdf")
+                pdf_exporter = PDFExporter()
+                pdf_exporter.export(results, self.current_query, pdf_path)
+            else:
+                html_path = save_path.with_suffix(".html")
+                html_exporter = HTMLExporter()
+                html_exporter.export(results, self.current_query, html_path)
+
+        except Exception as e:
+            self._show_status(f"Export error: {e}", "error")
+
+    def _show_status(self, message: str, level: str = "info"):
+        """Show status message."""
+        self.status_label.configure(text=message)
+
+        # Color based on level
+        colors = {
+            "info": ("gray", None),
+            "success": ("#27ae60", None),
+            "warning": ("#f39c12", None),
+            "error": ("#e74c3c", None)
+        }
+        text_color, bg_color = colors.get(level, colors["info"])
+        self.status_label.configure(text_color=text_color)
+
+    def _show_synthesis_progress(self, visible: bool):
+        """Show or hide the synthesis progress bar."""
+        if visible:
+            self.synthesis_progress.pack(side="right", padx=PADDING["small"])
+            self.synthesis_progress.start()
+        else:
+            self.synthesis_progress.stop()
+            self.synthesis_progress.pack_forget()
+
+    # Auto-Update Methods
+
+    def _sync_library(self):
+        """Sync library on startup to detect new files."""
+        def _do_sync():
+            try:
+                result = self.scanner.sync_library()
+                self.after(0, lambda: self._on_sync_complete(result))
+            except Exception as e:
+                self.after(0, lambda: self._show_status(f"Sync error: {e}", "error"))
+
+        thread = threading.Thread(target=_do_sync, daemon=True)
+        thread.start()
+
+    def _on_sync_complete(self, result: dict):
+        """Handle library sync completion."""
+        unindexed = self.database.get_unindexed_files()
+        self.new_files_panel.load_from_database(unindexed)
+
+        if result['new_files'] > 0:
+            self._show_status(
+                f"Library synced: {result['new_files']} new files detected",
+                "success"
+            )
+        else:
+            self._show_status(f"Library synced: {result['total_files']} files")
+
+    def _start_file_watcher(self):
+        """Start watching for new files."""
+        if not config.LIBRARY_PATH.exists():
+            return
+
+        self.file_watcher = FileWatcher(
+            library_path=config.LIBRARY_PATH,
+            on_new_file=self._on_new_file_detected,
+            on_modified_file=self._on_file_modified,
+            on_deleted_file=self._on_file_deleted
+        )
+        self.file_watcher.start()
+
+    def _on_new_file_detected(self, pdf_path: Path):
+        """Handle new file detected by watcher."""
+        def _process():
+            try:
+                metadata = self.scanner.get_pdf_metadata(pdf_path)
+                checksum = self.database.get_file_checksum(pdf_path)
+                self.database.track_file(
+                    pdf_path,
+                    checksum=checksum,
+                    file_size=pdf_path.stat().st_size,
+                    book_series=metadata.book_series,
+                    chapter_title=metadata.chapter_title,
+                    page_count=metadata.page_count
+                )
+                # Update UI
+                self.after(0, lambda: self.new_files_panel.add_file(
+                    pdf_path,
+                    book_series=metadata.book_series,
+                    chapter_title=metadata.chapter_title,
+                    page_count=metadata.page_count
+                ))
+                self.after(0, lambda: self._show_status(
+                    f"New file detected: {pdf_path.name}",
+                    "success"
+                ))
+            except Exception as e:
+                print(f"Error processing new file: {e}")
+
+        threading.Thread(target=_process, daemon=True).start()
+
+    def _on_file_modified(self, pdf_path: Path):
+        """Handle file modification."""
+        # Re-process the file
+        self._on_new_file_detected(pdf_path)
+
+    def _on_file_deleted(self, pdf_path: Path):
+        """Handle file deletion."""
+        self.database.remove_tracked_file(pdf_path)
+        self.after(0, lambda: self.new_files_panel.remove_file(pdf_path))
+
+    def _index_single_file(self, pdf_path: Path):
+        """Index a single new file (make it searchable)."""
+        self.database.mark_file_indexed(pdf_path)
+        self._show_status(f"Indexed: {pdf_path.name}", "success")
+
+    def _index_all_new_files(self):
+        """Index all new files."""
+        unindexed = self.database.get_unindexed_files()
+        for file_info in unindexed:
+            pdf_path = Path(file_info['pdf_path'])
+            self.database.mark_file_indexed(pdf_path)
+
+        count = len(unindexed)
+        self._show_status(f"Indexed {count} new files", "success")
+
+    def _on_close(self):
+        """Clean up on window close."""
+        if self.file_watcher:
+            self.file_watcher.stop()
+        self.destroy()
+
+    # Semantic Index Methods
+
+    def _build_semantic_index(self):
+        """Build semantic search index (text only)."""
+        self.index_btn.configure(state="disabled", text="Indexing...")
+        self._show_status("Building text index...")
+
+        def _do_index():
+            import time
+
+            def text_progress(current, total):
+                self.after(0, lambda c=current, t=total: self._show_status(
+                    f"Text indexing: {c}/{t} PDFs"
+                ))
+                # Yield to UI thread every PDF to prevent freezing
+                time.sleep(0.01)
+
+            # Use sequential indexing (runs in background thread to keep UI responsive)
+            text_count = self.searcher.index_library_semantic(progress_callback=text_progress)
+            self.after(0, lambda: self._on_text_index_complete(text_count))
+
+        threading.Thread(target=_do_index, daemon=True).start()
+
+    def _on_text_index_complete(self, text_count: int):
+        """Handle text indexing completion."""
+        self.index_btn.configure(state="normal", text="Index Text")
+        self._show_status(f"Text indexed: {text_count} pages", "success")
+
+    def _extract_figures_slow(self):
+        """Extract figures from PDFs one at a time (prevents freezing)."""
+        from ..utils.neurosynth_imports import NEUROSYNTH_AVAILABLE
+
+        if not NEUROSYNTH_AVAILABLE:
+            self._show_status("Figure extraction unavailable (install NeuroSynth dependencies)", "error")
+            return
+
+        self.extract_btn.configure(state="disabled", text="Extracting...")
+        self._show_status("Starting figure extraction...")
+
+        def _do_extract():
+            import time
+            from pathlib import Path
+
+            # Get all PDFs
+            pdfs = list(config.LIBRARY_PATH.rglob("*.pdf"))
+            total = len(pdfs)
+            total_figures = 0
+
+            for i, pdf_path in enumerate(pdfs):
+                # Update progress
+                self.after(0, lambda p=pdf_path.name, idx=i+1, t=total:
+                    self._show_status(f"Extracting {idx}/{t}: {p[:30]}...")
+                )
+
+                try:
+                    # Extract from single PDF
+                    figures = self.scanner.extract_figures(pdf_path, force=False)
+                    total_figures += len(figures)
+
+                    # Small delay to keep UI responsive
+                    time.sleep(0.1)
+
+                except Exception as e:
+                    print(f"Error extracting from {pdf_path.name}: {e}")
+                    continue
+
+            self.after(0, lambda: self._on_extract_complete(total, total_figures))
+
+        threading.Thread(target=_do_extract, daemon=True).start()
+
+    def _on_extract_complete(self, pdfs_processed: int, figures_extracted: int):
+        """Handle figure extraction completion."""
+        self.extract_btn.configure(state="normal", text="Extract Figures")
+        self._show_status(f"Extracted {figures_extracted} figures from {pdfs_processed} PDFs", "success")
+
+    def _on_index_complete(self, text_count: int, figure_stats: dict = None, captions_indexed: int = 0, extraction_warning: str = None):
+        """Handle semantic indexing completion (legacy, kept for compatibility)."""
+        self.index_btn.configure(state="normal", text="Index Text")
+
+        # Build status message
+        msg = f"Index built: {text_count} pages"
+        status_type = "success"
+
+        if figure_stats and figure_stats.get("total_figures", 0) > 0:
+            total_figs = figure_stats.get("total_figures", 0)
+            msg += f", {total_figs} figures"
+            if captions_indexed > 0:
+                msg += f" ({captions_indexed} captions indexed)"
+        elif extraction_warning:
+            msg += f" | {extraction_warning}"
+            status_type = "warning"
+
+        self._show_status(msg, status_type)
+
+    # NeuroSynth Integration Methods
+
+    def _on_selection_change(self, selected_results: list[SearchResult]):
+        """Handle selection change in results tree."""
+        self.selected_results = selected_results
+
+        # Enable/disable synthesize button based on selection
+        if selected_results:
+            self.synthesize_btn.configure(state="normal")
+        else:
+            self.synthesize_btn.configure(state="disabled")
+
+        # Update category coverage indicator
+        self._update_coverage_label()
+
+    def _update_coverage_label(self):
+        """Update the category coverage indicator."""
+        coverage = self.results_tree.get_selected_coverage()
+        surgical = coverage.get("Surgical/Anatomical", 0)
+        theoretical = coverage.get("Theoretical", 0)
+
+        if surgical > 0 or theoretical > 0:
+            self.coverage_label.configure(text=f"S:{surgical} T:{theoretical}")
+        else:
+            self.coverage_label.configure(text="")
+
+    def _on_smart_select(self, choice: str):
+        """Handle smart selection dropdown choice."""
+        if choice == "Balanced":
+            self.results_tree.smart_select_balanced(target_per_group=6)
+            self._show_status("Auto-selected balanced coverage (6 per category)", "success")
+        elif choice == "High Confidence":
+            self.results_tree.smart_select_high_confidence(threshold=0.8)
+            self._show_status("Selected high-confidence results (>=80%)", "success")
+        elif choice == "Diverse":
+            self.results_tree.smart_select_diverse(max_per_source=3)
+            self._show_status("Selected diverse sources (max 3 per book)", "success")
+
+        # Reset the dropdown text
+        self.smart_select_menu.set("Smart Select")
+
+    def _synthesize_chapter(self):
+        """Synthesize a chapter from selected results using NeuroSynth."""
+        if not self.selected_results:
+            self._show_status("No results selected for synthesis", "warning")
+            return
+
+        # Check if NeuroSynth is available
+        available, version_or_error = self.neurosynth.check_available()
+        if not available:
+            self._show_status(f"NeuroSynth not available: {version_or_error}", "error")
+            return
+
+        # Use current query as default topic
+        topic = self.current_query if self.current_query else "Neurosurgical Chapter"
+
+        # Get options from dialog
+        dialog = SynthesisDialog(self, initial_topic=topic)
+        result = dialog.get_input()
+
+        if not result:
+            return
+
+        topic, template_type = result
+
+        # Disable button during synthesis and show progress bar
+        self.synthesize_btn.configure(state="disabled")
+        self._show_synthesis_progress(True)
+        self._show_status(f"Starting synthesis for '{topic}'...")
+
+        # Get search context
+        search_query = self.current_query
+        search_mode = self.search_panel.get_mode()
+
+        # Run synthesis in background
+        def _do_synthesis():
+            result = self.neurosynth.synthesize(
+                topic=topic,
+                results=self.selected_results,
+                on_progress=lambda msg: self.after(0, lambda: self._show_status(msg)),
+                search_query=search_query,
+                search_mode=search_mode,
+                template_type=template_type
+            )
+
+            self.after(0, lambda: self._on_synthesis_complete(result))
+
+        thread = threading.Thread(target=_do_synthesis, daemon=True)
+        thread.start()
+
+    def _on_synthesis_complete(self, result):
+        """Handle synthesis completion."""
+        from ..integration.neurosynth_bridge import SynthesisResult
+
+        # Hide progress bar and re-enable button
+        self._show_synthesis_progress(False)
+        if self.selected_results:
+            self.synthesize_btn.configure(state="normal")
+
+        if result.success:
+            self._show_status(f"Chapter synthesized: {result.output_path.name}", "success")
+
+            # Offer to open the file
+            from tkinter import messagebox
+            if messagebox.askyesno(
+                "Synthesis Complete",
+                f"Chapter saved to:\n{result.output_path}\n\nOpen the file now?"
+            ):
+                import subprocess
+                subprocess.run(["open", str(result.output_path)])
+        else:
+            self._show_status(f"Synthesis failed: {result.error}", "error")
+            if result.log:
+                print(f"NeuroSynth log:\n{result.log}")
+
+
+def run_app():
+    """Run the application."""
+    app = NeurosurgeryLibraryApp()
+    app.mainloop()

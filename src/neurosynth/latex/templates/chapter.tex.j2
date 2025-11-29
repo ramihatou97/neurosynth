@@ -1,0 +1,303 @@
+\documentclass[12pt,a4paper]{article}
+
+% Essential Packages
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{setspace}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{wrapfig}
+
+% Page Layout
+\geometry{
+    top=1in,
+    bottom=1in,
+    left=1.25in,
+    right=1.25in
+}
+\onehalfspacing
+
+% Colors
+\definecolor{sectioncolor}{RGB}{0,51,102}
+\definecolor{linkcolor}{RGB}{0,102,204}
+\definecolor{conflictbg}{RGB}{255,250,240}
+\definecolor{conflictborder}{RGB}{255,140,0}
+
+% Section Formatting
+\titleformat{\section}
+    {\normalfont\Large\bfseries\color{sectioncolor}}
+    {\thesection}{1em}{}
+\titleformat{\subsection}
+    {\normalfont\large\bfseries\color{sectioncolor}}
+    {\thesubsection}{1em}{}
+\titleformat{\subsubsection}
+    {\normalfont\normalsize\bfseries}
+    {\thesubsubsection}{1em}{}
+
+% Header/Footer
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\nouppercase{\leftmark}}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\fancyfoot[C]{\footnotesize NeuroSynth - Knowledge Synthesis}
+
+% Hyperlinks
+\hypersetup{
+    colorlinks=true,
+    linkcolor=linkcolor,
+    citecolor=linkcolor,
+    urlcolor=linkcolor
+}
+
+% Custom Environments
+\usepackage{mdframed}
+
+% Controversy/Conflict Box
+\newmdenv[
+    backgroundcolor=conflictbg,
+    linecolor=conflictborder,
+    linewidth=2pt,
+    topline=true,
+    bottomline=true,
+    leftline=true,
+    rightline=false,
+    innertopmargin=10pt,
+    innerbottommargin=10pt,
+    innerleftmargin=15pt,
+    innerrightmargin=10pt,
+    skipabove=\baselineskip,
+    skipbelow=\baselineskip
+]{controversybox}
+
+% Clinical Pearl Box
+\newmdenv[
+    backgroundcolor=blue!5,
+    linecolor=blue!50,
+    linewidth=1pt,
+    roundcorner=5pt,
+    innertopmargin=10pt,
+    innerbottommargin=10pt,
+    innerleftmargin=10pt,
+    innerrightmargin=10pt
+]{clinicalpearl}
+
+% Figure Plate Environment (for grouping multiple figures)
+\newmdenv[
+    backgroundcolor=gray!5,
+    linecolor=gray!40,
+    linewidth=1pt,
+    innertopmargin=15pt,
+    innerbottommargin=15pt,
+    innerleftmargin=10pt,
+    innerrightmargin=10pt,
+    skipabove=\baselineskip,
+    skipbelow=\baselineskip
+]{figureplate}
+
+% Caption styling
+\captionsetup{
+    font=small,
+    labelfont=bf,
+    textfont=it,
+    margin=20pt
+}
+
+% Graphics path
+\graphicspath{{./figures/}}
+
+% Document Info
+\title{\Huge\bfseries {{ title }}}
+\author{
+    \Large NeuroSynth\\[0.5em]
+    \normalsize Automated Neurosurgical Knowledge Synthesis
+}
+\date{\today}
+
+\begin{document}
+
+% Title Page
+\maketitle
+\thispagestyle{empty}
+
+\vfill
+
+\begin{center}
+\begin{minipage}{0.8\textwidth}
+\small
+\textbf{Document Statistics}\\[0.5em]
+\begin{tabular}{ll}
+Total Words: & {{ total_words }} \\
+Sources Synthesized: & {{ total_sources }} \\
+Sections: & {{ sections|length }} \\
+{% if has_figures %}
+Figures: & {{ total_figures }} \\
+{% endif %}
+\end{tabular}
+\end{minipage}
+\end{center}
+
+\newpage
+
+% Abstract
+{% if abstract %}
+\begin{abstract}
+\noindent
+{{ abstract }}
+\end{abstract}
+\vspace{1em}
+{% endif %}
+
+% Keywords
+{% if keywords %}
+\noindent\textbf{Keywords:} {{ keywords | join(', ') }}
+\vspace{2em}
+{% endif %}
+
+% Table of Contents
+\tableofcontents
+\newpage
+
+% Main Content
+{% for section in sections %}
+
+{% if section.level == 1 %}
+\section{{ '{' }}{{ section.title }}{{ '}' }}
+{% elif section.level == 2 %}
+\subsection{{ '{' }}{{ section.title }}{{ '}' }}
+{% elif section.level == 3 %}
+\subsubsection{{ '{' }}{{ section.title }}{{ '}' }}
+{% else %}
+\paragraph{{ '{' }}{{ section.title }}{{ '}' }}
+{% endif %}
+
+{{ section.content }}
+
+{% if section.has_conflicts %}
+% Note: This section contains points of controversy
+{% endif %}
+
+{% if section.inline_figures %}
+% Inline Figures
+{% for fig in section.inline_figures %}
+\begin{figure}[htbp]
+\centering
+\includegraphics[width={{ fig.width }}]{{ '{' }}{{ fig.path }}{{ '}' }}
+\caption{{ '{' }}{{ fig.caption }}{{ '}' }}
+\label{{ '{' }}{{ fig.label }}{{ '}' }}
+\end{figure}
+
+{% endfor %}
+{% endif %}
+
+{% for subsection in section.subsections %}
+{% if subsection.level == 2 %}
+\subsection{{ '{' }}{{ subsection.title }}{{ '}' }}
+{% elif subsection.level == 3 %}
+\subsubsection{{ '{' }}{{ subsection.title }}{{ '}' }}
+{% else %}
+\paragraph{{ '{' }}{{ subsection.title }}{{ '}' }}
+{% endif %}
+
+{{ subsection.content }}
+
+{% if subsection.inline_figures %}
+% Subsection Inline Figures
+{% for fig in subsection.inline_figures %}
+\begin{figure}[htbp]
+\centering
+\includegraphics[width={{ fig.width }}]{{ '{' }}{{ fig.path }}{{ '}' }}
+\caption{{ '{' }}{{ fig.caption }}{{ '}' }}
+\label{{ '{' }}{{ fig.label }}{{ '}' }}
+\end{figure}
+
+{% endfor %}
+{% endif %}
+
+{% if subsection.figure_plate %}
+% Subsection Figure Plate
+\begin{figureplate}
+\noindent\textbf{{ '{' }}{{ subsection.figure_plate.title }}{{ '}' }}
+\vspace{0.5em}
+
+{% for fig in subsection.figure_plate.figures %}
+\begin{minipage}[t]{0.48\textwidth}
+\centering
+\includegraphics[width=\linewidth,height=5cm,keepaspectratio]{{ '{' }}{{ fig.path }}{{ '}' }}
+\captionof{figure}{{ '{' }}{{ fig.caption }}{{ '}' }}
+\label{{ '{' }}{{ fig.label }}{{ '}' }}
+\end{minipage}
+{% if loop.index is odd and not loop.last %}
+\hfill
+{% elif loop.index is even %}
+
+\vspace{1em}
+{% endif %}
+{% endfor %}
+\end{figureplate}
+{% endif %}
+
+{% endfor %}
+
+{% if section.figure_plate %}
+% Section Figure Plate
+\begin{figureplate}
+\noindent\textbf{{ '{' }}{{ section.figure_plate.title }}{{ '}' }}
+\vspace{0.5em}
+
+{% for fig in section.figure_plate.figures %}
+\begin{minipage}[t]{0.48\textwidth}
+\centering
+\includegraphics[width=\linewidth,height=5cm,keepaspectratio]{{ '{' }}{{ fig.path }}{{ '}' }}
+\captionof{figure}{{ '{' }}{{ fig.caption }}{{ '}' }}
+\label{{ '{' }}{{ fig.label }}{{ '}' }}
+\end{minipage}
+{% if loop.index is odd and not loop.last %}
+\hfill
+{% elif loop.index is even %}
+
+\vspace{1em}
+{% endif %}
+{% endfor %}
+\end{figureplate}
+{% endif %}
+
+{% endfor %}
+
+% References
+\newpage
+\section*{References}
+\addcontentsline{toc}{section}{References}
+
+\begin{enumerate}[label={[\arabic*]}, leftmargin=*]
+{% for source in bibliography %}
+\item \label{ref:{{ source.key }}}
+{{ source.authors }} ({{ source.year }}).
+\textit{{ '{' }}{{ source.title }}{{ '}' }}.
+{% if source.publisher %}{{ source.publisher }}.{% endif %}
+{% endfor %}
+\end{enumerate}
+
+% Footer
+\vfill
+\noindent\rule{\textwidth}{0.4pt}
+
+\begin{center}
+\small
+\textit{This chapter was synthesized from {{ total_sources }} authoritative sources using NeuroSynth.}\\
+\textit{Generated on \today}
+\end{center}
+
+\end{document}

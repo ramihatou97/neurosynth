@@ -1,0 +1,119 @@
+[tool.poetry]
+name = "neurosynth"
+version = "0.1.0"
+description = "Neurosurgical Knowledge Synthesis System - Transform multiple reference sources into comprehensive chapters"
+authors = ["Rami Hatoum"]
+readme = "README.md"
+packages = [{include = "neurosynth", from = "src"}]
+
+[tool.poetry.scripts]
+neurosynth = "neurosynth.cli:app"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+
+# Document Parsing
+PyMuPDF = "^1.23.0"
+pymupdf4llm = "^0.0.8"
+ebooklib = "^0.18"
+python-docx = "^1.1.0"
+beautifulsoup4 = "^4.12.0"
+lxml = "^4.9.0"
+
+# LLM APIs
+anthropic = "^0.39.0"
+google-generativeai = "^0.8.0"
+voyageai = "^0.2.0"
+
+# ML/Embeddings
+numpy = "^1.26.0"
+scikit-learn = "^1.4.0"
+
+# ColPali Vision-Language Model
+torch = "^2.0.0"
+colpali-engine = "^0.3.0"
+transformers = "^4.40.0"
+pillow = "^10.0.0"
+
+# Vector Database
+qdrant-client = "^1.16.0"
+
+# LaTeX
+Jinja2 = "^3.1.0"
+
+# CLI & Utils
+typer = {extras = ["all"], version = "^0.9.0"}
+rich = "^13.7.0"
+pydantic = "^2.5.0"
+pydantic-settings = "^2.1.0"
+python-dotenv = "^1.0.0"
+tenacity = "^8.2.0"
+
+# Async
+aiofiles = "^23.2.0"
+httpx = "^0.27.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+pytest-asyncio = "^0.21.0"
+black = "^23.0.0"
+ruff = "^0.1.0"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neurosynth"
+version = "0.1.0"
+description = "Neurosurgical Knowledge Synthesis System"
+requires-python = ">=3.11"
+dependencies = [
+    "PyMuPDF>=1.23.0",
+    "pymupdf4llm>=0.0.8",
+    "ebooklib>=0.18",
+    "python-docx>=1.1.0",
+    "beautifulsoup4>=4.12.0",
+    "lxml>=4.9.0",
+    "anthropic>=0.39.0",
+    "google-generativeai>=0.8.0",
+    "voyageai>=0.2.0",
+    "numpy>=1.26.0",
+    "scikit-learn>=1.4.0",
+    "torch>=2.0.0",
+    "colpali-engine>=0.3.0",
+    "transformers>=4.40.0",
+    "pillow>=10.0.0",
+    "qdrant-client>=1.16.0",
+    "Jinja2>=3.1.0",
+    "typer[all]>=0.9.0",
+    "rich>=13.7.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "python-dotenv>=1.0.0",
+    "tenacity>=8.2.0",
+    "aiofiles>=23.2.0",
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+neurosynth = "neurosynth.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "N", "W"]

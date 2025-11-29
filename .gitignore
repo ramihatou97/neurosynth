@@ -1,0 +1,47 @@
+# Environment
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Data (potentially large/sensitive)
+data/sources/
+data/processed/
+data/output/
+
+# Reference Library data (user-specific)
+reference-library/data/
+reference-library/venv/
+
+# Test artifacts
+test_pipeline/
+test_run/
+test_manifest.json
+test_templates.py
+debug_*.py
+output/
+neurosynth/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Build
+dist/
+build/
+*.egg-info/
+
+# Test
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
