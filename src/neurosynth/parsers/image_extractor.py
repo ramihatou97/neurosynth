@@ -371,6 +371,29 @@ class ImageExtractor:
         if not self.resilient_filter:
             logger.info("Using legacy 6-rule image filter")
 
+        # Initialize enhanced caption detector if enhancements enabled
+        self.caption_detector = None
+        self.caption_detector_stats = {
+            'enhanced_used': 0,
+            'legacy_used': 0,
+            'multi_directional_matches': 0,
+        }
+
+        if self.settings.enhancements_enabled and self.settings.enable_enhanced_captions:
+            try:
+                from neurosynth.enhancements.enhanced_caption_detector import EnhancedCaptionDetector
+                from neurosynth.enhancements.config import NeuroSynthEnhancedConfig
+
+                enh_config = NeuroSynthEnhancedConfig()
+                self.caption_detector = EnhancedCaptionDetector(config=enh_config)
+                logger.info("✓ EnhancedCaptionDetector initialized")
+            except Exception as e:
+                logger.warning(f"Could not initialize EnhancedCaptionDetector: {e}")
+                self.caption_detector = None
+
+        if not self.caption_detector:
+            logger.info("Using legacy caption detection")
+
     def filter_image(
         self,
         image_bytes: bytes,
@@ -712,7 +735,42 @@ class ImageExtractor:
         page_text: str,
         text_blocks: list,
     ) -> tuple[str, float]:
-        """Find caption for image, prioritizing numbered figures.
+        """Find caption for image using enhanced or legacy detector.
+
+        Returns:
+            Tuple of (caption_text, confidence)
+        """
+        # Try enhanced detector if available
+        if self.caption_detector and image_bbox:
+            try:
+                from neurosynth.enhancements.config import CaptionPosition
+
+                detected = self.caption_detector.find_caption_for_image(
+                    page=page,
+                    image_bbox=image_bbox
+                )
+
+                if detected and detected.confidence >= self.settings.caption_confidence_threshold:
+                    self.caption_detector_stats['enhanced_used'] += 1
+                    if detected.position != CaptionPosition.BELOW:
+                        self.caption_detector_stats['multi_directional_matches'] += 1
+                    return detected.text, detected.confidence
+
+            except Exception as e:
+                logger.warning(f"Enhanced caption detection failed: {e}, falling back to legacy")
+
+        # Fall back to legacy detection
+        self.caption_detector_stats['legacy_used'] += 1
+        return self._find_caption_legacy(page, image_bbox, page_text, text_blocks)
+
+    def _find_caption_legacy(
+        self,
+        page: fitz.Page,
+        image_bbox: tuple | None,
+        page_text: str,
+        text_blocks: list,
+    ) -> tuple[str, float]:
+        """Legacy caption detection: Find caption for image, prioritizing numbered figures.
 
         Strategy:
         1. First look for "Figure X:" patterns in the page text
