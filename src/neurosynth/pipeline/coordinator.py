@@ -88,6 +88,9 @@ class PipelineState:
     all_visuals: list["VisualElement"] = field(default_factory=list)
     visuals_embedded: bool = False
 
+    # Phase 3.6: Procedural sequences
+    procedural_sequences: list = field(default_factory=list)  # List[ProceduralSequence]
+
     # Progress tracking
     current_stage: str = "initialized"
     stages_completed: list[str] = field(default_factory=list)
@@ -163,6 +166,27 @@ class Pipeline:
         if not self.keyword_scorer:
             console.print("  [dim]Using legacy visual association (no keyword scoring)[/dim]")
 
+        # Initialize procedural sequence detector for Phase 3.6
+        self.procedural_detector = None
+        self.sequence_stats = {
+            'sequences_detected': 0,
+            'total_sequence_elements': 0,
+            'procedural_confidence_avg': 0.0,
+            'sequence_type_counts': {},
+        }
+
+        if settings.enable_enhancements and settings.enable_procedural_detection:
+            try:
+                from neurosynth.enhancements.procedural_detector import ProceduralSequenceDetector
+                from neurosynth.enhancements.config import NeuroSynthEnhancedConfig
+
+                enh_config = NeuroSynthEnhancedConfig()
+                self.procedural_detector = ProceduralSequenceDetector(config=enh_config)
+                console.print("  [dim]✓ ProceduralSequenceDetector initialized[/dim]")
+            except Exception as e:
+                console.print(f"  [yellow]Could not initialize procedural detector: {e}[/yellow]")
+                self.procedural_detector = None
+
     def on(self, event: str, callback: Callable) -> None:
         """Register a callback for pipeline events."""
         if event in self._callbacks:
@@ -198,16 +222,20 @@ class Pipeline:
             if self.config.enable_visual_extraction and self.state.all_visuals:
                 await self._run_stage("associate_visuals", self._associate_visuals)
 
-            # Stage 7: Merge clusters
+            # Stage 7: Detect procedural sequences (Phase 3.6)
+            if self.config.enable_visual_extraction and self.state.all_visuals:
+                await self._run_stage("detect_sequences", self._detect_procedural_sequences)
+
+            # Stage 8: Merge clusters
             await self._run_stage("merge", self._merge_clusters)
 
-            # Stage 8: Generate outline
+            # Stage 9: Generate outline
             await self._run_stage("outline", self._generate_outline)
 
-            # Stage 9: Synthesize content
+            # Stage 10: Synthesize content
             await self._run_stage("synthesize", self._synthesize_chapter)
 
-            # Stage 10: Generate output
+            # Stage 11: Generate output
             await self._run_stage("output", self._generate_output)
 
             console.print("\n[bold green]Pipeline complete![/bold green]")
@@ -462,6 +490,106 @@ class Pipeline:
                 text_parts.append(visual.caption)
 
         return " ".join(text_parts)[:2000]  # Total limit
+
+    async def _detect_procedural_sequences(self) -> None:
+        """Detect and order surgical procedural step sequences from visual elements.
+
+        Converts VisualElement objects to the format expected by ProceduralSequenceDetector,
+        runs detection, then applies sequence metadata back to the visual elements.
+
+        This enables identification of:
+        - Numbered step sequences (Step 1→2→3)
+        - Subfigure sequences (Fig 3a→3b→3c)
+        - Lettered panel sequences (Panel A→B→C)
+        - Staged procedures (Stage I→II→III)
+        - Implicit temporal sequences (proximity-based)
+        """
+        if not self.procedural_detector or not self.state.all_visuals:
+            console.print("  [dim]No visuals to analyze for sequences[/dim]")
+            return
+
+        console.print(f"  Detecting procedural sequences from {len(self.state.all_visuals)} visuals...")
+
+        try:
+            # Convert VisualElements to detector input format
+            images_for_detection = []
+            visual_map = {}  # Map detector image_id back to VisualElement
+
+            for visual in self.state.all_visuals:
+                # Extract figure_id from caption if available (e.g., "Figure 3" → "3")
+                figure_id = ""
+                if visual.caption:
+                    import re
+                    fig_match = re.search(r'[Ff]ig(?:ure)?\.?\s*(\d+[a-zA-Z]?)', visual.caption)
+                    if fig_match:
+                        figure_id = fig_match.group(1)
+
+                img_dict = {
+                    'id': visual.id,
+                    'page': visual.page_number or 0,
+                    'bbox': visual.bbox or (0, 0, 0, 0),
+                    'caption': visual.caption or "",
+                    'figure_id': figure_id,
+                    'context': visual.context_text or "",
+                    'chapter': None,  # Could extract from document metadata if available
+                }
+                images_for_detection.append(img_dict)
+                visual_map[visual.id] = visual
+
+            # Run sequence detection
+            sequences = self.procedural_detector.detect_sequences(images_for_detection)
+
+            # Apply sequence metadata back to VisualElements
+            for sequence in sequences:
+                for elem in sequence.elements:
+                    if elem.image_id in visual_map:
+                        visual = visual_map[elem.image_id]
+                        visual.sequence_id = sequence.sequence_id
+                        visual.sequence_position = elem.sequence_number
+                        visual.sequence_type = sequence.sequence_type.value
+                        visual.step_label = elem.step_label
+                        visual.is_procedural = True
+                        visual.procedural_confidence = elem.confidence
+
+            # Update statistics
+            self.sequence_stats['sequences_detected'] = len(sequences)
+            total_elements = sum(len(s.elements) for s in sequences)
+            self.sequence_stats['total_sequence_elements'] = total_elements
+
+            # Calculate average confidence
+            if total_elements > 0:
+                confidences = [
+                    e.confidence
+                    for s in sequences
+                    for e in s.elements
+                    if e.confidence is not None
+                ]
+                if confidences:
+                    self.sequence_stats['procedural_confidence_avg'] = sum(confidences) / len(confidences)
+
+            # Count by sequence type
+            type_counts = {}
+            for seq in sequences:
+                seq_type = seq.sequence_type.value
+                type_counts[seq_type] = type_counts.get(seq_type, 0) + 1
+            self.sequence_stats['sequence_type_counts'] = type_counts
+
+            # Store sequences in state
+            self.state.procedural_sequences = sequences
+            self.state.metrics['sequences_detected'] = len(sequences)
+            self.state.metrics['procedural_elements'] = total_elements
+            self.state.metrics['procedural_confidence_avg'] = self.sequence_stats['procedural_confidence_avg']
+
+            console.print(f"  Detected {len(sequences)} procedural sequences ({total_elements} elements)")
+            if type_counts:
+                type_summary = ", ".join(f"{k}: {v}" for k, v in type_counts.items())
+                console.print(f"  Types: {type_summary}")
+
+        except Exception as e:
+            console.print(f"  [yellow]Sequence detection failed: {e}[/yellow]")
+            import traceback
+            console.print(f"  [dim]{traceback.format_exc()}[/dim]")
+            self.state.metrics['sequences_detected'] = 0
 
     async def _cluster_chunks(self) -> None:
         """Cluster chunks semantically using FAISS (if available) or sklearn."""

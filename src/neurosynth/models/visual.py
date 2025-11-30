@@ -108,6 +108,14 @@ class VisualElement:
     keyword_score: float = 0.0  # 0-1 score from 340+ keyword analysis
     keywords_matched: list[str] = field(default_factory=list)  # Matched keywords
 
+    # Phase 3.6: Procedural Sequence Detection
+    sequence_id: str | None = None              # Sequence identifier (e.g., "seq_001")
+    sequence_position: int | None = None        # Position in sequence (1, 2, 3...)
+    sequence_type: str | None = None            # "numbered_steps", "subfigures", "lettered_panels", "staged_procedure", "implicit"
+    step_label: str | None = None               # Human-readable label: "Step 1", "(a)", "Stage 2"
+    is_procedural: bool = False                 # Whether part of procedural sequence
+    procedural_confidence: float = 0.0          # 0-1 confidence score
+
     def __post_init__(self):
         """Validate and normalize fields after initialization."""
         if isinstance(self.image_path, str):
@@ -175,6 +183,12 @@ class VisualElement:
             "relevance_score": self.relevance_score,
             "keyword_score": self.keyword_score,
             "keywords_matched": self.keywords_matched,
+            "sequence_id": self.sequence_id,
+            "sequence_position": self.sequence_position,
+            "sequence_type": self.sequence_type,
+            "step_label": self.step_label,
+            "is_procedural": self.is_procedural,
+            "procedural_confidence": self.procedural_confidence,
         }
         if include_embedding and self.visual_embedding is not None:
             data["visual_embedding"] = self.visual_embedding.tolist()
@@ -203,6 +217,12 @@ class VisualElement:
             relevance_score=data.get("relevance_score", 0.0),
             keyword_score=data.get("keyword_score", 0.0),
             keywords_matched=data.get("keywords_matched", []),
+            sequence_id=data.get("sequence_id"),
+            sequence_position=data.get("sequence_position"),
+            sequence_type=data.get("sequence_type"),
+            step_label=data.get("step_label"),
+            is_procedural=data.get("is_procedural", False),
+            procedural_confidence=data.get("procedural_confidence", 0.0),
         )
         # Restore visual embedding if present
         if "visual_embedding" in data and data["visual_embedding"] is not None:
