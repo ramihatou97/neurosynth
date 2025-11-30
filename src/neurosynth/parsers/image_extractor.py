@@ -7,12 +7,15 @@ anatomical diagrams, imaging studies, etc.).
 
 import asyncio
 import io
+import logging
 import math
 import re
 from dataclasses import dataclass
 from pathlib import Path
 
 import fitz  # PyMuPDF
+
+logger = logging.getLogger(__name__)
 from PIL import Image
 from rich.console import Console
 
@@ -339,6 +342,143 @@ class ImageExtractor:
         self.min_size = self.settings.min_image_size
         self.max_size = self.settings.max_image_size
 
+        # Initialize resilient filter if enhancements enabled
+        self.resilient_filter = None
+        self.filter_stats = {
+            'total_filtered': 0,
+            'enhanced_used': 0,
+            'basic_fallback': 0,
+            'permissive_fallback': 0,
+            'legacy_used': 0,
+            'accepted': 0,
+            'rejected': 0,
+        }
+
+        if self.settings.enhancements_enabled and self.settings.enable_enhanced_filtering:
+            try:
+                from neurosynth.enhancements.resilient_filter import ResilientImageFilter
+                from neurosynth.enhancements.config import FilterFallbackLevel
+
+                enh_config = self.settings.enhancement_config
+                if enh_config:
+                    self.resilient_filter = ResilientImageFilter(config=enh_config)
+                    self.FilterFallbackLevel = FilterFallbackLevel
+                    logger.info("✓ Resilient 3-tier image filter initialized")
+            except Exception as e:
+                logger.warning(f"Could not initialize resilient filter: {e}")
+                self.resilient_filter = None
+
+        if not self.resilient_filter:
+            logger.info("Using legacy 6-rule image filter")
+
+    def filter_image(
+        self,
+        image_bytes: bytes,
+        width: int,
+        height: int,
+        file_size_bytes: int,
+        image_type: ImageType,
+        context_text: str = "",
+    ) -> ImageFilterResult:
+        """
+        Filter image using best available method.
+
+        Tries resilient 3-tier filter first, falls back to legacy if:
+        - Enhancements disabled
+        - Resilient filter unavailable
+        - Enhanced filter fails
+
+        Args:
+            image_bytes: Raw image data
+            width: Image width in pixels
+            height: Image height in pixels
+            file_size_bytes: Size of image data
+            image_type: Classified image type
+            context_text: Surrounding text for analysis
+
+        Returns:
+            ImageFilterResult with is_valid, rejection_reason, confidence
+        """
+        self.filter_stats['total_filtered'] += 1
+
+        # Try resilient filter if available
+        if self.resilient_filter:
+            try:
+                should_extract, filter_result = self.resilient_filter.should_extract(
+                    image_bytes=image_bytes,
+                    width=width,
+                    height=height,
+                    doc=None,  # Not available here
+                    xref=0,    # Not available here
+                    context_text=context_text,
+                )
+
+                # Track fallback level
+                fallback_level = filter_result.fallback_level
+                if fallback_level == self.FilterFallbackLevel.ENHANCED:
+                    self.filter_stats['enhanced_used'] += 1
+                elif fallback_level == self.FilterFallbackLevel.BASIC:
+                    self.filter_stats['basic_fallback'] += 1
+                elif fallback_level == self.FilterFallbackLevel.PERMISSIVE:
+                    self.filter_stats['permissive_fallback'] += 1
+
+                # Convert FilterResult to ImageFilterResult
+                result = ImageFilterResult(
+                    is_valid=should_extract,
+                    rejection_reason=filter_result.rejection_reason or "",
+                    confidence=filter_result.confidence,
+                )
+
+                if result.is_valid:
+                    self.filter_stats['accepted'] += 1
+                else:
+                    self.filter_stats['rejected'] += 1
+
+                return result
+
+            except Exception as e:
+                logger.warning(f"Resilient filter failed: {e}, using legacy")
+                # Fall through to legacy filter
+
+        # Use legacy 6-rule filter
+        self.filter_stats['legacy_used'] += 1
+        result = _is_medical_image(
+            width=width,
+            height=height,
+            file_size_bytes=file_size_bytes,
+            image_type=image_type,
+        )
+
+        if result.is_valid:
+            self.filter_stats['accepted'] += 1
+        else:
+            self.filter_stats['rejected'] += 1
+
+        return result
+
+    def print_filter_stats(self) -> None:
+        """Print filter statistics for monitoring."""
+        stats = self.filter_stats
+        total = stats['total_filtered']
+
+        if total == 0:
+            print("No images filtered yet")
+            return
+
+        print("\n" + "="*70)
+        print("IMAGE FILTER STATISTICS")
+        print("="*70)
+        print(f"Total Processed:  {total}")
+        print(f"  Accepted:       {stats['accepted']} ({100*stats['accepted']/total:.1f}%)")
+        print(f"  Rejected:       {stats['rejected']} ({100*stats['rejected']/total:.1f}%)")
+
+        print(f"\nFilter Method Used:")
+        print(f"  Enhanced (Tier 1):  {stats['enhanced_used']} ({100*stats['enhanced_used']/total:.1f}%)")
+        print(f"  Basic (Tier 2):     {stats['basic_fallback']} ({100*stats['basic_fallback']/total:.1f}%)")
+        print(f"  Permissive (Tier 3):{stats['permissive_fallback']} ({100*stats['permissive_fallback']/total:.1f}%)")
+        print(f"  Legacy (6-rule):    {stats['legacy_used']} ({100*stats['legacy_used']/total:.1f}%)")
+        print("="*70)
+
     async def extract_images(
         self,
         pdf_path: Path,
@@ -472,11 +612,14 @@ class ImageExtractor:
 
                 # Apply medical image filter BEFORE saving
                 # This filters out logos, separator bars, and decorative elements
-                filter_result = _is_medical_image(
+                # Uses resilient 3-tier filter if available, otherwise legacy 6-rule filter
+                filter_result = self.filter_image(
+                    image_bytes=image_bytes,
                     width=width,
                     height=height,
                     file_size_bytes=len(image_bytes),
                     image_type=image_type,
+                    context_text=context_text,
                 )
                 if not filter_result.is_valid:
                     console.print(
