@@ -11,13 +11,8 @@ from dataclasses import dataclass, field
 import fitz  # type: ignore[import-untyped]  # PyMuPDF
 import traceback
 
-def _is_medical_image(image_bytes: bytes) -> bool:
-    """Basic filter to skip icons, lines, and non-content images."""
-    # Skip very small files (< 3KB) which are likely icons or spacers
-    if len(image_bytes) < 3072:
-        return False
-    return True
-
+# Import main filter for consistency (replaces duplicate 3KB filter)
+from neurosynth.parsers.image_extractor import filter_image_bytes
 
 @dataclass
 class ProjectDirectory:
@@ -425,8 +420,9 @@ class NeuroSynthBridge:
                             image_bytes = base_image["image"]
                             ext = base_image["ext"]
 
-                            # Apply Medical Filter
-                            if _is_medical_image(image_bytes):
+                            # Apply unified medical filter (6-rule sophisticated filter)
+                            is_valid, rejection_reason = filter_image_bytes(image_bytes)
+                            if is_valid:
                                 filename = f"{path.stem}_p{page_num}_i{img_idx}.{ext}"
                                 # Sanitize filename just in case
                                 filename = re.sub(r'[^\w\-\.]', '_', filename)
@@ -434,6 +430,10 @@ class NeuroSynthBridge:
                                 with open(output_dir / filename, "wb") as f:
                                     f.write(image_bytes)
                                 count += 1
+                            else:
+                                # Image filtered out - skip it
+                                # Uncomment for debugging: print(f"Filtered p{page_num}_i{img_idx}: {rejection_reason}")
+                                pass
                         except Exception as img_err:
                             print(f"Warning: Failed to extract image {img_idx} on page {page_num} of {path.name}: {img_err}")
                             continue

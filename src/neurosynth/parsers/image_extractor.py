@@ -135,6 +135,70 @@ def _is_medical_image(
     )
 
 
+def filter_image_bytes(
+    image_bytes: bytes,
+    context_text: str = "",
+) -> tuple[bool, str]:
+    """
+    Bridge-friendly wrapper for _is_medical_image().
+
+    Automatically extracts dimensions from image_bytes and applies
+    the full 6-rule filtering logic.
+
+    This is a convenience function for code that only has access to
+    raw image bytes (e.g., reference library bridge) without pre-computed
+    dimensions.
+
+    Args:
+        image_bytes: Raw image data
+        context_text: Optional surrounding text for classification hints
+
+    Returns:
+        (is_valid, rejection_reason) tuple
+        - is_valid: True if image should be extracted
+        - rejection_reason: Explanation if rejected (empty if accepted)
+
+    Example:
+        >>> is_valid, reason = filter_image_bytes(img_bytes)
+        >>> if not is_valid:
+        ...     print(f"Filtered: {reason}")
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    # Extract dimensions from image bytes
+    width, height = 0, 0
+    try:
+        from PIL import Image
+        import io
+        img = Image.open(io.BytesIO(image_bytes))
+        width, height = img.size
+    except Exception as e:
+        # Fallback: estimate dimensions from file size
+        # Rough estimate assuming RGB image (3 bytes per pixel)
+        estimated_pixels = len(image_bytes) / 3
+        width = height = int(estimated_pixels ** 0.5)
+        logger.debug(
+            f"Could not read image dimensions with PIL: {e}. "
+            f"Using estimate: {width}x{height}px"
+        )
+
+    # Calculate file size
+    file_size_bytes = len(image_bytes)
+
+    # Use main filter with UNKNOWN type (no classification bias)
+    # If context_text provided, could enhance by classifying first,
+    # but for simplicity use UNKNOWN to apply strict filtering
+    filter_result = _is_medical_image(
+        width=width,
+        height=height,
+        file_size_bytes=file_size_bytes,
+        image_type=ImageType.UNKNOWN,
+    )
+
+    return filter_result.is_valid, filter_result.rejection_reason
+
+
 @dataclass
 class CaptionCandidate:
     """A potential caption found near an image."""
