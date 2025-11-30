@@ -138,6 +138,31 @@ class Pipeline:
             "error": [],
         }
 
+        # Initialize keyword scorer for Phase 3.5 (neurosurgical keyword relevance)
+        self.keyword_scorer = None
+        self.keyword_stats = {
+            'enhanced_associations': 0,
+            'legacy_associations': 0,
+            'keyword_matched_count': 0,
+            'total_keywords_found': 0,
+        }
+
+        settings = get_settings()
+        if settings.enable_enhancements and settings.enable_keyword_scoring:
+            try:
+                from neurosynth.enhancements.visual_cluster_associator import NeurosurgicalKeywordScorer
+                from neurosynth.enhancements.config import NeuroSynthEnhancedConfig
+
+                enh_config = NeuroSynthEnhancedConfig()
+                self.keyword_scorer = NeurosurgicalKeywordScorer(config=enh_config)
+                console.print("  [dim]✓ NeurosurgicalKeywordScorer initialized (340+ medical terms)[/dim]")
+            except Exception as e:
+                console.print(f"  [yellow]Could not initialize keyword scorer: {e}[/yellow]")
+                self.keyword_scorer = None
+
+        if not self.keyword_scorer:
+            console.print("  [dim]Using legacy visual association (no keyword scoring)[/dim]")
+
     def on(self, event: str, callback: Callable) -> None:
         """Register a callback for pipeline events."""
         if event in self._callbacks:
@@ -342,7 +367,7 @@ class Pipeline:
             self.state.metrics["visuals_embedded"] = 0
 
     async def _associate_visuals(self) -> None:
-        """Associate visual elements with text clusters."""
+        """Associate visual elements with text clusters with optional keyword enhancement."""
         if not self.state.all_visuals or not self.state.clusters:
             return
 
@@ -353,12 +378,12 @@ class Pipeline:
             f"with {len(self.state.clusters)} clusters..."
         )
 
-        # Create associator
+        # Create legacy associator
         associator = VisualAssociator(
             visual_relevance_threshold=self.config.visual_relevance_threshold,
         )
 
-        # Associate visuals to existing clusters
+        # Associate visuals to existing clusters (legacy method)
         self.state.clusters = await associator.associate_visuals_to_existing_clusters(
             self.state.clusters,
             self.state.all_visuals,
@@ -367,8 +392,76 @@ class Pipeline:
         # Count associations
         total_associations = sum(len(c.visual_elements) for c in self.state.clusters)
         self.state.metrics["visual_associations"] = total_associations
+        self.keyword_stats['legacy_associations'] = total_associations
 
         console.print(f"  Created {total_associations} visual-cluster associations")
+
+        # Phase 3.5: Enhance with keyword scoring if available
+        if self.keyword_scorer:
+            try:
+                keyword_enhanced = 0
+                total_keywords = 0
+
+                for cluster in self.state.clusters:
+                    if not cluster.visual_elements:
+                        continue
+
+                    # Get cluster's representative text for keyword analysis
+                    cluster_text = self._get_cluster_text_for_scoring(cluster)
+                    if not cluster_text:
+                        continue
+
+                    # Score the text for neurosurgical keyword relevance
+                    keyword_score, details = self.keyword_scorer.score_text(
+                        cluster_text, context_type="body"
+                    )
+
+                    if keyword_score > 0:
+                        keywords = details.get('keywords', [])
+
+                        # Apply keyword scores to all visuals in this cluster
+                        for visual in cluster.visual_elements:
+                            visual.keyword_score = keyword_score
+                            visual.keywords_matched = keywords
+                            if keywords:
+                                keyword_enhanced += 1
+                                total_keywords += len(keywords)
+
+                # Update statistics
+                self.keyword_stats['enhanced_associations'] = keyword_enhanced
+                self.keyword_stats['keyword_matched_count'] = keyword_enhanced
+                self.keyword_stats['total_keywords_found'] = total_keywords
+
+                if keyword_enhanced > 0:
+                    console.print(
+                        f"  [dim]✓ Enhanced {keyword_enhanced} associations with keyword scoring "
+                        f"({total_keywords} keywords matched)[/dim]"
+                    )
+
+                self.state.metrics["keyword_enhanced_count"] = keyword_enhanced
+                self.state.metrics["total_keywords_found"] = total_keywords
+
+            except Exception as e:
+                console.print(f"  [yellow]Keyword enhancement failed: {e}[/yellow]")
+
+    def _get_cluster_text_for_scoring(self, cluster) -> str:
+        """Extract representative text from cluster for keyword scoring.
+
+        Combines the top chunk texts and captions for comprehensive analysis.
+        """
+        text_parts = []
+
+        # Get text from representative chunks (top 3 by priority)
+        for chunk in cluster.chunks[:3]:
+            if hasattr(chunk, 'content') and chunk.content:
+                text_parts.append(chunk.content[:500])  # Limit per chunk
+
+        # Include visual captions if available
+        for visual in cluster.visual_elements[:3]:
+            if visual.caption:
+                text_parts.append(visual.caption)
+
+        return " ".join(text_parts)[:2000]  # Total limit
 
     async def _cluster_chunks(self) -> None:
         """Cluster chunks semantically using FAISS (if available) or sklearn."""

@@ -104,6 +104,10 @@ class VisualElement:
     # Relevance scoring (set during visual association)
     relevance_score: float = 0.0
 
+    # Keyword scoring (Phase 3.5 - neurosurgical keyword relevance)
+    keyword_score: float = 0.0  # 0-1 score from 340+ keyword analysis
+    keywords_matched: list[str] = field(default_factory=list)  # Matched keywords
+
     def __post_init__(self):
         """Validate and normalize fields after initialization."""
         if isinstance(self.image_path, str):
@@ -169,6 +173,8 @@ class VisualElement:
             "context_text": self.context_text[:200],  # Truncate for storage
             "visual_hash": self.visual_hash,
             "relevance_score": self.relevance_score,
+            "keyword_score": self.keyword_score,
+            "keywords_matched": self.keywords_matched,
         }
         if include_embedding and self.visual_embedding is not None:
             data["visual_embedding"] = self.visual_embedding.tolist()
@@ -195,6 +201,8 @@ class VisualElement:
             context_text=data.get("context_text", ""),
             visual_hash=data.get("visual_hash", ""),
             relevance_score=data.get("relevance_score", 0.0),
+            keyword_score=data.get("keyword_score", 0.0),
+            keywords_matched=data.get("keywords_matched", []),
         )
         # Restore visual embedding if present
         if "visual_embedding" in data and data["visual_embedding"] is not None:
