@@ -474,7 +474,9 @@ class NeuroSynthBridge:
         if self.neurosynth_venv:
             import os
             env = os.environ.copy()
-            env["PATH"] = str(self.neurosynth_venv / "bin") + ":" + env["PATH"]
+            # Include MacTeX path for pdflatex
+            tex_path = "/Library/TeX/texbin"
+            env["PATH"] = str(self.neurosynth_venv / "bin") + ":" + tex_path + ":" + env["PATH"]
             env["VIRTUAL_ENV"] = str(self.neurosynth_venv)
 
         try:
@@ -485,6 +487,10 @@ class NeuroSynthBridge:
             import os as _os
             if env is None:
                 env = _os.environ.copy()
+                # Include MacTeX path for pdflatex
+                tex_path = "/Library/TeX/texbin"
+                if tex_path not in env.get("PATH", ""):
+                    env["PATH"] = tex_path + ":" + env.get("PATH", "")
 
             # Force unbuffered Python output for real-time streaming
             env["PYTHONUNBUFFERED"] = "1"
