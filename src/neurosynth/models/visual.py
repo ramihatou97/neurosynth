@@ -27,7 +27,8 @@ class ImageType(str, Enum):
     4. ILLUSTRATION - General medical illustrations
     5. PHOTOGRAPH - Clinical photographs
     6. TABLE - Extracted tables as images
-    7. UNKNOWN - Unclassified images
+    7. FLOWCHART - Algorithm diagrams, decision trees, workflows
+    8. UNKNOWN - Unclassified images
     """
     SURGICAL_STEP = "surgical_step"
     ANATOMICAL = "anatomical"
@@ -35,6 +36,7 @@ class ImageType(str, Enum):
     ILLUSTRATION = "illustration"
     PHOTOGRAPH = "photograph"
     TABLE = "table"
+    FLOWCHART = "flowchart"
     UNKNOWN = "unknown"
 
     @classmethod
@@ -47,6 +49,7 @@ class ImageType(str, Enum):
             cls.ILLUSTRATION,
             cls.PHOTOGRAPH,
             cls.TABLE,
+            cls.FLOWCHART,
             cls.UNKNOWN,
         ]
 
