@@ -76,6 +76,37 @@ from .procedural_detector import (
     SequenceExporter,
 )
 
+# Phase 4: Unified Pipeline (conditional import)
+try:
+    from .unified_pipeline import (
+        UnifiedExtractionPipeline,
+        ExtractionResult,
+        ExtractedImage,
+    )
+    HAS_UNIFIED_PIPELINE = True
+except ImportError:
+    HAS_UNIFIED_PIPELINE = False
+
+# Phase 4.1: Dependencies
+from .vector_extractor import VectorGraphicsExtractor, VectorGraphic
+from .batch_processor import BatchPageProcessor, BatchProcessingResult
+from .async_wrappers import (
+    async_wrap,
+    process_batch,
+    AsyncPDFDocument,
+    get_executor_pool,
+    ExecutorPool,
+    shutdown_executor_pool,
+)
+from .latex_validator import (
+    LaTeXValidator,
+    ValidationResult,
+    escape_latex,
+    sanitize_label,
+    unescape_latex,
+    validate_figure_environment,
+)
+
 __all__ = [
     # Version
     "__version__",
@@ -131,4 +162,34 @@ __all__ = [
     "SequenceElement",
     "SequenceValidator",
     "SequenceExporter",
+
+    # Phase 4: Unified Pipeline
+    "HAS_UNIFIED_PIPELINE",  # Flag to check if unified pipeline available
+
+    # Phase 4.1: Dependencies
+    "VectorGraphicsExtractor",
+    "VectorGraphic",
+    "BatchPageProcessor",
+    "BatchProcessingResult",
+    "async_wrap",
+    "process_batch",
+    "AsyncPDFDocument",
+    "get_executor_pool",
+    "ExecutorPool",
+    "shutdown_executor_pool",
+    "LaTeXValidator",
+    "ValidationResult",
+    "escape_latex",
+    "sanitize_label",
+    "unescape_latex",
+    "validate_figure_environment",
 ]
+
+# Add conditional Phase 4 exports
+if HAS_UNIFIED_PIPELINE:
+    __all__.extend([
+        "UnifiedExtractionPipeline",
+        "ExtractionResult",
+        "ExtractedImage",
+    ])
+

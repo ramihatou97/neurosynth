@@ -23,31 +23,31 @@ import time
 from .config import NeuroSynthEnhancedConfig, ImageCategory
 
 # Import enhancement modules
-from resilient_filter import ResilientImageFilter, FilterResult
-from enhanced_caption_detector import (
-    EnhancedCaptionDetector, 
+from .resilient_filter import ResilientImageFilter, FilterResult
+from .enhanced_caption_detector import (
+    EnhancedCaptionDetector,
     DetectedCaption,
     BatchCaptionProcessor
 )
-from procedural_detector import (
-    ProceduralSequenceDetector, 
+from .procedural_detector import (
+    ProceduralSequenceDetector,
     ProceduralSequence
 )
-from visual_cluster_associator import (
+from .visual_cluster_associator import (
     EnhancedVisualClusterAssociator,
     ImageBlock,
     TextBlock,
     Association
 )
-from vector_extractor import VectorGraphicsExtractor, VectorGraphic
-from latex_figure_generator import (
+from .vector_extractor import VectorGraphicsExtractor, VectorGraphic
+from .latex_figure_generator import (
     EnhancedLaTeXFigureGenerator,
     FigureSpec,
     FigureImage,
     FigureLayout
 )
-from batch_processor import BatchPageProcessor, BatchProcessingResult
-from async_wrappers import (
+from .batch_processor import BatchPageProcessor, BatchProcessingResult
+from .async_wrappers import (
     async_wrap,
     process_batch,
     AsyncPDFDocument,

@@ -112,6 +112,28 @@ class Settings(BaseSettings):
         description="Enable surgical procedure sequence detection (Step 1→2→3)",
     )
 
+    # Phase 4: Unified Extraction Pipeline Configuration
+    enable_unified_pipeline: bool = Field(
+        default=False,
+        description="Enable unified extraction pipeline (Phase 4)",
+    )
+    unified_pipeline_mode: Literal["incremental", "unified", "auto"] = Field(
+        default="incremental",
+        description="Extraction mode: 'incremental' (Phase 3), 'unified' (Phase 4), 'auto' (decide automatically)",
+    )
+    enable_vector_extraction: bool = Field(
+        default=False,
+        description="Enable vector graphics extraction (flowcharts, diagrams)",
+    )
+    enable_latex_generation: bool = Field(
+        default=False,
+        description="Enable LaTeX figure code generation",
+    )
+    enable_batch_processing: bool = Field(
+        default=True,
+        description="Enable batch processing with xref deduplication",
+    )
+
     # Enhancement Thresholds
     caption_confidence_threshold: float = Field(
         default=0.60,

@@ -18,7 +18,7 @@ from typing import List, Optional, Dict, Tuple, Any
 from enum import Enum
 
 from .config import LaTeXConfig, NeuroSynthEnhancedConfig
-from latex_validator import LaTeXValidator, escape_latex, sanitize_label
+from .latex_validator import LaTeXValidator, escape_latex, sanitize_label
 
 logger = logging.getLogger(__name__)
 
