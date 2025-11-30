@@ -72,7 +72,7 @@ class Section:
         """Total number of figures in this section."""
         count = len(self.inline_figures)
         if self.figure_plate:
-            count += len(self.figure_plate.elements)
+            count += len(self.figure_plate.figures)
         return count
 
     def collect_visuals_from_clusters(self, max_inline: int = 3) -> None:
