@@ -1,10 +1,25 @@
 """Configuration management for NeuroSynth."""
 
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Import enhancement modules with graceful fallback
+try:
+    from neurosynth.enhancements.config import (
+        NeuroSynthEnhancedConfig,
+        KeywordWeightConfig,
+        AssociationWeightConfig,
+        CaptionConfidenceConfig,
+        NeurosurgicalKeywords,
+    )
+    ENHANCEMENTS_AVAILABLE = True
+except ImportError:
+    # Graceful degradation if enhancements not installed
+    NeuroSynthEnhancedConfig = None  # type: ignore
+    ENHANCEMENTS_AVAILABLE = False
 
 # Find .env relative to this file, not CWD
 # This allows NeuroSynth to work from any working directory
@@ -73,6 +88,42 @@ class Settings(BaseSettings):
     include_all_relevant_visuals: bool = Field(
         default=True,
         description="Comprehensive visual coverage (include all relevant images)",
+    )
+
+    # Enhancement Module Configuration (v3.1)
+    enable_enhancements: bool = Field(
+        default=True,
+        description="Enable enhancement module v3.1 features",
+    )
+    enable_enhanced_filtering: bool = Field(
+        default=True,
+        description="Enable 3-tier resilient image filtering (Enhanced → Basic → Permissive)",
+    )
+    enable_enhanced_captions: bool = Field(
+        default=True,
+        description="Enable multi-directional caption detection with confidence scoring",
+    )
+    enable_keyword_scoring: bool = Field(
+        default=True,
+        description="Enable neurosurgical keyword-based association scoring (340+ terms)",
+    )
+    enable_procedural_detection: bool = Field(
+        default=True,
+        description="Enable surgical procedure sequence detection (Step 1→2→3)",
+    )
+
+    # Enhancement Thresholds
+    caption_confidence_threshold: float = Field(
+        default=0.60,
+        description="Minimum confidence for caption detection (0-1)",
+    )
+    visual_association_threshold: float = Field(
+        default=0.50,
+        description="Minimum score for image-text association (0-1)",
+    )
+    keyword_match_threshold: int = Field(
+        default=2,
+        description="Minimum keyword matches for relevance",
     )
 
     # Qdrant Configuration
@@ -153,6 +204,79 @@ class Settings(BaseSettings):
     @property
     def output_dir(self) -> Path:
         return self.data_dir / "output"
+
+    @property
+    def enhancement_config(self) -> Optional["NeuroSynthEnhancedConfig"]:  # type: ignore
+        """
+        Get enhancement module configuration.
+
+        Returns None if enhancements disabled or unavailable.
+        Auto-creates config with default weights on first access.
+        Validates all weights on creation.
+        """
+        if not self.enable_enhancements or not ENHANCEMENTS_AVAILABLE:
+            return None
+
+        if not hasattr(self, '_enhancement_config_cache'):
+            # Create enhancement config with defaults
+            self._enhancement_config_cache = NeuroSynthEnhancedConfig(  # type: ignore
+                # Paths
+                output_base_dir=str(self.data_dir / "neurosynth_output"),
+                images_subdir="images",
+                metadata_subdir="metadata",
+                latex_subdir="latex",
+
+                # Feature flags (inherit from main config)
+                enable_enhanced_filtering=self.enable_enhanced_filtering,
+                enable_caption_detection=self.enable_enhanced_captions,
+                enable_procedural_detection=self.enable_procedural_detection,
+            )
+
+            # Validate weights on creation
+            self._enhancement_config_cache.keyword_weights.validate()  # type: ignore
+            self._enhancement_config_cache.association_weights.validate()  # type: ignore
+            self._enhancement_config_cache.caption_confidence.validate()  # type: ignore
+
+        return self._enhancement_config_cache
+
+    @property
+    def enhancements_enabled(self) -> bool:
+        """Check if enhancements are available and enabled."""
+        return self.enable_enhancements and ENHANCEMENTS_AVAILABLE
+
+    def print_enhancement_status(self) -> None:
+        """Print current enhancement configuration status."""
+        print("="*70)
+        print("ENHANCEMENT MODULE STATUS")
+        print("="*70)
+
+        if not ENHANCEMENTS_AVAILABLE:
+            print("❌ Enhancement module NOT AVAILABLE")
+            print("   Files should be in: src/neurosynth/enhancements/")
+            return
+
+        if not self.enable_enhancements:
+            print("⚠  Enhancement module DISABLED (enable_enhancements=False)")
+            return
+
+        print("✓ Enhancement module ACTIVE\n")
+
+        print("Feature Flags:")
+        print(f"  Resilient Filtering:     {'✓' if self.enable_enhanced_filtering else '✗'}")
+        print(f"  Enhanced Captions:       {'✓' if self.enable_enhanced_captions else '✗'}")
+        print(f"  Keyword Scoring:         {'✓' if self.enable_keyword_scoring else '✗'}")
+        print(f"  Procedural Detection:    {'✓' if self.enable_procedural_detection else '✗'}")
+
+        print("\nThresholds:")
+        print(f"  Caption Confidence:      {self.caption_confidence_threshold:.2f}")
+        print(f"  Visual Association:      {self.visual_association_threshold:.2f}")
+        print(f"  Keyword Matches:         {self.keyword_match_threshold}")
+
+        if self.enhancement_config:
+            print("\n" + "="*70)
+            self.enhancement_config.print_weights_summary()  # type: ignore
+
+        print("="*70)
 
 
 # Global settings instance (lazy loaded)
