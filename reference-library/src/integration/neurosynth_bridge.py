@@ -6,8 +6,17 @@ import shutil
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Callable, TYPE_CHECKING
+from typing import Any, Optional, Callable, TYPE_CHECKING, cast
 from dataclasses import dataclass, field
+import fitz  # type: ignore[import-untyped]  # PyMuPDF
+import traceback
+
+def _is_medical_image(image_bytes: bytes) -> bool:
+    """Basic filter to skip icons, lines, and non-content images."""
+    # Skip very small files (< 3KB) which are likely icons or spacers
+    if len(image_bytes) < 3072:
+        return False
+    return True
 
 
 @dataclass
@@ -48,10 +57,10 @@ class ProjectDirectory:
         topic: str,
         search_query: str = "",
         search_mode: str = "keyword",
-        template_type: str = None
+        template_type: Optional[str] = None
     ):
         """Save project metadata."""
-        meta = {
+        meta: dict[str, str | None] = {
             "topic": topic,
             "created_at": datetime.now().isoformat(),
             "search_query": search_query,
@@ -89,7 +98,7 @@ def _create_project_directory(topic: str, base_dir: Optional[Path] = None) -> Pr
     return ProjectDirectory(root=project_dir).create()
 
 
-def _get_subprocess_kwargs() -> dict:
+def _get_subprocess_kwargs() -> dict[str, Any]:
     """Get platform-specific subprocess kwargs to prevent terminal windows."""
     kwargs = {"stdin": subprocess.DEVNULL}
     if sys.platform == "win32":
@@ -132,6 +141,7 @@ from ..export.page_extractor import extract_relevant_pages, generate_manifest, E
 
 if TYPE_CHECKING:
     from ..cache.database import Database
+    from ..search.result_model import SearchResult
 
 
 @dataclass
@@ -167,13 +177,13 @@ class NeuroSynthBridge:
     def synthesize(
         self,
         topic: str,
-        results: list,  # list[SearchResult]
+        results: "list[SearchResult]",
         output_dir: Optional[Path] = None,
         on_progress: Optional[Callable[[str], None]] = None,
         context_pages: int = 1,
         search_query: str = "",
         search_mode: str = "keyword",
-        template_type: str = None
+        template_type: Optional[str] = None
     ) -> SynthesisResult:
         """
         Synthesize a chapter from selected search results.
@@ -244,13 +254,32 @@ class NeuroSynthBridge:
                 error="No pages could be extracted from selected results"
             )
 
+        # 3. Extract Images (Targeted)
+        # This extracts images ONLY from the specific pages of the selected PDFs
+        # independent of the pre-indexed library images.
+        if on_progress:
+            on_progress("Extracting anatomical figures from selection...")
+        
+        try:
+            image_count = self._extract_images_from_sources(
+                extracted_sources=extracted,
+                output_dir=project.images_dir
+            )
+            if on_progress and image_count > 0:
+                on_progress(f"Persisted {image_count} high-quality figures")
+        except Exception as e:
+            print(f"Non-fatal error during image extraction: {e}")
+            traceback.print_exc()
+            # Continue with synthesis even if image extraction fails partially
+
         # Copy medical images from extracted sources to project images directory
+        # (Legacy/Fallback: copies images that were already extracted during page extraction if any)
         if on_progress:
             on_progress("Collecting medical images...")
 
-        image_count = self._collect_project_images(extracted, project.images_dir)
-        if on_progress and image_count > 0:
-            on_progress(f"Collected {image_count} medical images")
+        legacy_image_count = self._collect_project_images(extracted, project.images_dir)
+        if on_progress and legacy_image_count > 0:
+            on_progress(f"Collected {legacy_image_count} cached medical images")
 
         # Generate enhanced manifest with search context
         generate_manifest(
@@ -355,6 +384,70 @@ class NeuroSynthBridge:
 
         return collected
 
+    def _extract_images_from_sources(self, extracted_sources: list[ExtractedSource], output_dir: Path) -> int:
+        """Extract images ONLY from the specific pages of the selected PDFs."""
+        count = 0
+        # Group by original PDF
+        pdf_map: dict[Path, set[int]] = {}
+        for source in extracted_sources:
+            if not source.original_path: continue
+            if source.original_path not in pdf_map:
+                pdf_map[source.original_path] = set()
+            pdf_map[source.original_path].update(source.pages)
+
+        for path, pages in pdf_map.items():
+            if not path.exists(): 
+                print(f"Skipping missing PDF: {path}")
+                continue
+
+            doc = None
+            try:
+                doc = fitz.open(path)
+            except Exception as e:
+                print(f"Error opening PDF {path.name}: {e}")
+                continue
+
+            for page_num in pages:
+                try:
+                    # CRITICAL FIX: pages are 1-indexed but fitz uses 0-indexed
+                    page_idx = page_num - 1
+                    if page_idx < 0 or page_idx >= len(doc):
+                        print(f"Warning: Page {page_num} out of bounds for {path.name} (has {len(doc)} pages)")
+                        continue
+
+                    page = doc[page_idx]
+                    image_list: list[tuple[Any, ...]] = page.get_images(full=True)  # type: ignore[no-untyped-call]
+
+                    for img_idx, img_info in enumerate(image_list):  # type: ignore[union-attr]
+                        try:
+                            xref: int = img_info[0]
+                            base_image = cast(dict[str, Any], doc.extract_image(xref))  # type: ignore[no-untyped-call]
+                            image_bytes = base_image["image"]
+                            ext = base_image["ext"]
+
+                            # Apply Medical Filter
+                            if _is_medical_image(image_bytes):
+                                filename = f"{path.stem}_p{page_num}_i{img_idx}.{ext}"
+                                # Sanitize filename just in case
+                                filename = re.sub(r'[^\w\-\.]', '_', filename)
+
+                                with open(output_dir / filename, "wb") as f:
+                                    f.write(image_bytes)
+                                count += 1
+                        except Exception as img_err:
+                            print(f"Warning: Failed to extract image {img_idx} on page {page_num} of {path.name}: {img_err}")
+                            continue
+                except Exception as page_err:
+                    print(f"Warning: Failed to process page {page_num} of {path.name}: {page_err}")
+                    continue
+
+            try:
+                if doc: doc.close()
+            except Exception:
+                pass
+        
+        return count
+
     def _run_neurosynth(
         self,
         topic: str,
@@ -410,10 +503,12 @@ class NeuroSynthBridge:
                 **_get_subprocess_kwargs()
             )
 
-            log_lines = []
+            log_lines: list[str] = []
 
             # Stream output line by line
             try:
+                if process.stdout is None:
+                    raise RuntimeError("Failed to capture pip process output")
                 for line in iter(process.stdout.readline, ''):
                     line = line.rstrip()
                     if line:
@@ -541,7 +636,7 @@ class NeuroSynthBridge:
                     manifest_json = f.read()
 
             # Convert extracted sources to dict format
-            sources = [
+            sources: list[dict[str, object]] = [
                 {
                     "original_source": s.original_source,
                     "original_path": str(s.original_path),

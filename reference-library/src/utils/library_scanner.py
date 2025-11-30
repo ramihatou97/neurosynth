@@ -297,6 +297,7 @@ class LibraryScanner:
 
         # PARALLEL metadata collection with ThreadPoolExecutor
         files_data = []
+        failed_files = []
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # Submit all tasks
             future_to_path = {
@@ -306,14 +307,28 @@ class LibraryScanner:
             # Collect results as they complete (enables progress reporting)
             completed = 0
             for future in as_completed(future_to_path):
-                result = future.result()
-                if result:
-                    files_data.append(result)
+                pdf_path = future_to_path[future]
+                try:
+                    result = future.result()
+                    if result:
+                        files_data.append(result)
+                    else:
+                        # _scan_single_pdf returned None (failed silently)
+                        failed_files.append(pdf_path)
+                        print(f"Warning: Could not scan {pdf_path.name}")
+                except Exception as e:
+                    # Future raised an exception
+                    failed_files.append(pdf_path)
+                    print(f"Error scanning {pdf_path.name}: {e}")
                 completed += 1
 
                 # Report progress
                 if progress_callback:
                     progress_callback(completed, len(new_pdfs))
+
+        # Log summary if there were failures
+        if failed_files:
+            print(f"Warning: {len(failed_files)} of {len(new_pdfs)} files failed to scan")
 
         # Batch insert all new files at once (single-threaded for SQLite safety)
         if files_data:

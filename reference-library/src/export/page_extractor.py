@@ -3,7 +3,7 @@ import fitz  # PyMuPDF
 from pathlib import Path
 from dataclasses import dataclass, field
 from collections import defaultdict
-from typing import Optional
+from typing import Any, Optional
 from datetime import datetime
 import json
 
@@ -20,19 +20,18 @@ class ExtractedSource:
     category: Optional[str] = None        # Specific subcategory
     confidence: Optional[float] = None    # AI confidence score 0.0-1.0
     reasoning: Optional[str] = None       # AI categorization reasoning
-    reasoning: Optional[str] = None       # AI categorization reasoning
     context_excerpts: list[str] = field(default_factory=list)
     full_text: str = ""                   # Full text content of extracted pages
     # Visual content fields
-    figures: list[dict] = field(default_factory=list)  # Figures on extracted pages
+    figures: list[dict[str, Any]] = field(default_factory=list)  # Figures on extracted pages
     figure_count: int = 0
 
 
 def extract_relevant_pages(
-    results: list,  # list[SearchResult] - avoiding import for flexibility
+    results: list[Any],  # list[SearchResult] - avoiding import for flexibility
     output_dir: Path,
     context_pages: int = 1,
-    database = None  # Optional database for figure lookup
+    database: Any | None = None  # Optional database for figure lookup
 ) -> list[ExtractedSource]:
     """
     Extract only pages containing matches from source PDFs.
@@ -78,122 +77,156 @@ def extract_relevant_pages(
 
 def _extract_pages_from_pdf(
     pdf_path: Path,
-    results: list,
+    results: list[Any],
     output_dir: Path,
     context_pages: int,
-    database = None
+    database: Any | None = None
 ) -> Optional[ExtractedSource]:
-    """Extract pages from a single PDF."""
-    doc = fitz.open(pdf_path)
-    total_pages = len(doc)
+    """Extract pages from a single PDF.
 
-    # Collect all relevant page numbers with context
-    page_set: set[int] = set()
-    for result in results:
-        page_num = result.page_number
-        # Add context pages before and after
-        for offset in range(-context_pages, context_pages + 1):
-            p = page_num + offset
-            if 1 <= p <= total_pages:
-                page_set.add(p)
+    Uses try-finally to ensure document handles are always closed,
+    even if extraction fails partway through. Individual page failures
+    are logged and skipped to allow partial extraction.
+    """
+    doc = None
+    new_doc = None
+    successfully_inserted_pages: list[int] = []
 
-    pages = sorted(page_set)
+    try:
+        doc = fitz.open(pdf_path)
+        total_pages = len(doc)
 
-    if not pages:
-        doc.close()
+        # Collect all relevant page numbers with context
+        page_set: set[int] = set()
+        for result in results:
+            page_num = result.page_number
+            # Add context pages before and after
+            for offset in range(-context_pages, context_pages + 1):
+                p = page_num + offset
+                if 1 <= p <= total_pages:
+                    page_set.add(p)
+
+        pages = sorted(page_set)
+
+        if not pages:
+            return None
+
+        # Create new PDF with selected pages and extract text
+        new_doc = fitz.open()
+        full_text_parts = []
+
+        for page_num in pages:
+            # fitz uses 0-indexed pages - wrap in try-except for resilience
+            try:
+                new_doc.insert_pdf(doc, from_page=page_num - 1, to_page=page_num - 1)
+                successfully_inserted_pages.append(page_num)
+            except Exception as e:
+                print(f"Warning: Could not insert page {page_num} from {pdf_path.name}: {e}")
+                continue  # Skip problematic page, continue with others
+
+            # Extract text from the original page
+            try:
+                page = doc.load_page(page_num - 1)
+                text = page.get_text()
+                if text.strip():
+                    full_text_parts.append(f"--- Page {page_num} ---\n{text}")
+            except Exception as e:
+                print(f"Warning: Could not extract text from page {page_num}: {e}")
+
+        # Check if we successfully inserted any pages
+        if not successfully_inserted_pages:
+            print(f"Warning: No pages could be extracted from {pdf_path.name}")
+            return None
+
+        full_text = "\n\n".join(full_text_parts)
+
+        # Generate output filename
+        first_result = results[0]
+        safe_name = _safe_filename(first_result.chapter_title or first_result.book_title)
+        page_range = f"p{successfully_inserted_pages[0]}-{successfully_inserted_pages[-1]}" if len(successfully_inserted_pages) > 1 else f"p{successfully_inserted_pages[0]}"
+        output_name = f"{safe_name}_{page_range}.pdf"
+        output_path = output_dir / output_name
+
+        # Handle filename collisions
+        counter = 1
+        while output_path.exists():
+            output_name = f"{safe_name}_{page_range}_{counter}.pdf"
+            output_path = output_dir / output_name
+            counter += 1
+
+        new_doc.save(str(output_path))
+
+        # Build source reference
+        source_ref = first_result.book_series
+        if first_result.chapter_number:
+            source_ref += f" Ch {first_result.chapter_number}"
+
+        # Collect categorization with confidence weighting
+        # Use the category with highest confidence if multiple exist
+        best_category = None
+        best_group = None
+        best_confidence = 0.0
+        best_reasoning = None
+
+        for r in results:
+            if r.category and (r.category_confidence or 0) >= best_confidence:
+                best_category = r.category
+                best_group = getattr(r, 'category_group', None)
+                best_confidence = r.category_confidence or 0
+                best_reasoning = getattr(r, 'category_reasoning', None)
+
+        # Collect context excerpts
+        excerpts = [r.context for r in results if r.context][:5]  # Limit to 5
+
+        # Collect figures for extracted pages (use successfully_inserted_pages)
+        figures = []
+        if database:
+            try:
+                for page_num in successfully_inserted_pages:
+                    page_figures = database.get_page_figures(pdf_path, page_num)
+                    for fig in page_figures:
+                        figures.append({
+                            "id": fig.get("id"),
+                            "page_number": fig.get("page_number"),
+                            "image_path": fig.get("image_path"),
+                            "image_type": fig.get("image_type"),
+                            "caption": fig.get("caption"),
+                            "caption_confidence": fig.get("caption_confidence"),
+                        })
+            except Exception as e:
+                print(f"Warning: Could not load figures for {pdf_path.name}: {e}")
+
+        return ExtractedSource(
+            extracted_path=output_path,
+            original_path=pdf_path,
+            original_source=source_ref,
+            pages=successfully_inserted_pages,  # Use actually extracted pages
+            category_group=best_group,
+            category=best_category,
+            confidence=best_confidence if best_confidence > 0 else None,
+            reasoning=best_reasoning,
+            context_excerpts=excerpts,
+            full_text=full_text,
+            figures=figures,
+            figure_count=len(figures)
+        )
+
+    except Exception as e:
+        print(f"Error extracting from {pdf_path.name}: {e}")
         return None
 
-    # Create new PDF with selected pages and extract text
-    new_doc = fitz.open()
-    full_text_parts = []
-    
-    for page_num in pages:
-        # fitz uses 0-indexed pages
-        new_doc.insert_pdf(doc, from_page=page_num - 1, to_page=page_num - 1)
-        
-        # Extract text from the original page
-        try:
-            page = doc.load_page(page_num - 1)
-            text = page.get_text()
-            if text.strip():
-                full_text_parts.append(f"--- Page {page_num} ---\n{text}")
-        except Exception as e:
-            print(f"Warning: Could not extract text from page {page_num}: {e}")
-
-    full_text = "\n\n".join(full_text_parts)
-
-    # Generate output filename
-    first_result = results[0]
-    safe_name = _safe_filename(first_result.chapter_title or first_result.book_title)
-    page_range = f"p{pages[0]}-{pages[-1]}" if len(pages) > 1 else f"p{pages[0]}"
-    output_name = f"{safe_name}_{page_range}.pdf"
-    output_path = output_dir / output_name
-
-    # Handle filename collisions
-    counter = 1
-    while output_path.exists():
-        output_name = f"{safe_name}_{page_range}_{counter}.pdf"
-        output_path = output_dir / output_name
-        counter += 1
-
-    new_doc.save(str(output_path))
-    new_doc.close()
-    doc.close()
-
-    # Build source reference
-    source_ref = first_result.book_series
-    if first_result.chapter_number:
-        source_ref += f" Ch {first_result.chapter_number}"
-
-    # Collect categorization with confidence weighting
-    # Use the category with highest confidence if multiple exist
-    best_category = None
-    best_group = None
-    best_confidence = 0.0
-    best_reasoning = None
-
-    for r in results:
-        if r.category and (r.category_confidence or 0) >= best_confidence:
-            best_category = r.category
-            best_group = getattr(r, 'category_group', None)
-            best_confidence = r.category_confidence or 0
-            best_reasoning = getattr(r, 'category_reasoning', None)
-
-    # Collect context excerpts
-    excerpts = [r.context for r in results if r.context][:5]  # Limit to 5
-
-    # Collect figures for extracted pages
-    figures = []
-    if database:
-        try:
-            for page_num in pages:
-                page_figures = database.get_page_figures(pdf_path, page_num)
-                for fig in page_figures:
-                    figures.append({
-                        "id": fig.get("id"),
-                        "page_number": fig.get("page_number"),
-                        "image_path": fig.get("image_path"),
-                        "image_type": fig.get("image_type"),
-                        "caption": fig.get("caption"),
-                        "caption_confidence": fig.get("caption_confidence"),
-                    })
-        except Exception as e:
-            print(f"Warning: Could not load figures for {pdf_path.name}: {e}")
-
-    return ExtractedSource(
-        extracted_path=output_path,
-        original_path=pdf_path,
-        original_source=source_ref,
-        pages=pages,
-        category_group=best_group,
-        category=best_category,
-        confidence=best_confidence if best_confidence > 0 else None,
-        reasoning=best_reasoning,
-        context_excerpts=excerpts,
-        full_text=full_text,
-        figures=figures,
-        figure_count=len(figures)
-    )
+    finally:
+        # Always close document handles to prevent file descriptor leaks
+        if new_doc:
+            try:
+                new_doc.close()
+            except Exception:
+                pass
+        if doc:
+            try:
+                doc.close()
+            except Exception:
+                pass
 
 
 def _safe_filename(name: str) -> str:
@@ -265,7 +298,7 @@ def generate_manifest(
     output_path: Path,
     search_query: str = "",
     search_mode: str = "keyword",
-    template_type: str = None  # Override auto-detection
+    template_type: Optional[str] = None  # Override auto-detection
 ) -> Path:
     """
     Generate an enhanced manifest.json file for NeuroSynth import.
@@ -306,7 +339,6 @@ def generate_manifest(
                 "category_group": source.category_group,
                 "category": source.category,
                 "confidence": source.confidence,
-                "reasoning": source.reasoning,
                 "reasoning": source.reasoning,
                 "context_excerpts": source.context_excerpts,
                 "full_text": source.full_text,
