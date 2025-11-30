@@ -3,7 +3,7 @@
 import asyncio
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, TypedDict, Unpack
 
 from rich.console import Console
 
@@ -14,6 +14,26 @@ from neurosynth.models.output import Chapter
 
 if TYPE_CHECKING:
     from neurosynth.models.visual import VisualElement
+
+
+class PipelineKwargs(TypedDict, total=False):
+    """Optional kwargs for run_pipeline that map to PipelineConfig fields."""
+
+    supported_formats: list[str]
+    chunk_size: int
+    chunk_overlap: int
+    similarity_threshold: float
+    use_cache: bool
+    parallel_parse_concurrency: int
+    output_format: str
+    detect_conflicts: bool
+    use_llm_chunking: bool
+    generate_subsections: bool
+    enable_visual_extraction: bool
+    enable_visual_embeddings: bool
+    max_inline_figures: int
+    visual_relevance_threshold: float
+    use_faiss_clustering: bool
 
 console = Console()
 
@@ -487,7 +507,7 @@ async def run_pipeline(
     topic: str,
     source_dir: Path,
     output_dir: Path,
-    **kwargs,
+    **kwargs: Unpack[PipelineKwargs],
 ) -> Chapter:
     """Convenience function to run the full pipeline."""
     config = PipelineConfig(

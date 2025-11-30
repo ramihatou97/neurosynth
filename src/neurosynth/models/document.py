@@ -5,12 +5,26 @@ import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, TypedDict, Unpack
 
 import numpy as np
 
 if TYPE_CHECKING:
     from neurosynth.models.visual import VisualElement
+
+
+class ChunkKwargs(TypedDict, total=False):
+    """Optional keyword arguments for creating a ContentChunk."""
+
+    page_number: int | None
+    section_title: str | None
+    chapter_title: str | None
+    id: str
+    word_count: int
+    embedding: np.ndarray | None
+    content_hash: str
+    cluster_id: str | None
+    visual_elements: list["VisualElement"]
 
 
 class DocumentFormat(str, Enum):
@@ -251,7 +265,7 @@ class Document:
         """Number of chunks."""
         return len(self.chunks)
 
-    def add_chunk(self, content: str, **kwargs) -> ContentChunk:
+    def add_chunk(self, content: str, **kwargs: Unpack[ChunkKwargs]) -> ContentChunk:
         """Create and add a new chunk to this document."""
         chunk = ContentChunk(
             content=content,

@@ -5,8 +5,8 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch, AsyncMock
 
 from neurosynth.pipeline.coordinator import run_pipeline
-from neurosynth.models.document import Document, ContentChunk, Source, DocumentFormat
-from neurosynth.models.output import Chapter, Section
+from neurosynth.models.document import Document, Source, DocumentFormat
+from neurosynth.models.output import Chapter
 
 @pytest.fixture
 def mock_settings():
@@ -77,7 +77,8 @@ def mock_llm_clients():
         yield
 
 @pytest.mark.asyncio
-async def test_full_pipeline_mocked(tmp_path, mock_settings, mock_parser, mock_llm_clients):
+@pytest.mark.usefixtures("mock_parser", "mock_settings", "mock_llm_clients")
+async def test_full_pipeline_mocked(tmp_path: Path) -> None:
     """Test the full pipeline with mocked LLM calls."""
     
     # Setup directories

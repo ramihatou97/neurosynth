@@ -478,7 +478,7 @@ class Database:
         topic: str,
         search_query: str,
         search_mode: str,
-        sources: list[dict],
+        sources: list[dict[str, object]],
         template_used: Optional[str] = None,
         output_path: Optional[Path] = None,
         success: bool = True,
