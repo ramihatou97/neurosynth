@@ -15,7 +15,7 @@ Version: 1.0
 import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from typing import Callable, TypeVar, List, Any, Optional
+from typing import Callable, TypeVar, List, Dict, Any, Optional
 from functools import wraps
 
 try:

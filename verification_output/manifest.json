@@ -1,0 +1,170 @@
+{
+  "topic": "Lumbar Microdiskectomy",
+  "search_query": "",
+  "search_mode": "keyword",
+  "generated_at": "2025-11-30T12:36:05.046231",
+  "template_type": "procedural",
+  "template_type_auto_detected": true,
+  "category_summary": {
+    "Surgical/Anatomical": 1,
+    "Theoretical": 0
+  },
+  "figure_summary": {
+    "total_figures": 0,
+    "figures_by_type": {
+      "imaging": 6
+    }
+  },
+  "sources": [
+    {
+      "pdf_path": "42 Minimally Invasive Lumbar Diskectomy.pdf",
+      "original_source": "Test Source",
+      "original_path": "/Users/ramihatoum/neurosynth/test_pipeline/sources/42 Minimally Invasive Lumbar Diskectomy.pdf",
+      "pages": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "category_group": "Surgical/Anatomical",
+      "category": "Surgical",
+      "confidence": 0.9,
+      "reasoning": null,
+      "context_excerpts": [
+        "\n        Minimally Invasive Lumbar Microdiskectomy: Surgical Technique\n\n        Clinical Context:\n        Lumbar microdiskectomy is indicated for patients with symptomatic lumbar disk herniation who have failed conservative management. The primary goal is nerve root decompression.\n\n        Strategic Planning:\n        Pre-operative MRI imaging is reviewed to plan the trajectory. Risk stratification is performed. Standard equipment includes a microscope and tubular retractors.\n\n        Positioning and Exposure:\n        The patient is positioned prone on a Wilson frame or Jackson table to reduce lumbar lordosis and open the interlaminar space. Fixation is checked. All pressure points are padded. Fluoroscopy is used to confirm the level.\n\n        Surface Anatomy and Incision:\n        The midline and iliac crest are identified as surface landmarks. A 2cm incision is made 1-2cm lateral to the midline. Danger zones are avoided.\n\n        Dissection and Approach:\n        Under microscopic visualization, the remaining muscle is cleared from the lamina. Layered dissection is performed to identify the plane. A high-speed drill or Kerrison rongeur is used to perform a laminotomy. The ligamentum flavum is identified and detached or resected to expose the epidural space.\n\n        The Definitive Action:\n        The nerve root is gently retracted medially. The disk herniation is identified ventral to the nerve root. An annulotomy is performed if not already present, and the herniated disk fragments are removed using pituitary rongeurs. The target is decompressed.\n\n        Closure and Post-op:\n        Hemostasis is achieved. The tubular retractor is removed slowly while checking for bleeding. The fascia and skin are closed in layers with sutures. A dressing is applied. No drain is typically needed.\n        "
+      ],
+      "full_text": "\n        Minimally Invasive Lumbar Microdiskectomy: Surgical Technique\n\n        Clinical Context:\n        Lumbar microdiskectomy is indicated for patients with symptomatic lumbar disk herniation who have failed conservative management. The primary goal is nerve root decompression.\n\n        Strategic Planning:\n        Pre-operative MRI imaging is reviewed to plan the trajectory. Risk stratification is performed. Standard equipment includes a microscope and tubular retractors.\n\n        Positioning and Exposure:\n        The patient is positioned prone on a Wilson frame or Jackson table to reduce lumbar lordosis and open the interlaminar space. Fixation is checked. All pressure points are padded. Fluoroscopy is used to confirm the level.\n\n        Surface Anatomy and Incision:\n        The midline and iliac crest are identified as surface landmarks. A 2cm incision is made 1-2cm lateral to the midline. Danger zones are avoided.\n\n        Dissection and Approach:\n        Under microscopic visualization, the remaining muscle is cleared from the lamina. Layered dissection is performed to identify the plane. A high-speed drill or Kerrison rongeur is used to perform a laminotomy. The ligamentum flavum is identified and detached or resected to expose the epidural space.\n\n        The Definitive Action:\n        The nerve root is gently retracted medially. The disk herniation is identified ventral to the nerve root. An annulotomy is performed if not already present, and the herniated disk fragments are removed using pituitary rongeurs. The target is decompressed.\n\n        Closure and Post-op:\n        Hemostasis is achieved. The tubular retractor is removed slowly while checking for bleeding. The fascia and skin are closed in layers with sutures. A dressing is applied. No drain is typically needed.\n        ",
+      "figure_count": 0,
+      "figures": [
+        {
+          "id": "img_p0_37",
+          "page_number": 1,
+          "image_type": "imaging",
+          "caption": "",
+          "image_path": "/Users/ramihatoum/neurosynth/verification_output/images/images/img_p0_37_8c884ad9.jpeg",
+          "caption_confidence": 0.0,
+          "keywords": [
+            "exposure",
+            "incision",
+            "herniation",
+            "microscope",
+            "minimally invasive",
+            "approach",
+            "epidural",
+            "then",
+            "compression",
+            "position"
+          ],
+          "is_procedural": false,
+          "sequence_id": null
+        },
+        {
+          "id": "img_p1_41",
+          "page_number": 2,
+          "image_type": "imaging",
+          "caption": "should be docked on the lamina facet junction such that a small portion of the interlaminar space is visible inferiorly. Once the proper tube position is radiographically confirmed, the tube is locked into position with the flexible retractor arm, and the dilators are removed (▶Fig. 42.5). The remainder of the proce- dure can be performed using loupe magnification, the endo- scope, or the operating microscope, and the surgical technique is identical for any of these methods.",
+          "image_path": "/Users/ramihatoum/neurosynth/verification_output/images/images/img_p1_41_c2c2c5cd.jpeg",
+          "caption_confidence": 0.59,
+          "keywords": [
+            "fluoroscopy",
+            "dura",
+            "then",
+            "expose",
+            "position",
+            "dissection",
+            "retractor",
+            "exposure",
+            "microscope",
+            "minimally invasive",
+            "endoscope",
+            "loupe",
+            "hemostasis",
+            "epidural",
+            "herniation",
+            "monopolar",
+            "remove",
+            "drill",
+            "kerrison"
+          ],
+          "is_procedural": true,
+          "sequence_id": "seq_000"
+        },
+        {
+          "id": "img_p1_42",
+          "page_number": 2,
+          "image_type": "imaging",
+          "caption": "Fig. 42.2 (a) Fluoroscopic image demonstrating the initial dilator docked on the spine at the laminar–facet junction directly over the disk space. (b) The dilator is used in a sweeping motion to remove soft tissue away from the lamina and identify bony landmarks.",
+          "image_path": "/Users/ramihatoum/neurosynth/verification_output/images/images/img_p1_42_687bd3b8.jpeg",
+          "caption_confidence": 0.65,
+          "keywords": [
+            "fluoroscopy",
+            "dura",
+            "then",
+            "expose",
+            "position",
+            "dissection",
+            "retractor",
+            "exposure",
+            "microscope",
+            "endoscope",
+            "loupe",
+            "hemostasis",
+            "epidural",
+            "herniation",
+            "identify",
+            "monopolar",
+            "remove",
+            "drill",
+            "kerrison"
+          ],
+          "is_procedural": true,
+          "sequence_id": "seq_000"
+        },
+        {
+          "id": "img_p2_45",
+          "page_number": 3,
+          "image_type": "imaging",
+          "caption": "Fig. 42.6 A Woodson instrument is used to",
+          "image_path": "/Users/ramihatoum/neurosynth/verification_output/images/images/img_p2_45_b3c93dca.jpeg",
+          "caption_confidence": 0.65,
+          "keywords": [
+            "retractor",
+            "position"
+          ],
+          "is_procedural": true,
+          "sequence_id": "seq_000"
+        },
+        {
+          "id": "img_p2_46",
+          "page_number": 3,
+          "image_type": "imaging",
+          "caption": "",
+          "image_path": "/Users/ramihatoum/neurosynth/verification_output/images/images/img_p2_46_9e4d9054.jpeg",
+          "caption_confidence": 0.0,
+          "keywords": [
+            "minimally invasive",
+            "retractor",
+            "position"
+          ],
+          "is_procedural": false,
+          "sequence_id": null
+        },
+        {
+          "id": "img_p2_47",
+          "page_number": 3,
+          "image_type": "imaging",
+          "caption": "Fig. 42.6 A Woodson instrument is used to palpate the pedicle, which serves as a landmark",
+          "image_path": "/Users/ramihatoum/neurosynth/verification_output/images/images/img_p2_47_ad2f3462.jpeg",
+          "caption_confidence": 0.65,
+          "keywords": [
+            "retractor",
+            "position"
+          ],
+          "is_procedural": true,
+          "sequence_id": "seq_000"
+        }
+      ]
+    }
+  ]
+}

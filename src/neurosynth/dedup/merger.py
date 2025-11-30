@@ -13,6 +13,7 @@ from neurosynth.models.knowledge import (
     KnowledgeCluster,
     Perspective,
 )
+from neurosynth.models.document import ContentChunk
 
 console = Console()
 
@@ -69,7 +70,7 @@ class ClusterMerger:
         # Detect conflicts first (if enabled)
         conflicts = []
         if detect_conflicts:
-            conflicts = await self._detect_conflicts(chunk_data)
+            conflicts = await self._detect_conflicts(chunk_data, cluster.chunks)
 
         # Merge content
         merged_content = await self.claude.merge_chunks(
@@ -164,6 +165,7 @@ class ClusterMerger:
     async def _detect_conflicts(
         self,
         chunk_data: list[dict[str, str]],
+        original_chunks: list[ContentChunk],
     ) -> list[Conflict]:
         """Detect conflicts between chunks using Claude."""
         if len(chunk_data) < 2:
@@ -179,17 +181,20 @@ class ClusterMerger:
             for p in raw.get("perspectives", []):
                 # Find matching chunk for source attribution
                 source_key = p.get("source", "")
-                matching_chunk = next(
-                    (c for c in chunk_data if source_key in c.get("source", "")),
+                
+                # Find index of matching chunk in chunk_data
+                match_index = next(
+                    (i for i, c in enumerate(chunk_data) if source_key in c.get("source", "")),
                     None,
                 )
 
-                if matching_chunk:
+                if match_index is not None:
+                    original_chunk = original_chunks[match_index]
                     perspectives.append(
                         Perspective(
                             claim=p.get("claim", ""),
-                            source=None,  # Will be set later with full Source object
-                            chunk=None,
+                            source=original_chunk.source,
+                            chunk=original_chunk,
                             confidence=1.0,
                         )
                     )

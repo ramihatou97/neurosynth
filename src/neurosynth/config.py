@@ -114,15 +114,15 @@ class Settings(BaseSettings):
 
     # Phase 4: Unified Extraction Pipeline Configuration
     enable_unified_pipeline: bool = Field(
-        default=False,
+        default=True,
         description="Enable unified extraction pipeline (Phase 4)",
     )
     unified_pipeline_mode: Literal["incremental", "unified", "auto"] = Field(
-        default="incremental",
+        default="auto",
         description="Extraction mode: 'incremental' (Phase 3), 'unified' (Phase 4), 'auto' (decide automatically)",
     )
     enable_vector_extraction: bool = Field(
-        default=False,
+        default=True,
         description="Enable vector graphics extraction (flowcharts, diagrams)",
     )
     enable_latex_generation: bool = Field(

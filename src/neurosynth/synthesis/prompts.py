@@ -54,6 +54,13 @@ Requirements:
 - Ensure medical accuracy
 - Do not fabricate information not present in sources
 
+FIGURE INTEGRATION:
+The source material includes available figures with IDs (e.g., [FIGURE_ID: 1234]).
+You MUST integrate these figures into your text where relevant by inserting the tag [FIGURE: 1234].
+- Place the tag at the end of the sentence referencing the figure.
+- Use at least 1 figure for every 300 words if available.
+- Do not invent figure IDs. Only use those provided in the source material.
+
 Write the section:"""
 
 SECTION_SYNTHESIS_IMPERATIVE = """You are writing a surgical technique section for a neurosurgical operative atlas.
@@ -80,6 +87,13 @@ Requirements:
 - Include tips for avoiding complications
 - Use sources to support technique recommendations
 - Do not fabricate steps not supported by source material
+
+FIGURE INTEGRATION:
+The source material includes available figures with IDs (e.g., [FIGURE_ID: 1234]).
+You MUST integrate these figures into your text where relevant by inserting the tag [FIGURE: 1234].
+- Place the tag at the end of the sentence referencing the figure.
+- Use at least 1 figure for every 300 words if available.
+- Do not invent figure IDs. Only use those provided in the source material.
 
 "WHY" INTEGRATION:
 For each major step, you MUST include the rationale at three levels if supported by the source material:
@@ -119,5 +133,12 @@ Requirements:
 - Ensure medical accuracy
 - Do not include content from other categories
 - Do not fabricate information not present in sources
+
+FIGURE INTEGRATION:
+The source material includes available figures with IDs (e.g., [FIGURE_ID: 1234]).
+You MUST integrate these figures into your text where relevant by inserting the tag [FIGURE: 1234].
+- Place the tag at the end of the sentence referencing the figure.
+- Use at least 1 figure for every 300 words if available.
+- Do not invent figure IDs. Only use those provided in the source material.
 
 Write the section:"""

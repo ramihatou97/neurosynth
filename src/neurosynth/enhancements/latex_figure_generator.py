@@ -406,7 +406,7 @@ class EnhancedLaTeXFigureGenerator:
         errors = []
         
         if validate and latex_code:
-            result = self.validator.validate_figure(latex_code)
+            result = self.validator.validate_figure_code(latex_code)
             is_valid = result.is_valid
             errors = [issue.message for issue in result.errors]
         

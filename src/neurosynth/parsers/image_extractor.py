@@ -16,7 +16,7 @@ from pathlib import Path
 import fitz  # PyMuPDF
 
 logger = logging.getLogger(__name__)
-from PIL import Image
+from PIL import Image, ImageChops
 from rich.console import Console
 
 from neurosynth.config import get_settings
@@ -1167,6 +1167,19 @@ class ImageExtractor:
         except Exception:
             return ""
 
+    def _crop_borders(self, pil_image: Image.Image) -> Image.Image:
+        """Crop white borders from an image."""
+        try:
+            bg = Image.new(pil_image.mode, pil_image.size, (255, 255, 255))
+            diff = ImageChops.difference(pil_image, bg)
+            diff = ImageChops.add(diff, diff, 2.0, -100)
+            bbox = diff.getbbox()
+            if bbox:
+                return pil_image.crop(bbox)
+            return pil_image
+        except Exception:
+            return pil_image
+
     def extract_figure_as_snapshot(
         self,
         page: fitz.Page,
@@ -1210,8 +1223,16 @@ class ImageExtractor:
             if pix.width < 100 or pix.height < 50:
                 return None
 
-            # Convert to PNG bytes
-            return pix.tobytes("png")
+            # Convert to PIL Image for cropping
+            pil_image = Image.open(io.BytesIO(pix.tobytes("png")))
+            
+            # Crop white borders
+            cropped_image = self._crop_borders(pil_image)
+            
+            # Save to bytes
+            buf = io.BytesIO()
+            cropped_image.save(buf, format="PNG")
+            return buf.getvalue()
 
         except Exception as e:
             console.print(f"    [yellow]Snapshot extraction failed: {e}[/yellow]")
@@ -1269,12 +1290,37 @@ class ImageExtractor:
                     for elem in raw_images:
                         if elem.visual_hash:
                             seen_hashes.add(elem.visual_hash)
-                    visual_elements.extend(raw_images)
+                    # visual_elements.extend(raw_images)  <-- Moved to after deduplication
 
                     # 2. Snapshot extraction for figure captions
                     snapshot_images = self._extract_page_snapshots(
                         page, page_num, pdf_path, output_dir, seen_hashes
                     )
+                    
+                    # SPATIAL DEDUPLICATION:
+                    # Remove raw images that are covered by snapshots
+                    # Snapshots are preferred because they capture labels/arrows
+                    
+                    final_raw_images = []
+                    for raw in raw_images:
+                        is_covered = False
+                        if raw.bbox:
+                            raw_rect = fitz.Rect(raw.bbox)
+                            raw_area = raw_rect.get_area()
+                            
+                            for snap in snapshot_images:
+                                if snap.bbox:
+                                    snap_rect = fitz.Rect(snap.bbox)
+                                    # Calculate intersection
+                                    intersect = raw_rect & snap_rect
+                                    if intersect.get_area() > (raw_area * 0.5):
+                                        is_covered = True
+                                        break
+                        
+                        if not is_covered:
+                            final_raw_images.append(raw)
+                            
+                    visual_elements.extend(final_raw_images)
                     visual_elements.extend(snapshot_images)
 
         except Exception as e:

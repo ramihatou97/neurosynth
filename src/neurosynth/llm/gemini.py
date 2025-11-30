@@ -225,4 +225,74 @@ Return ONLY valid JSON."""
         except json.JSONDecodeError:
             pass
 
-        return {"title": "", "authors": [], "year": None}
+    async def synthesize_section(
+        self,
+        section_title: str,
+        clusters: list[dict[str, str]],
+        word_target: int = 1500,
+        use_xml_citations: bool = True,
+    ) -> str:
+        """Synthesize a chapter section from knowledge clusters (Gemini implementation)."""
+        # Build cluster text with source IDs for traceability
+        cluster_parts = []
+        for i, c in enumerate(clusters):
+            source_id = c.get("source_id", f"cluster_{i+1}")
+            source_name = c.get("source", "Unknown")
+            cluster_parts.append(
+                f"[SOURCE_ID: {source_id}]\n"
+                f"[SOURCE: {source_name}]\n"
+                f"{c['content']}"
+            )
+        clusters_text = "\n\n---\n\n".join(cluster_parts)
+
+        if use_xml_citations:
+            system = """You are writing a section of a neurosurgical textbook chapter.
+Write in formal academic medical prose. Be comprehensive but not redundant.
+
+CRITICAL: Use XML citation anchoring for every factual claim. Format:
+<claim source_id="SOURCE_ID">factual statement here</claim>
+
+Example:
+<claim source_id="Smith2020">The mortality rate for this procedure is approximately 2.3%</claim>
+
+This allows verification of every claim back to its source. Never make unsourced claims."""
+
+            prompt = f"""Write the "{section_title}" section for a neurosurgical chapter.
+
+Knowledge to incorporate (each has a SOURCE_ID for citation):
+{clusters_text}
+
+Requirements:
+- Target length: approximately {word_target} words
+- Academic medical writing style
+- WRAP EVERY FACTUAL CLAIM in <claim source_id="...">...</claim> tags
+- Include ALL relevant information from the clusters
+- Present conflicting viewpoints explicitly with both source_ids
+- Use precise anatomical and medical terminology
+- Flow logically from concept to concept
+
+Write the section content now:"""
+        else:
+            system = """You are writing a section of a neurosurgical textbook chapter.
+Write in formal academic medical prose. Be comprehensive but not redundant.
+Include inline citations as (AuthorYear) format."""
+
+            prompt = f"""Write the "{section_title}" section for a neurosurgical chapter.
+
+Knowledge to incorporate:
+{clusters_text}
+
+Requirements:
+- Target length: approximately {word_target} words
+- Academic medical writing style
+- Include ALL relevant information from the clusters
+- Present conflicting viewpoints with attribution
+- Use precise anatomical and medical terminology
+- Flow logically from concept to concept
+- Include citations inline
+
+Write the section content now:"""
+
+        # Gemini uses system instructions differently, but we can prepend it to the prompt
+        full_prompt = f"{system}\n\n{prompt}"
+        return await self.generate(full_prompt, temperature=0.3, max_tokens=8192)

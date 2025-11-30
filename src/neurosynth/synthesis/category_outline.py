@@ -180,9 +180,6 @@ class CategoryAwareOutlineGenerator:
                             assigned = True
                             break
 
-                if assigned:
-                    break
-
             if not assigned:
                 unassigned.append(source)
 

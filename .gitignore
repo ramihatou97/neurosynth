@@ -21,7 +21,7 @@ test_manifest.json
 test_templates.py
 debug_*.py
 output/
-neurosynth/
+/neurosynth/
 
 # IDE
 .idea/

@@ -11,6 +11,11 @@ from dataclasses import dataclass, field
 import fitz  # type: ignore[import-untyped]  # PyMuPDF
 import traceback
 
+# Set up path to neurosynth modules (same as neurosynth_imports.py)
+_neurosynth_src = Path(__file__).parent.parent.parent.parent / "src"
+if str(_neurosynth_src) not in sys.path:
+    sys.path.insert(0, str(_neurosynth_src))
+
 # Import main filter for consistency (replaces duplicate 3KB filter)
 from neurosynth.parsers.image_extractor import filter_image_bytes
 
@@ -380,72 +385,63 @@ class NeuroSynthBridge:
         return collected
 
     def _extract_images_from_sources(self, extracted_sources: list[ExtractedSource], output_dir: Path) -> int:
-        """Extract images ONLY from the specific pages of the selected PDFs."""
-        count = 0
-        # Group by original PDF
-        pdf_map: dict[Path, set[int]] = {}
-        for source in extracted_sources:
-            if not source.original_path: continue
-            if source.original_path not in pdf_map:
-                pdf_map[source.original_path] = set()
-            pdf_map[source.original_path].update(source.pages)
-
-        for path, pages in pdf_map.items():
-            if not path.exists(): 
-                print(f"Skipping missing PDF: {path}")
-                continue
-
-            doc = None
-            try:
-                doc = fitz.open(path)
-            except Exception as e:
-                print(f"Error opening PDF {path.name}: {e}")
-                continue
-
-            for page_num in pages:
-                try:
-                    # CRITICAL FIX: pages are 1-indexed but fitz uses 0-indexed
-                    page_idx = page_num - 1
-                    if page_idx < 0 or page_idx >= len(doc):
-                        print(f"Warning: Page {page_num} out of bounds for {path.name} (has {len(doc)} pages)")
-                        continue
-
-                    page = doc[page_idx]
-                    image_list: list[tuple[Any, ...]] = page.get_images(full=True)  # type: ignore[no-untyped-call]
-
-                    for img_idx, img_info in enumerate(image_list):  # type: ignore[union-attr]
-                        try:
-                            xref: int = img_info[0]
-                            base_image = cast(dict[str, Any], doc.extract_image(xref))  # type: ignore[no-untyped-call]
-                            image_bytes = base_image["image"]
-                            ext = base_image["ext"]
-
-                            # Apply unified medical filter (6-rule sophisticated filter)
-                            is_valid, rejection_reason = filter_image_bytes(image_bytes)
-                            if is_valid:
-                                filename = f"{path.stem}_p{page_num}_i{img_idx}.{ext}"
-                                # Sanitize filename just in case
-                                filename = re.sub(r'[^\w\-\.]', '_', filename)
-
-                                with open(output_dir / filename, "wb") as f:
-                                    f.write(image_bytes)
-                                count += 1
-                            else:
-                                # Image filtered out - skip it
-                                # Uncomment for debugging: print(f"Filtered p{page_num}_i{img_idx}: {rejection_reason}")
-                                pass
-                        except Exception as img_err:
-                            print(f"Warning: Failed to extract image {img_idx} on page {page_num} of {path.name}: {img_err}")
-                            continue
-                except Exception as page_err:
-                    print(f"Warning: Failed to process page {page_num} of {path.name}: {page_err}")
-                    continue
-
-            try:
-                if doc: doc.close()
-            except Exception:
-                pass
+        """Extract images using NeuroSynth's advanced ImageExtractor (Phase 4).
         
+        This uses the unified pipeline to extract:
+        1. Medical images (filtered)
+        2. Vector graphics (flowcharts)
+        3. Procedural sequences
+        4. Captions with high confidence
+        """
+        import asyncio
+        from neurosynth.parsers.image_extractor import ImageExtractor
+        
+        count = 0
+        extractor = ImageExtractor()
+        
+        for source in extracted_sources:
+            if not source.extracted_path.exists():
+                print(f"Skipping missing source PDF: {source.extracted_path}")
+                continue
+
+            try:
+                # Run extraction on the mini-PDF (contains only relevant pages)
+                # We use asyncio.run because this method is synchronous
+                visuals = asyncio.run(extractor.extract_images(
+                    pdf_path=source.extracted_path,
+                    output_dir=output_dir
+                ))
+                
+                # Update source figures with rich metadata
+                # This ensures the manifest contains Phase 4 data
+                source.figures = [] 
+                
+                for v in visuals:
+                    # Map mini-PDF page number back to original source page number
+                    # v.page_number is 1-based index in mini-PDF
+                    original_page = v.page_number
+                    if 0 <= v.page_number - 1 < len(source.pages):
+                        original_page = source.pages[v.page_number - 1]
+                    
+                    # Convert to dictionary for manifest
+                    fig_data = {
+                        "id": v.id,
+                        "page_number": original_page,
+                        "image_type": v.image_type.value if hasattr(v.image_type, 'value') else str(v.image_type),
+                        "caption": v.caption,
+                        "image_path": str(v.image_path),
+                        "caption_confidence": v.caption_confidence,
+                        "keywords": v.keywords_matched,
+                        "is_procedural": v.is_procedural,
+                        "sequence_id": v.sequence_id
+                    }
+                    source.figures.append(fig_data)
+                    count += 1
+                    
+            except Exception as e:
+                print(f"Error extracting images from {source.extracted_path.name}: {e}")
+                traceback.print_exc()
+                
         return count
 
     def _run_neurosynth(

@@ -147,6 +147,23 @@ class VisualElement:
         """Whether image is wider than tall."""
         return self.aspect_ratio > 1.0
 
+    def to_latex(self, width: str = "0.8\\textwidth") -> str:
+        """Convert to LaTeX figure code."""
+        if not self.image_path:
+            return ""
+            
+        # Escape caption for LaTeX
+        safe_caption = self.caption.replace("_", "\\_").replace("%", "\\%")
+        
+        return (
+            "\\begin{figure}[h]\n"
+            "\\centering\n"
+            f"\\includegraphics[width={width}]{{{self.image_path}}}\n"
+            f"\\caption{{{safe_caption}}}\n"
+            f"\\label{{fig:{self.id}}}\n"
+            "\\end{figure}"
+        )
+
     @property
     def location_str(self) -> str:
         """Human-readable location string."""

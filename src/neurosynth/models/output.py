@@ -140,8 +140,26 @@ class Section:
         if self.content:
             lines.append(self.content)
 
+        # Inline Figures
+        for fig in self.inline_figures:
+            lines.append(fig.to_latex())
+
+        # Subsections
         for subsection in self.subsections:
             lines.append(subsection.to_latex(level_offset))
+
+        # Figure Plate
+        if self.figure_plate:
+            lines.append("\\clearpage")
+            lines.append(f"\\subsection*{{{self.figure_plate.section_title}}}")
+            lines.append("\\begin{figure}[p]")
+            lines.append("\\centering")
+            # Simple grid layout logic could go here, but for now just list them
+            for fig in self.figure_plate.figures:
+                # Use minipage for grid effect if needed, or just standard includes
+                lines.append(fig.to_latex(width="0.45\\textwidth"))
+            lines.append("\\end{figure}")
+            lines.append("\\clearpage")
 
         return "\n\n".join(lines)
 

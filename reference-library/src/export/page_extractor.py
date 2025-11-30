@@ -350,6 +350,11 @@ def generate_manifest(
                         "image_type": fig.get("image_type"),
                         "caption": fig.get("caption"),
                         "image_path": str(fig.get("image_path")) if fig.get("image_path") else None,
+                        # Phase 4 fields
+                        "caption_confidence": fig.get("caption_confidence"),
+                        "keywords": fig.get("keywords"),
+                        "is_procedural": fig.get("is_procedural"),
+                        "sequence_id": fig.get("sequence_id"),
                     }
                     for fig in source.figures
                 ]
