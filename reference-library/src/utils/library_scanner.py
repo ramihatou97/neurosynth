@@ -235,7 +235,7 @@ class LibraryScanner:
 
     def sync_library(
         self,
-        max_workers: int = 8,
+        max_workers: int = 4,
         progress_callback: Optional[Callable[[int, int], None]] = None,
     ) -> dict:
         """
@@ -244,7 +244,7 @@ class LibraryScanner:
         FAST VERSION: Skips filesystem scan if database is populated.
 
         Args:
-            max_workers: Number of parallel workers (default 8)
+            max_workers: Number of parallel workers (default 4, reduced to prevent file descriptor exhaustion)
             progress_callback: Optional callback(current, total) for progress updates
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed

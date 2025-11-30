@@ -1,4 +1,5 @@
 """Semantic search engine using vector embeddings."""
+import threading
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
@@ -11,6 +12,9 @@ except ImportError:
 
 from src import config
 from ..cache.database import Database
+
+# ChromaDB batch size limit (well under the 5461 HNSW limit)
+CHROMADB_BATCH_SIZE = 1000
 
 
 # Available embedding models
@@ -33,6 +37,14 @@ class SemanticSearcher:
         self.captions_collection = None  # Collection for figure captions
         self.model = None
 
+        # Thread safety locks - SentenceTransformer and ChromaDB are not thread-safe
+        self._model_lock = threading.Lock()
+        self._collection_lock = threading.Lock()
+
+        # Store collection names for consistent access
+        self.collection_name = None
+        self.captions_collection_name = None
+
         if self.enabled:
             self._init_resources()
 
@@ -45,9 +57,9 @@ class SemanticSearcher:
 
             # Create or get collection with cosine similarity for pages
             # Collection name includes model type to avoid mixing embeddings
-            collection_name = f"neurosurgery_pages_{config.EMBEDDING_MODEL_TYPE}"
+            self.collection_name = f"neurosurgery_pages_{config.EMBEDDING_MODEL_TYPE}"
             self.collection = self.client.get_or_create_collection(
-                name=collection_name,
+                name=self.collection_name,
                 metadata={
                     "hnsw:space": "cosine",
                     "model": config.EMBEDDING_MODEL,
@@ -56,9 +68,9 @@ class SemanticSearcher:
             )
 
             # Create or get collection for figure captions
-            captions_collection_name = f"figure_captions_{config.EMBEDDING_MODEL_TYPE}"
+            self.captions_collection_name = f"figure_captions_{config.EMBEDDING_MODEL_TYPE}"
             self.captions_collection = self.client.get_or_create_collection(
-                name=captions_collection_name,
+                name=self.captions_collection_name,
                 metadata={
                     "hnsw:space": "cosine",
                     "model": config.EMBEDDING_MODEL,
@@ -96,23 +108,25 @@ class SemanticSearcher:
             return True
 
         try:
-            # Generate embedding
-            embedding = self.model.encode(text).tolist()
+            # Generate embedding (thread-safe)
+            with self._model_lock:
+                embedding = self.model.encode(text).tolist()
 
             # Unique ID format: path:page
             doc_id = f"{pdf_path}:{page_number}"
 
-            # Store in ChromaDB (embeddings + metadata only, no documents)
+            # Store in ChromaDB (thread-safe)
             # Text is already stored in SQLite pdf_text_cache
-            self.collection.upsert(
-                ids=[doc_id],
-                embeddings=[embedding],
-                metadatas=[{
-                    "pdf_path": str(pdf_path),
-                    "page_number": page_number,
-                    "checksum": checksum
-                }]
-            )
+            with self._collection_lock:
+                self.collection.upsert(
+                    ids=[doc_id],
+                    embeddings=[embedding],
+                    metadatas=[{
+                        "pdf_path": str(pdf_path),
+                        "page_number": page_number,
+                        "checksum": checksum
+                    }]
+                )
 
             # Track in SQLite for cache management
             self.database.track_semantic_index(pdf_path, page_number, checksum)
@@ -191,12 +205,13 @@ class SemanticSearcher:
             return 0
 
         try:
-            # Get embeddings (subprocess or in-process)
+            # Get embeddings (subprocess or in-process with lock)
             texts = [t for _, t in to_index]
             if use_subprocess:
                 embeddings = self._encode_subprocess(texts)
             else:
-                embeddings = self.model.encode(texts, show_progress_bar=False).tolist()
+                with self._model_lock:
+                    embeddings = self.model.encode(texts, show_progress_bar=False).tolist()
 
             # Prepare batch data for ChromaDB
             ids = []
@@ -210,12 +225,17 @@ class SemanticSearcher:
                     "checksum": checksum
                 })
 
-            # Batch upsert to ChromaDB
-            self.collection.upsert(
-                ids=ids,
-                embeddings=embeddings,
-                metadatas=metas
-            )
+            # Batch upsert to ChromaDB with chunking to avoid HNSW limits
+            with self._collection_lock:
+                for i in range(0, len(ids), CHROMADB_BATCH_SIZE):
+                    batch_ids = ids[i:i + CHROMADB_BATCH_SIZE]
+                    batch_embeddings = embeddings[i:i + CHROMADB_BATCH_SIZE]
+                    batch_metas = metas[i:i + CHROMADB_BATCH_SIZE]
+                    self.collection.upsert(
+                        ids=batch_ids,
+                        embeddings=batch_embeddings,
+                        metadatas=batch_metas
+                    )
 
             # Track in SQLite
             for page_num, _ in to_index:
@@ -245,21 +265,23 @@ class SemanticSearcher:
             return []
 
         try:
-            # Embed the query
-            query_embedding = self.model.encode(query).tolist()
+            # Embed the query (thread-safe)
+            with self._model_lock:
+                query_embedding = self.model.encode(query).tolist()
 
             # Build metadata filter if specified
             where = None
             if category_filter in ["Surgical/Anatomical", "Theoretical"]:
                 where = {"category_group": category_filter}
 
-            # Search ChromaDB with optional filter
-            results = self.collection.query(
-                query_embeddings=[query_embedding],
-                n_results=n_results,
-                where=where,  # Apply category filter if specified
-                include=["metadatas", "distances"]
-            )
+            # Search ChromaDB with optional filter (thread-safe)
+            with self._collection_lock:
+                results = self.collection.query(
+                    query_embeddings=[query_embedding],
+                    n_results=n_results,
+                    where=where,  # Apply category filter if specified
+                    include=["metadatas", "distances"]
+                )
 
             # Transform to cleaner format
             clean_results = []
@@ -303,22 +325,23 @@ class SemanticSearcher:
         try:
             doc_id = f"{pdf_path}:{page_number}"
 
-            # Get existing metadata
-            existing = self.collection.get(ids=[doc_id], include=["metadatas"])
-            if not existing['ids']:
-                return  # Page not indexed yet
+            # Get existing metadata (thread-safe)
+            with self._collection_lock:
+                existing = self.collection.get(ids=[doc_id], include=["metadatas"])
+                if not existing['ids']:
+                    return  # Page not indexed yet
 
-            # Update metadata
-            metadata = existing['metadatas'][0]
-            metadata["category_group"] = category_group
-            metadata["category"] = category
+                # Update metadata
+                metadata = existing['metadatas'][0]
+                metadata["category_group"] = category_group
+                metadata["category"] = category
 
-            # Update in ChromaDB (requires re-upserting with same embedding)
-            # Note: ChromaDB doesn't have a metadata-only update, so we keep the embedding
-            self.collection.update(
-                ids=[doc_id],
-                metadatas=[metadata]
-            )
+                # Update in ChromaDB (requires re-upserting with same embedding)
+                # Note: ChromaDB doesn't have a metadata-only update, so we keep the embedding
+                self.collection.update(
+                    ids=[doc_id],
+                    metadatas=[metadata]
+                )
 
         except Exception as e:
             print(f"Warning: Failed to update category for {pdf_path.name} p{page_number}: {e}")
@@ -359,12 +382,18 @@ class SemanticSearcher:
             return
 
         try:
-            # Delete and recreate collection
-            self.client.delete_collection("neurosurgery_pages")
-            self.collection = self.client.get_or_create_collection(
-                name="neurosurgery_pages",
-                metadata={"hnsw:space": "cosine"}
-            )
+            # Delete and recreate collection using stored name (thread-safe)
+            with self._collection_lock:
+                if self.collection_name:
+                    self.client.delete_collection(self.collection_name)
+                self.collection = self.client.get_or_create_collection(
+                    name=self.collection_name,
+                    metadata={
+                        "hnsw:space": "cosine",
+                        "model": config.EMBEDDING_MODEL,
+                        "model_type": config.EMBEDDING_MODEL_TYPE
+                    }
+                )
             # Also clear SQLite tracking
             self.database.clear_semantic_index()
             print("Semantic index cleared")
@@ -402,20 +431,22 @@ class SemanticSearcher:
             return True
 
         try:
-            # Generate embedding for caption
-            embedding = self.model.encode(caption).tolist()
+            # Generate embedding for caption (thread-safe)
+            with self._model_lock:
+                embedding = self.model.encode(caption).tolist()
 
-            # Store in ChromaDB captions collection
-            self.captions_collection.upsert(
-                ids=[figure_id],
-                embeddings=[embedding],
-                metadatas=[{
-                    "pdf_path": str(pdf_path),
-                    "page_number": page_number,
-                    "image_type": image_type,
-                    "caption_preview": caption[:200]  # Store preview for display
-                }]
-            )
+            # Store in ChromaDB captions collection (thread-safe)
+            with self._collection_lock:
+                self.captions_collection.upsert(
+                    ids=[figure_id],
+                    embeddings=[embedding],
+                    metadatas=[{
+                        "pdf_path": str(pdf_path),
+                        "page_number": page_number,
+                        "image_type": image_type,
+                        "caption_preview": caption[:200]  # Store preview for display
+                    }]
+                )
 
             # Track in SQLite (figure_id used as both element_id and point_id for ChromaDB)
             self.database.track_visual_embedding(figure_id, figure_id, "caption")
@@ -485,21 +516,23 @@ class SemanticSearcher:
             return []
 
         try:
-            # Embed the query
-            query_embedding = self.model.encode(query).tolist()
+            # Embed the query (thread-safe)
+            with self._model_lock:
+                query_embedding = self.model.encode(query).tolist()
 
             # Build where filter if image_types specified
             where = None
             if image_types:
                 where = {"image_type": {"$in": image_types}}
 
-            # Search captions collection
-            results = self.captions_collection.query(
-                query_embeddings=[query_embedding],
-                n_results=n_results,
-                where=where,
-                include=["metadatas", "distances"]
-            )
+            # Search captions collection (thread-safe)
+            with self._collection_lock:
+                results = self.captions_collection.query(
+                    query_embeddings=[query_embedding],
+                    n_results=n_results,
+                    where=where,
+                    include=["metadatas", "distances"]
+                )
 
             # Transform to cleaner format
             clean_results = []
@@ -571,11 +604,18 @@ class SemanticSearcher:
             return
 
         try:
-            self.client.delete_collection("figure_captions")
-            self.captions_collection = self.client.get_or_create_collection(
-                name="figure_captions",
-                metadata={"hnsw:space": "cosine"}
-            )
+            # Use stored collection name (thread-safe)
+            with self._collection_lock:
+                if self.captions_collection_name:
+                    self.client.delete_collection(self.captions_collection_name)
+                self.captions_collection = self.client.get_or_create_collection(
+                    name=self.captions_collection_name,
+                    metadata={
+                        "hnsw:space": "cosine",
+                        "model": config.EMBEDDING_MODEL,
+                        "model_type": config.EMBEDDING_MODEL_TYPE
+                    }
+                )
             print("Caption index cleared")
         except Exception as e:
             print(f"Error clearing caption index: {e}")

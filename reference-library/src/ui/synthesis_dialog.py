@@ -28,14 +28,49 @@ class SynthesisDialog(ctk.CTkToplevel):
 
         self.result: Optional[tuple[str, str]] = None
         self.selected_results = selected_results or []
+        self._setup_failed = False  # Track setup status
 
-        self._setup_ui(initial_topic)
+        # Setup UI with error handling - print errors BEFORE grab_set blocks
+        try:
+            self._setup_ui(initial_topic)
+        except Exception as e:
+            print(f"ERROR: Failed to create synthesis dialog: {e}")
+            import traceback
+            traceback.print_exc()
+            self._setup_failed = True
+            self._show_error_ui(str(e))
 
         # Make modal
         self.transient(parent)
         self.grab_set()
         self.focus_set()
         self.wait_window()
+
+    def _show_error_ui(self, error_msg: str):
+        """Show error message when dialog fails to initialize."""
+        try:
+            ctk.CTkLabel(
+                self,
+                text="Dialog Error",
+                font=("Helvetica", 14, "bold")
+            ).pack(pady=20)
+
+            ctk.CTkLabel(
+                self,
+                text=f"Could not create synthesis dialog:\n{error_msg}",
+                font=("Helvetica", 11),
+                wraplength=400
+            ).pack(pady=10, padx=20)
+
+            ctk.CTkButton(
+                self,
+                text="Close",
+                command=self.destroy,
+                width=100
+            ).pack(pady=20)
+        except Exception:
+            # If even error UI fails, just close
+            self.after(100, self.destroy)
 
     def _setup_ui(self, initial_topic: str):
         """Set up the dialog UI."""
@@ -120,47 +155,18 @@ class SynthesisDialog(ctk.CTkToplevel):
 
     def _analyze_selection(self) -> tuple[str, str]:
         """
-        Analyze selected results to recommend a template type.
+        Get default template type and optional recommendation text.
+
+        Category is a "lens" for generation - the user decides how to interpret
+        sources, not the system. The same source can be used for different chapter types.
 
         Returns:
-            Tuple of (recommended_type, recommendation_text)
+            Tuple of (default_type, recommendation_text)
         """
-        if not self.selected_results:
-            return ("procedural", "")
-
-        # Count results by category group
-        surgical_count = sum(
-            1 for r in self.selected_results
-            if getattr(r, 'category_group', None) == "Surgical/Anatomical"
-        )
-        theoretical_count = sum(
-            1 for r in self.selected_results
-            if getattr(r, 'category_group', None) == "Theoretical"
-        )
-        total_categorized = surgical_count + theoretical_count
-
-        if total_categorized == 0:
-            return ("procedural", "No categorized sources - defaulting to Surgical")
-
-        surgical_ratio = surgical_count / total_categorized
-
-        # Determine recommendation based on ratio
-        if surgical_ratio >= 0.7:
-            return (
-                "procedural",
-                f"Recommended: Surgical ({surgical_count}/{total_categorized} surgical sources, {surgical_ratio:.0%})"
-            )
-        elif surgical_ratio <= 0.3:
-            return (
-                "theoretical",
-                f"Recommended: Clinical ({theoretical_count}/{total_categorized} clinical sources, {1-surgical_ratio:.0%})"
-            )
-        else:
-            # Mixed content - default to procedural but note the mix
-            return (
-                "procedural",
-                f"Mixed content: {surgical_count} surgical, {theoretical_count} clinical sources"
-            )
+        source_count = len(self.selected_results)
+        if source_count > 0:
+            return ("procedural", f"{source_count} sources selected")
+        return ("procedural", "")
 
     def _on_submit(self):
         """Handle submit."""
@@ -178,4 +184,6 @@ class SynthesisDialog(ctk.CTkToplevel):
 
     def get_input(self) -> Optional[tuple[str, str]]:
         """Get the dialog result."""
+        if self._setup_failed:
+            return None
         return self.result

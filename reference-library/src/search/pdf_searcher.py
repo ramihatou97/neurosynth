@@ -95,36 +95,41 @@ class PDFSearcher:
                 if self._cancelled:
                     break
 
-                page_key = f"{hit['pdf_path']}:{hit['page_number']}"
-                seen_pages.add(page_key)
+                try:
+                    page_key = f"{hit['pdf_path']}:{hit['page_number']}"
+                    seen_pages.add(page_key)
 
-                metadata = self.scanner.get_pdf_metadata(hit["pdf_path"])
+                    metadata = self.scanner.get_pdf_metadata(hit["pdf_path"])
 
-                # Get context from SQLite cache (not ChromaDB)
-                checksum = self.database.get_file_checksum(hit["pdf_path"])
-                cached_text = self.database.get_cached_text(
-                    hit["pdf_path"],
-                    hit["page_number"] - 1,  # 0-indexed in cache
-                    checksum
-                )
-                context = self._extract_context_from_text(cached_text or "", query)
+                    # Get context from SQLite cache (not ChromaDB)
+                    checksum = self.database.get_file_checksum(hit["pdf_path"])
+                    cached_text = self.database.get_cached_text(
+                        hit["pdf_path"],
+                        hit["page_number"] - 1,  # 0-indexed in cache
+                        checksum
+                    )
+                    context = self._extract_context_from_text(cached_text or "", query)
 
-                result = SearchResult(
-                    pdf_path=hit["pdf_path"],
-                    book_series=metadata.book_series,
-                    book_title=metadata.book_title,
-                    chapter_number=metadata.chapter_number,
-                    chapter_title=metadata.chapter_title,
-                    page_number=hit["page_number"],
-                    match_text=f"[Semantic: {hit['score']:.0%}]",
-                    context=context
-                )
-                yield result
+                    result = SearchResult(
+                        pdf_path=hit["pdf_path"],
+                        book_series=metadata.book_series,
+                        book_title=metadata.book_title,
+                        chapter_number=metadata.chapter_number,
+                        chapter_title=metadata.chapter_title,
+                        page_number=hit["page_number"],
+                        match_text=f"[Semantic: {hit['score']:.0%}]",
+                        context=context
+                    )
+                    yield result
 
-                # Update semantic search progress
-                if progress_callback:
-                    semantic_progress.total_matches = i + 1
-                    progress_callback(semantic_progress)
+                    # Update semantic search progress
+                    if progress_callback:
+                        semantic_progress.total_matches = i + 1
+                        progress_callback(semantic_progress)
+
+                except Exception as e:
+                    # Log error but continue with remaining semantic results
+                    print(f"Error processing semantic hit: {type(e).__name__}: {e}")
 
             if mode == "semantic":
                 return
@@ -135,45 +140,69 @@ class PDFSearcher:
             total_pdfs = len(all_pdfs)
             progress = SearchProgress(total_pdfs=total_pdfs)
 
-            for pdf_path in all_pdfs:
+            print(f"[DEBUG] Starting keyword search across {total_pdfs} PDFs")
+
+            for idx, pdf_path in enumerate(all_pdfs):
                 if self._cancelled:
+                    print(f"[DEBUG] Search cancelled at PDF {idx}")
                     break
 
                 progress.current_file = pdf_path.name
                 if progress_callback:
                     progress_callback(progress)
 
-                metadata = self.scanner.get_pdf_metadata(pdf_path)
-                matches = self.search_pdf(query, pdf_path)
+                # Debug: log every 100 PDFs and around the problem area
+                if idx % 100 == 0 or (600 <= idx <= 620):
+                    print(f"[DEBUG] Processing PDF {idx}/{total_pdfs}: {pdf_path.name}", flush=True)
 
-                for match in matches:
-                    if self._cancelled:
-                        break
+                try:
+                    metadata = self.scanner.get_pdf_metadata(pdf_path)
+                    if idx % 100 == 0 or (600 <= idx <= 620):
+                        print(f"[DEBUG]   Got metadata, searching...", flush=True)
+                    matches = self.search_pdf(query, pdf_path)
+                    if idx % 100 == 0 or (600 <= idx <= 620):
+                        print(f"[DEBUG]   Found {len(matches)} matches, yielding...", flush=True)
 
-                    # Skip if already returned by semantic search
-                    page_key = f"{pdf_path}:{match.page_number}"
-                    if mode == "hybrid" and page_key in seen_pages:
-                        continue
+                    for match in matches:
+                        if self._cancelled:
+                            break
 
-                    result = SearchResult(
-                        pdf_path=pdf_path,
-                        book_series=metadata.book_series,
-                        book_title=metadata.book_title,
-                        chapter_number=metadata.chapter_number,
-                        chapter_title=metadata.chapter_title,
-                        page_number=match.page_number,
-                        match_text=match.match_text,
-                        context=match.context
-                    )
-                    progress.total_matches += 1
-                    yield result
+                        # Skip if already returned by semantic search
+                        page_key = f"{pdf_path}:{match.page_number}"
+                        if mode == "hybrid" and page_key in seen_pages:
+                            continue
+
+                        result = SearchResult(
+                            pdf_path=pdf_path,
+                            book_series=metadata.book_series,
+                            book_title=metadata.book_title,
+                            chapter_number=metadata.chapter_number,
+                            chapter_title=metadata.chapter_title,
+                            page_number=match.page_number,
+                            match_text=match.match_text,
+                            context=match.context
+                        )
+                        progress.total_matches += 1
+                        yield result
+
+                except Exception as e:
+                    # Log error but continue with remaining PDFs
+                    print(f"[DEBUG] ERROR at PDF {idx} ({pdf_path.name}): {type(e).__name__}: {e}", flush=True)
+                    import traceback
+                    traceback.print_exc()
 
                 progress.searched_pdfs += 1
+                if idx % 100 == 0 or (600 <= idx <= 620):
+                    print(f"[DEBUG]   PDF {idx} complete, moving to next", flush=True)
                 if progress_callback:
                     progress_callback(progress)
 
     def search_pdf(self, query: str, pdf_path: Path) -> list[PageMatch]:
-        """Search a single PDF for query, return matches with context."""
+        """Search a single PDF for query, return matches with context.
+
+        Uses cached text when available to avoid slow/hanging PDF extraction.
+        PDFs without cached text are skipped during search (run sync first).
+        """
         matches = []
 
         try:
@@ -183,28 +212,20 @@ class PDFSearcher:
             # Get file checksum for cache
             checksum = self.database.get_file_checksum(pdf_path)
 
-            # Try to get all cached pages first
+            # Try to get cached pages
             cached_pages = self.database.get_all_cached_pages(pdf_path, checksum)
 
-            # Use context manager for proper resource cleanup
-            new_pages = {}  # Track pages to batch cache
-            with fitz.open(pdf_path) as doc:
-                for page_num in range(len(doc)):
-                    # Get page text (from cache or extract)
-                    if page_num in cached_pages:
-                        text = cached_pages[page_num]
-                    else:
-                        page = doc[page_num]
-                        text = page.get_text()
-                        new_pages[page_num] = text
-
-                    # Search for query (case-insensitive)
-                    page_matches = self._find_matches(query, text, page_num + 1)  # 1-indexed pages
+            # If cache exists, use it exclusively (fast path)
+            if cached_pages:
+                for page_num, text in cached_pages.items():
+                    page_matches = self._find_matches(query, text, page_num + 1)
                     matches.extend(page_matches)
+                return matches
 
-            # Batch cache any newly extracted pages
-            if new_pages:
-                self.database.cache_pdf_text_batch(pdf_path, new_pages, checksum)
+            # No cache - skip this PDF during search to avoid hangs
+            # PDFs should be indexed via sync_library first
+            # Don't try to extract text during search as some PDFs can hang PyMuPDF
+            return matches
 
         except ValueError as e:
             # Path validation error - log but don't expose internal paths

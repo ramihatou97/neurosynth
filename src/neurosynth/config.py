@@ -93,7 +93,7 @@ class Settings(BaseSettings):
 
     # LLM Configuration
     llm_timeout: float = Field(
-        default=60.0,
+        default=600.0,  # 10 minutes - synthesis prompts can be very large
         description="Timeout in seconds for LLM API calls",
     )
     llm_max_retries: int = Field(

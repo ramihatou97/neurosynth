@@ -6,7 +6,6 @@ from pathlib import Path
 
 from src import config
 from ..search.result_model import SearchResult
-from ..ai.category_model import CategoryResult
 from .styles import FONTS, PADDING
 
 
@@ -33,12 +32,8 @@ class ResultsTree(ctk.CTkFrame):
         self.series_items: dict[str, str] = {}  # series_name -> tree_item_id
         self.chapter_items: dict[str, str] = {}  # chapter_key -> tree_item_id
         self.selected_items: set[str] = set()  # Track checked items
+        self._item_parents: dict[str, str] = {}  # item_id -> parent_id
 
-        # Filter state tracking
-        self._detached_items: set[str] = set()  # Items currently hidden
-        self._item_parents: dict[str, str] = {}  # item_id -> parent_id for reattach
-        self._active_filter: list[str] = []  # Currently active category filter
-        
         # Context menu
         self.context_menu = None
 
@@ -132,7 +127,7 @@ class ResultsTree(ctk.CTkFrame):
         # Treeview
         self.tree = ttk.Treeview(
             tree_frame,
-            columns=("select", "category", "page", "figs", "confidence"),
+            columns=("select", "page", "figs"),
             show="tree headings",
             yscrollcommand=scrollbar.set,
             style="Results.Treeview"
@@ -143,17 +138,13 @@ class ResultsTree(ctk.CTkFrame):
         # Configure columns
         self.tree.heading("#0", text="Source", anchor="w")
         self.tree.heading("select", text="✓")
-        self.tree.heading("category", text="Category")
         self.tree.heading("page", text="Page")
         self.tree.heading("figs", text="Figs")
-        self.tree.heading("confidence", text="Conf.")
 
-        self.tree.column("#0", width=300, minwidth=200)
+        self.tree.column("#0", width=400, minwidth=200)
         self.tree.column("select", width=30, minwidth=30, anchor="center")
-        self.tree.column("category", width=100, minwidth=80, anchor="center")
         self.tree.column("page", width=50, minwidth=40, anchor="center")
         self.tree.column("figs", width=40, minwidth=35, anchor="center")
-        self.tree.column("confidence", width=50, minwidth=40, anchor="center")
 
         # Bind selection and checkbox toggle
         self.tree.bind("<<TreeviewSelect>>", self._on_tree_select)
@@ -167,16 +158,6 @@ class ResultsTree(ctk.CTkFrame):
         # Create context menu
         self._create_context_menu()
 
-        # Configure tag colors for categories
-        for category, color in config.CATEGORY_COLORS.items():
-            self.tree.tag_configure(category, foreground=color)
-        # Configure uncategorized tag for results without category yet
-        self.tree.tag_configure("uncategorized", foreground="#CCCCCC")
-
-        # Configure tag colors for category groups
-        self.tree.tag_configure("Surgical/Anatomical", foreground="#e74c3c")  # Red
-        self.tree.tag_configure("Theoretical", foreground="#3498db")  # Blue
-
     def clear(self):
         """Clear all results from tree."""
         for item in self.tree.get_children():
@@ -185,7 +166,6 @@ class ResultsTree(ctk.CTkFrame):
         self.series_items.clear()
         self.chapter_items.clear()
         self.selected_items.clear()
-        self._detached_items.clear()
         self._item_parents.clear()
         self._update_count(0)
         self._update_selection_label()
@@ -202,10 +182,6 @@ class ResultsTree(ctk.CTkFrame):
         # Get figure count for this page
         fig_count = self._get_figure_count(result)
 
-        # Add category badge based on group
-        category_badge = self._get_category_badge(result)
-        category_display = f"{category_badge} {result.category or '...'}"
-
         # Add match node with checkbox
         match_id = self.tree.insert(
             chapter_id,
@@ -213,34 +189,14 @@ class ResultsTree(ctk.CTkFrame):
             text=f"p.{result.page_number}: {result.match_text[:50]}...",
             values=(
                 "☐",  # Unchecked checkbox
-                category_display,
                 result.page_number,
-                fig_count,
-                f"{result.category_confidence:.0%}" if result.category_confidence else "..."
-            ),
-            tags=(result.category or "uncategorized",)
+                fig_count
+            )
         )
 
         self.results[match_id] = result
         self._item_parents[match_id] = chapter_id  # Track parent for filter reattach
-
-        # Apply current filter if active
-        if self._active_filter:
-            category = result.category or "Other"
-            if category not in self._active_filter:
-                self.tree.detach(match_id)
-                self._detached_items.add(match_id)
-
-        self._update_count(len(self.results) - len(self._detached_items))
-
-    def _get_category_badge(self, result: SearchResult) -> str:
-        """Get visual badge for category group."""
-        if result.category_group == "Surgical/Anatomical":
-            return "🔴"  # Red circle for surgical
-        elif result.category_group == "Theoretical":
-            return "🔵"  # Blue circle for clinical/theoretical
-        else:
-            return "⚪"  # White circle for uncategorized
+        self._update_count(len(self.results))
 
     def _get_figure_count(self, result: SearchResult) -> str:
         """Get figure count for a result's page."""
@@ -277,41 +233,6 @@ class ResultsTree(ctk.CTkFrame):
             )
             self.chapter_items[chapter_key] = chapter_id
         return self.chapter_items[chapter_key]
-
-    def update_result_category(self, result: SearchResult, cat_result: CategoryResult):
-        """Update a result's category in the tree."""
-        # Find the tree item for this result
-        for item_id, stored_result in self.results.items():
-            if (stored_result.pdf_path == result.pdf_path and
-                stored_result.page_number == result.page_number and
-                stored_result.match_text == result.match_text):
-
-                # Update the stored result
-                stored_result.category = cat_result.category
-                stored_result.category_group = cat_result.group
-                stored_result.category_confidence = cat_result.confidence
-                stored_result.category_reasoning = cat_result.reasoning
-
-                # Add category badge
-                category_badge = self._get_category_badge(stored_result)
-                display_cat = f"{category_badge} {cat_result.category}"
-
-                # Update tree display (preserve checkbox state and figs count)
-                current_values = self.tree.item(item_id, "values")
-                checkbox = current_values[0] if current_values else "☐"
-                figs = current_values[3] if len(current_values) > 3 else "-"
-                self.tree.item(
-                    item_id,
-                    values=(
-                        checkbox,
-                        display_cat,
-                        stored_result.page_number,
-                        figs,
-                        f"{cat_result.confidence:.0%}"
-                    ),
-                    tags=(cat_result.category,)
-                )
-                break
 
     def _update_count(self, count: int):
         """Update the results count label."""
@@ -358,32 +279,6 @@ class ResultsTree(ctk.CTkFrame):
         """Collapse all tree nodes."""
         for item in self.tree.get_children():
             self.tree.item(item, open=False)
-
-    def filter_by_categories(self, categories: list[str]):
-        """Show/hide results based on selected categories."""
-        self._active_filter = categories
-
-        # If all categories selected or empty list, show all
-        show_all = not categories or len(categories) >= 22  # All subcategories
-
-        for item_id, result in self.results.items():
-            # Get result category, default to "Other" if uncategorized
-            result_category = result.category or "Other"
-            should_show = show_all or result_category in categories
-
-            if should_show and item_id in self._detached_items:
-                # Reattach item to its parent
-                parent_id = self._item_parents.get(item_id, "")
-                self.tree.reattach(item_id, parent_id, "end")
-                self._detached_items.discard(item_id)
-            elif not should_show and item_id not in self._detached_items:
-                # Detach (hide) item
-                self.tree.detach(item_id)
-                self._detached_items.add(item_id)
-
-        # Update visible count
-        visible_count = len(self.results) - len(self._detached_items)
-        self._update_count(visible_count)
 
     def get_all_results(self) -> list[SearchResult]:
         """Get all results."""
@@ -465,58 +360,36 @@ class ResultsTree(ctk.CTkFrame):
 
     # ==================== Smart Selection Methods ====================
 
-    def get_category_coverage(self) -> dict[str, int]:
-        """Get count of results per category group."""
-        coverage = {"Surgical/Anatomical": 0, "Theoretical": 0}
-        for result in self.results.values():
-            if result.category_group in coverage:
-                coverage[result.category_group] += 1
-        return coverage
-
     def get_selected_coverage(self) -> dict[str, int]:
-        """Get count of selected results per category group."""
-        coverage = {"Surgical/Anatomical": 0, "Theoretical": 0}
-        for item_id in self.selected_items:
-            if item_id in self.results:
-                result = self.results[item_id]
-                if result.category_group in coverage:
-                    coverage[result.category_group] += 1
-        return coverage
+        """Get count of selected results per category group (stub for compatibility)."""
+        return {"Surgical/Anatomical": 0, "Theoretical": 0}
 
     def smart_select_balanced(self, target_per_group: int = 6) -> list[str]:
         """
-        Auto-select results for balanced category coverage.
-        Prioritizes high-confidence results from each group.
+        Auto-select first N results from each book series for balanced coverage.
 
         Args:
-            target_per_group: Target number of results per category group
+            target_per_group: Target number of results per book series
 
         Returns:
             List of selected item IDs
         """
         self._clear_selection()
-
-        # Group results by category group
-        surgical = []
-        theoretical = []
-        for item_id, result in self.results.items():
-            if result.category_group == "Surgical/Anatomical":
-                surgical.append((item_id, result))
-            elif result.category_group == "Theoretical":
-                theoretical.append((item_id, result))
-
-        # Sort each group by confidence (highest first)
-        surgical.sort(key=lambda x: x[1].category_confidence or 0, reverse=True)
-        theoretical.sort(key=lambda x: x[1].category_confidence or 0, reverse=True)
-
-        # Select top N from each group
         selected_ids = []
-        for item_id, _ in surgical[:target_per_group]:
-            self._select_item(item_id)
-            selected_ids.append(item_id)
-        for item_id, _ in theoretical[:target_per_group]:
-            self._select_item(item_id)
-            selected_ids.append(item_id)
+
+        # Group by book series
+        by_series: dict[str, list[str]] = {}
+        for item_id, result in self.results.items():
+            series = result.book_series
+            if series not in by_series:
+                by_series[series] = []
+            by_series[series].append(item_id)
+
+        # Select top N from each series
+        for series, items in by_series.items():
+            for item_id in items[:target_per_group]:
+                self._select_item(item_id)
+                selected_ids.append(item_id)
 
         self._update_selection_label()
         self._notify_selection_change()
@@ -524,10 +397,7 @@ class ResultsTree(ctk.CTkFrame):
 
     def smart_select_high_confidence(self, threshold: float = 0.8) -> list[str]:
         """
-        Select all results with confidence above threshold.
-
-        Args:
-            threshold: Minimum confidence score (0.0-1.0)
+        Select first 20 results (confidence-based selection removed).
 
         Returns:
             List of selected item IDs
@@ -535,10 +405,12 @@ class ResultsTree(ctk.CTkFrame):
         self._clear_selection()
         selected_ids = []
 
-        for item_id, result in self.results.items():
-            if (result.category_confidence or 0) >= threshold:
-                self._select_item(item_id)
-                selected_ids.append(item_id)
+        # Just select first 20 results
+        for i, item_id in enumerate(self.results.keys()):
+            if i >= 20:
+                break
+            self._select_item(item_id)
+            selected_ids.append(item_id)
 
         self._update_selection_label()
         self._notify_selection_change()
@@ -559,17 +431,16 @@ class ResultsTree(ctk.CTkFrame):
         selected_ids = []
 
         # Group by book series
-        by_series: dict[str, list[tuple[str, SearchResult]]] = {}
+        by_series: dict[str, list[str]] = {}
         for item_id, result in self.results.items():
             series = result.book_series
             if series not in by_series:
                 by_series[series] = []
-            by_series[series].append((item_id, result))
+            by_series[series].append(item_id)
 
-        # Sort each series by confidence and take top N
+        # Take top N from each series
         for series, items in by_series.items():
-            items.sort(key=lambda x: x[1].category_confidence or 0, reverse=True)
-            for item_id, _ in items[:max_per_source]:
+            for item_id in items[:max_per_source]:
                 self._select_item(item_id)
                 selected_ids.append(item_id)
 

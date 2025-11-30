@@ -6,6 +6,7 @@ FONTS = {
     "heading": ("Helvetica", 16, "bold"),
     "subheading": ("Helvetica", 14, "bold"),
     "body": ("Helvetica", 12),
+    "body_bold": ("Helvetica", 12, "bold"),
     "small": ("Helvetica", 10),
     "mono": ("Courier", 11),
 }

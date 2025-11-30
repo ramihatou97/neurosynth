@@ -29,11 +29,11 @@ class Database:
         """Get a database connection with WAL mode for concurrent reads."""
         conn = sqlite3.connect(
             str(self.db_path),
-            timeout=5.0,  # Wait up to 5 seconds for locks
+            timeout=30.0,  # Wait up to 30 seconds for locks (increased for large libraries)
             check_same_thread=False
         )
         # Configure SQLite for better concurrency and reliability
-        conn.execute("PRAGMA busy_timeout=5000")  # 5 second busy timeout
+        conn.execute("PRAGMA busy_timeout=30000")  # 30 second busy timeout (increased for large libraries)
         conn.execute("PRAGMA journal_mode=WAL")  # Write-ahead logging
         conn.execute("PRAGMA foreign_keys=ON")  # Enforce foreign key constraints
         conn.execute("PRAGMA temp_store=MEMORY")  # Store temp tables in memory

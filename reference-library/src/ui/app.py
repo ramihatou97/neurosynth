@@ -2,6 +2,7 @@
 import customtkinter as ctk
 from pathlib import Path
 import threading
+import time
 from typing import Optional
 import asyncio
 
@@ -9,8 +10,6 @@ from src import config
 from ..cache.database import Database
 from ..search.pdf_searcher import PDFSearcher
 from ..search.result_model import SearchResult, SearchProgress
-from ..ai.categorizer import ContentCategorizer
-from ..ai.category_model import CategoryResult
 from ..utils.library_scanner import LibraryScanner
 from ..utils.file_watcher import FileWatcher
 from ..integration.neurosynth_bridge import NeuroSynthBridge
@@ -42,7 +41,6 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         self.database = Database(config.DATABASE_PATH)
         self.searcher = PDFSearcher(config.LIBRARY_PATH, self.database)
         self.semantic_searcher = self.searcher.semantic  # Reference to SemanticSearcher for indexing
-        self.categorizer = ContentCategorizer(config.ANTHROPIC_API_KEY, self.database)
         self.scanner = LibraryScanner(config.LIBRARY_PATH, self.database)
         self.file_watcher: Optional[FileWatcher] = None
         self.neurosynth = NeuroSynthBridge(
@@ -55,13 +53,13 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         self.current_query = ""
         self.search_thread: Optional[threading.Thread] = None
         self.extraction_thread: Optional[threading.Thread] = None
-        self.categorize_threads: list[threading.Thread] = []
         self.pending_results: list[SearchResult] = []
         self.selected_results: list[SearchResult] = []
+        self._search_id = 0  # Counter to track active search, prevents stale callbacks
 
         # Batch and throttle settings
         self.RESULT_BATCH_SIZE = 50
-        self._categorization_semaphore = threading.Semaphore(10)  # Max 10 concurrent
+        self._last_progress_update = 0  # Track last progress update time for throttling
 
         # Set up UI
         self._setup_ui()
@@ -169,15 +167,6 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         )
         self.synthesize_btn.pack(side="right", padx=PADDING["small"])
 
-        # Category coverage indicator
-        self.coverage_label = ctk.CTkLabel(
-            self.status_frame,
-            text="",
-            font=FONTS["small"],
-            text_color="gray"
-        )
-        self.coverage_label.pack(side="right", padx=PADDING["small"])
-
         # Smart selection dropdown
         self.smart_select_var = ctk.StringVar(value="Smart Select")
         self.smart_select_menu = ctk.CTkOptionMenu(
@@ -276,6 +265,13 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         # Cancel any existing search
         self._cancel_search()
 
+        # Increment search_id to invalidate stale callbacks from previous search
+        self._search_id += 1
+        current_search_id = self._search_id
+
+        # Reset cancelled flag AFTER incrementing search_id, BEFORE starting thread
+        self.searcher._cancelled = False
+
         self.current_query = query
         self.pending_results = []
 
@@ -289,16 +285,18 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         self._show_status(f"Searching for '{query}' ({mode_display})...")
         self.export_btn.configure(state="disabled")
 
-        # Start search in background thread
+        # Start search in background thread with search_id
         self.search_thread = threading.Thread(
             target=self._search_thread,
-            args=(query, mode),
+            args=(query, mode, current_search_id),
             daemon=True
         )
         self.search_thread.start()
 
-    def _search_thread(self, query: str, mode: str = "keyword"):
+    def _search_thread(self, query: str, mode: str = "keyword", search_id: int = 0):
         """Background thread for searching."""
+        print(f"[DEBUG] _search_thread started: query='{query}', mode={mode}, search_id={search_id}")
+        result_count = 0
         try:
             batch = []
 
@@ -311,27 +309,50 @@ class NeurosurgeryLibraryApp(ctk.CTk):
                 progress_callback=self._on_search_progress,
                 category_filter=category_filter
             ):
+                result_count += 1
+                # Check if this search is still active
+                if search_id != self._search_id:
+                    print(f"[DEBUG] Search aborted - new search started (had {result_count} results)")
+                    return  # Abort - a new search has started
+
                 batch.append(result)
                 self.pending_results.append(result)
 
-                # Send batch to UI when full
+                # Send batch to UI when full, include search_id for validation
                 if len(batch) >= self.RESULT_BATCH_SIZE:
-                    self.after(0, self._add_results_batch, batch.copy())
+                    self.after(0, self._add_results_batch, batch.copy(), search_id)
                     batch.clear()
 
-            # Send remaining results
-            if batch:
-                self.after(0, self._add_results_batch, batch)
+            print(f"[DEBUG] Search generator exhausted. Total results: {result_count}")
+
+            # Send remaining results with search_id
+            if batch and search_id == self._search_id:
+                self.after(0, self._add_results_batch, batch, search_id)
 
             # Search complete
-            self.after(0, self._on_search_complete)
+            if search_id == self._search_id:
+                print(f"[DEBUG] Search complete, calling _on_search_complete")
+                self.after(0, self._on_search_complete)
 
         except Exception as e:
-            self.after(0, lambda: self._show_status(f"Search error: {e}", "error"))
-            self.after(0, self._on_search_complete)
+            print(f"[DEBUG] Search thread exception: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
+            if search_id == self._search_id:
+                self.after(0, lambda: self._show_status(f"Search error: {e}", "error"))
+                self.after(0, self._on_search_complete)
 
     def _on_search_progress(self, progress: SearchProgress):
-        """Update progress display."""
+        """Update progress display with throttling to avoid UI overload."""
+        # Throttle updates to max 10 per second (every 100ms)
+        current_time = time.time()
+        is_final = progress.searched_pdfs >= progress.total_pdfs
+
+        if not is_final and (current_time - self._last_progress_update) < 0.1:
+            return  # Skip this update, too soon
+
+        self._last_progress_update = current_time
+
         # Capture values by value to avoid threading race condition
         searched = progress.searched_pdfs
         total = progress.total_pdfs
@@ -340,64 +361,35 @@ class NeurosurgeryLibraryApp(ctk.CTk):
             text=f"{s}/{t} PDFs | {m} matches"
         ))
 
-    def _add_results_batch(self, results: list):
-        """Add a batch of results to the tree (called from main thread)."""
+    def _add_results_batch(self, results: list, search_id: int = 0):
+        """Add a batch of results to the tree (called from main thread).
+
+        Args:
+            results: List of SearchResult objects
+            search_id: ID of the search that produced these results
+        """
+        # Discard stale results from cancelled/old searches
+        if search_id != self._search_id:
+            return
+
         for result in results:
             self.results_tree.add_result(result)
-            self._categorize_result(result)
-
-    def _categorize_result(self, result: SearchResult):
-        """Categorize a result in background with throttling."""
-        def _do_categorize():
-            with self._categorization_semaphore:
-                cat_result = self.categorizer.categorize_result(result, self.current_query)
-                self.after(0, lambda: self._on_categorized(result, cat_result))
-
-        thread = threading.Thread(target=_do_categorize, daemon=True)
-        thread.start()
-        self.categorize_threads.append(thread)
-
-    def _on_categorized(self, result: SearchResult, cat_result: CategoryResult):
-        """Handle categorization complete for a result."""
-        result.category = cat_result.category
-        result.category_confidence = cat_result.confidence
-        result.category_reasoning = cat_result.reasoning
-
-        # Update tree
-        self.results_tree.update_result_category(result, cat_result)
-
-        # Update preview if this result is selected
-        if self.preview_panel.current_result == result:
-            self.preview_panel.show_result(result)
 
     def _on_search_complete(self):
         """Handle search completion."""
         self.search_panel.set_searching(False)
 
         result_count = len(self.results_tree.results)
-
-        # Count results by category group
-        surgical_count = sum(
-            1 for r in self.results_tree.results.values()
-            if getattr(r, 'category_group', None) == "Surgical/Anatomical"
-        )
-        theoretical_count = sum(
-            1 for r in self.results_tree.results.values()
-            if getattr(r, 'category_group', None) == "Theoretical"
-        )
-
         self._show_status(f"Search complete: {result_count} matches found")
 
         if result_count > 0:
             self.export_btn.configure(state="normal")
 
-        # Save to search history with category counts
+        # Save to search history
         search_mode = self.search_panel.get_mode()
         self.database.save_search_history(
             self.current_query,
             result_count,
-            surgical_count=surgical_count,
-            theoretical_count=theoretical_count,
             search_mode=search_mode
         )
 
@@ -505,7 +497,7 @@ class NeurosurgeryLibraryApp(ctk.CTk):
                     ))
 
                 result = self.scanner.sync_library(
-                    max_workers=8,
+                    max_workers=4,  # Reduced to prevent file descriptor exhaustion
                     progress_callback=on_progress
                 )
                 self.after(0, lambda: self._on_sync_complete(result))
@@ -776,28 +768,14 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         else:
             self.synthesize_btn.configure(state="disabled")
 
-        # Update category coverage indicator
-        self._update_coverage_label()
-
-    def _update_coverage_label(self):
-        """Update the category coverage indicator."""
-        coverage = self.results_tree.get_selected_coverage()
-        surgical = coverage.get("Surgical/Anatomical", 0)
-        theoretical = coverage.get("Theoretical", 0)
-
-        if surgical > 0 or theoretical > 0:
-            self.coverage_label.configure(text=f"S:{surgical} T:{theoretical}")
-        else:
-            self.coverage_label.configure(text="")
-
     def _on_smart_select(self, choice: str):
         """Handle smart selection dropdown choice."""
         if choice == "Balanced":
             self.results_tree.smart_select_balanced(target_per_group=6)
-            self._show_status("Auto-selected balanced coverage (6 per category)", "success")
+            self._show_status("Auto-selected balanced coverage (6 per series)", "success")
         elif choice == "High Confidence":
             self.results_tree.smart_select_high_confidence(threshold=0.8)
-            self._show_status("Selected high-confidence results (>=80%)", "success")
+            self._show_status("Selected first 20 results", "success")
         elif choice == "Diverse":
             self.results_tree.smart_select_diverse(max_per_source=3)
             self._show_status("Selected diverse sources (max 3 per book)", "success")
