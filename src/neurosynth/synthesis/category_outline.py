@@ -161,15 +161,15 @@ class CategoryAwareOutlineGenerator:
         # Pass 1: Assign by keywords and category restriction
         for source in sources:
             assigned = False
-            source_group = source.get("category_group", "")
+            source_group = source.get("category_group")  # Keep None, don't default to ""
             source_excerpts = " ".join(source.get("context_excerpts", [])).lower()
             source_category = (source.get("category") or "").lower()
 
             for node in nodes:
-                # Check category restriction
-                if node.allowed_groups is not None:
+                # Check category restriction (only if source HAS a category)
+                if node.allowed_groups is not None and source_group is not None:
                     if source_group not in node.allowed_groups:
-                        continue  # Source not allowed in this section
+                        continue  # Categorized source not allowed in this section
 
                 # Check keyword match
                 for bp in blueprint:
@@ -188,17 +188,22 @@ class CategoryAwareOutlineGenerator:
 
         # Pass 2: Knowledge safety net - assign unassigned to most appropriate section
         for source in unassigned:
-            source_group = source.get("category_group", "")
+            source_group = source.get("category_group")  # Keep None, don't default to ""
 
             # Find best matching section by category
             for node in nodes:
                 if node.allowed_groups is None:
-                    # Unrestricted section
+                    # Unrestricted section - accepts anything
+                    node.assigned_sources.append(source)
+                    node.has_content = True
+                    break
+                elif source_group is None:
+                    # Uncategorized source (from search) - can go to ANY section
                     node.assigned_sources.append(source)
                     node.has_content = True
                     break
                 elif source_group in node.allowed_groups:
-                    # Matching restricted section
+                    # Categorized source matching restricted section
                     node.assigned_sources.append(source)
                     node.has_content = True
                     break
