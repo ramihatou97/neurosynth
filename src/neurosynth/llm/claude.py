@@ -3,6 +3,7 @@
 from typing import Any
 
 import anthropic
+from anthropic.types import TextBlock
 from rich.console import Console
 from tenacity import (
     retry,
@@ -90,7 +91,13 @@ class ClaudeClient:
                 messages=messages,
             )
 
-            result = response.content[0].text
+            first_block = response.content[0]
+            if isinstance(first_block, TextBlock):
+                result = first_block.text
+            else:
+                raise ValueError(
+                    f"Expected TextBlock, got {type(first_block).__name__}"
+                )
             logger.debug(f"Generated response (length: {len(result)})")
             return result
 
@@ -403,7 +410,7 @@ Write the section content now:"""
         if detected_conflicts:
             conflict_strs = []
             for c in detected_conflicts:
-                perspectives = c.get("perspectives", [])
+                perspectives: list[dict] = c.get("perspectives", [])
                 persp_str = "; ".join(
                     f"{p.get('source', 'Unknown')}: {p.get('claim', '')}"
                     for p in perspectives

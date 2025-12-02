@@ -17,11 +17,7 @@ from dataclasses import dataclass
 from io import BytesIO
 from typing import Any
 
-from .config import (
-    FilterFallbackLevel,
-    ImageFilterConfig,
-    NeuroSynthEnhancedConfig,
-)
+from .config import FilterFallbackLevel, ImageFilterConfig, NeuroSynthEnhancedConfig
 
 logger = logging.getLogger(__name__)
 
@@ -542,7 +538,7 @@ class EnhancedMedicalClassifier:
         Returns:
             FilterResult with classification
         """
-        features = {}
+        features: dict[str, float] = {}
 
         # Quick rejection checks
         rejection = self._quick_rejection_check(image_bytes, width, height)
@@ -716,7 +712,7 @@ class BasicImageFilter:
     def filter(self, image_bytes: bytes, width: int, height: int) -> FilterResult:
         """Apply basic filtering."""
         cfg = self.config
-        features = {}
+        features: dict[str, float] = {}
 
         # Size checks
         if len(image_bytes) < cfg.min_bytes:

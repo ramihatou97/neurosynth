@@ -20,10 +20,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
-from .config import (
-    ImageCategory,
-    NeuroSynthEnhancedConfig,
-)
+from .config import ImageCategory, NeuroSynthEnhancedConfig
 
 logger = logging.getLogger(__name__)
 

@@ -501,7 +501,9 @@ class ImageExtractor:
         for pattern in self.FIGURE_PATTERNS:
             for match in pattern.finditer(page_text):
                 fig_num = match.group(1)
-                caption_text = match.group(2) if match.lastindex >= 2 else ""
+                caption_text = (
+                    match.group(2) if match.lastindex and match.lastindex >= 2 else ""
+                )
 
                 # Clean up the caption text (get rest of sentence/paragraph)
                 start_pos = match.end()
@@ -834,7 +836,9 @@ class ImageExtractor:
         for pattern in self.FIGURE_PATTERNS:
             for match in pattern.finditer(page_text):
                 fig_num = match.group(1)
-                caption_text = match.group(2) if match.lastindex >= 2 else ""
+                caption_text = (
+                    match.group(2) if match.lastindex and match.lastindex >= 2 else ""
+                )
 
                 # Find caption location on page
                 search_text = match.group(0)[:50]  # First 50 chars

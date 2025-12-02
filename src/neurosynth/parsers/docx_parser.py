@@ -156,7 +156,7 @@ class DOCXParser(BaseParser):
             doc = DocxDocument(str(path))
             sections = []
             current_section = None
-            current_content = []
+            current_content: list[str] = []
 
             for para in doc.paragraphs:
                 text = para.text.strip()

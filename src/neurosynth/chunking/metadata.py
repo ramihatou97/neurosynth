@@ -122,7 +122,7 @@ class ChunkMetadataExtractor:
 
     def _extract_entities(self, text: str) -> list[str]:
         """Extract medical entities from text."""
-        entities = set()
+        entities: set[str] = set()
 
         # Find anatomy terms
         for pattern in self._compiled_anatomy:
@@ -164,7 +164,7 @@ class ChunkMetadataExtractor:
 
     def _extract_key_concepts(self, text: str) -> list[str]:
         """Extract key medical concepts from text."""
-        concepts = []
+        concepts: list[str] = []
 
         # Look for defined terms (term: definition pattern)
         definitions = re.findall(r"(\w+(?:\s+\w+)?)\s*[:]\s*[^.]+\.", text)

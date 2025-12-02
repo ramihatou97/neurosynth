@@ -19,11 +19,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from .config import (
-    CaptionDetectionConfig,
-    CaptionPosition,
-    NeuroSynthEnhancedConfig,
-)
+from .config import CaptionDetectionConfig, CaptionPosition, NeuroSynthEnhancedConfig
 
 logger = logging.getLogger(__name__)
 
@@ -682,7 +678,7 @@ class BatchCaptionProcessor:
         results = {}
 
         # Group images by page
-        by_page = {}
+        by_page: dict[int, list[dict]] = {}
         for img in image_info:
             page_num = img.get("page", 0)
             if page_num not in by_page:

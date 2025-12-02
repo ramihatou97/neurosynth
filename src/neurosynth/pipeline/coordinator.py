@@ -287,7 +287,7 @@ class Pipeline:
         """Parse all source documents in parallel with concurrency control."""
         from neurosynth.parsers import ParserFactory
 
-        source_files = []
+        source_files: list[Path] = []
         for ext in self.config.supported_formats:
             source_files.extend(self.config.source_dir.glob(f"*{ext}"))
 
@@ -600,7 +600,7 @@ class Pipeline:
                     ) / len(confidences)
 
             # Count by sequence type
-            type_counts = {}
+            type_counts: dict[str, int] = {}
             for seq in sequences:
                 seq_type = seq.sequence_type.value
                 type_counts[seq_type] = type_counts.get(seq_type, 0) + 1

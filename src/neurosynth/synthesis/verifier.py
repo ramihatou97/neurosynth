@@ -14,7 +14,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, cast
 
 from rich.console import Console
 
@@ -301,7 +301,7 @@ Return ONLY valid JSON."""
         )
         claims = claim_pattern.findall(synthesized_text)
 
-        results = {
+        results: dict[str, int | list[dict]] = {
             "total_citations": len(claims),
             "verified": 0,
             "unverified": 0,
@@ -331,10 +331,10 @@ Return ONLY valid JSON."""
                 )
 
                 if overlap > 0.3:  # At least 30% word overlap
-                    results["verified"] += 1
+                    results["verified"] = cast(int, results["verified"]) + 1
                 else:
-                    results["unverified"] += 1
-                    results["issues"].append(
+                    results["unverified"] = cast(int, results["unverified"]) + 1
+                    cast(list, results["issues"]).append(
                         {
                             "source_id": source_id,
                             "claim": claim_text[:100],
@@ -342,8 +342,8 @@ Return ONLY valid JSON."""
                         }
                     )
             else:
-                results["unverified"] += 1
-                results["issues"].append(
+                results["unverified"] = cast(int, results["unverified"]) + 1
+                cast(list, results["issues"]).append(
                     {
                         "source_id": source_id,
                         "claim": claim_text[:100],

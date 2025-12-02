@@ -480,7 +480,9 @@ class ProceduralSequenceDetector:
 
             # Check if consecutive
             is_consecutive = (
-                elem.sequence_number == last.sequence_number + 1
+                elem.sequence_number is not None
+                and last.sequence_number is not None
+                and elem.sequence_number == last.sequence_number + 1
                 and abs(elem.page_number - last.page_number) <= 2
             )
 
@@ -521,7 +523,7 @@ class ProceduralSequenceDetector:
                 continue
 
             # Determine sequence type from elements
-            type_counts = defaultdict(int)
+            type_counts: dict[SequenceType, int] = defaultdict(int)
             for elem in candidate:
                 type_counts[elem.sequence_type] += 1
 

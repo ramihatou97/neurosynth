@@ -19,18 +19,11 @@ import os
 import time
 from dataclasses import dataclass, field
 
-from .async_wrappers import (
-    get_executor_pool,
-)
+from .async_wrappers import get_executor_pool
 from .batch_processor import BatchPageProcessor
 from .config import ImageCategory, NeuroSynthEnhancedConfig
-from .enhanced_caption_detector import (
-    DetectedCaption,
-    EnhancedCaptionDetector,
-)
-from .latex_figure_generator import (
-    EnhancedLaTeXFigureGenerator,
-)
+from .enhanced_caption_detector import DetectedCaption, EnhancedCaptionDetector
+from .latex_figure_generator import EnhancedLaTeXFigureGenerator
 from .procedural_detector import ProceduralSequence, ProceduralSequenceDetector
 
 # Import enhancement modules
@@ -371,7 +364,7 @@ class UnifiedExtractionPipeline:
     def _detect_captions(self, doc: "fitz.Document", images: list[ExtractedImage]):
         """Detect and associate captions with images."""
         # Group images by page
-        by_page = {}
+        by_page: dict[int, list[ExtractedImage]] = {}
         for img in images:
             if img.page_number not in by_page:
                 by_page[img.page_number] = []

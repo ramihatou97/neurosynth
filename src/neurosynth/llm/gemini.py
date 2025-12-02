@@ -45,7 +45,7 @@ class GeminiClient:
             )
         ),
         before_sleep=lambda retry_state: logger.warning(
-            f"Gemini API error, retrying in {retry_state.next_action.sleep} seconds..."
+            f"Gemini API error, retrying in {retry_state.next_action.sleep if retry_state.next_action else 0} seconds..."
         ),
     )
     async def generate(

@@ -564,7 +564,7 @@ Return ONLY a JSON array."""
         )
 
         # Sequential synthesis to track used figures
-        used_figure_ids = set()
+        used_figure_ids: set[str] = set()
         failed_sections = []
 
         for i, node in enumerate(outline):

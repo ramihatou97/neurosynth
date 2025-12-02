@@ -253,7 +253,7 @@ class SemanticChunker:
         # Find natural split points (paragraphs, sentences)
         paragraphs = text.split("\n\n")
 
-        current_content = []
+        current_content: list[str] = []
         current_words = 0
 
         for para in paragraphs:

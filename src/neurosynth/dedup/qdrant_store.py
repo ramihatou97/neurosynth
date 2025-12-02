@@ -13,12 +13,14 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from rich.console import Console
 
+from neurosynth import get_logger
 from neurosynth.config import get_settings
 
 if TYPE_CHECKING:
     from neurosynth.models.visual import VisualElement
 
 console = Console()
+logger = get_logger("dedup.qdrant_store")
 
 
 class QdrantVisualStore:
@@ -131,6 +133,10 @@ class QdrantVisualStore:
         points = []
         for element in to_store:
             point_id = str(uuid.uuid4())
+
+            if element.visual_embedding is None:
+                logger.warning(f"Skipping element {element.id} with no embedding")
+                continue
 
             point = PointStruct(
                 id=point_id,

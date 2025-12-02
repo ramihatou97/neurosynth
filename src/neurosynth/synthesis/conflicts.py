@@ -5,11 +5,7 @@ from dataclasses import dataclass
 from rich.console import Console
 from rich.table import Table
 
-from neurosynth.models.knowledge import (
-    Conflict,
-    ConflictType,
-    KnowledgeCluster,
-)
+from neurosynth.models.knowledge import Conflict, ConflictType, KnowledgeCluster
 
 console = Console()
 
