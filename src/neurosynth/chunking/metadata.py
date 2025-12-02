@@ -1,7 +1,7 @@
 """Metadata extraction for content chunks."""
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from neurosynth.models.document import ContentChunk
 
@@ -12,16 +12,10 @@ class ChunkMetadata:
 
     topic: str = ""
     subtopic: str = ""
-    key_concepts: list[str] = None
-    medical_entities: list[str] = None
+    key_concepts: list[str] = field(default_factory=list)
+    medical_entities: list[str] = field(default_factory=list)
     section_type: str = ""
     confidence: float = 1.0
-
-    def __post_init__(self):
-        if self.key_concepts is None:
-            self.key_concepts = []
-        if self.medical_entities is None:
-            self.medical_entities = []
 
 
 class ChunkMetadataExtractor:
@@ -109,7 +103,7 @@ class ChunkMetadataExtractor:
         result = await gemini.identify_chunk_topic(chunk.content)
 
         # Ensure key_concepts is always a list
-        key_concepts_raw = result.get("key_concepts", [])
+        key_concepts_raw: str | list[str] = result.get("key_concepts", [])
         key_concepts = (
             [key_concepts_raw] if isinstance(key_concepts_raw, str) else key_concepts_raw
         )

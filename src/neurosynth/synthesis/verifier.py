@@ -65,6 +65,8 @@ class SynthesisVerifier:
     independent verification and catch potential issues.
     """
 
+    model: Any  # google.generativeai.GenerativeModel | None
+
     def __init__(
         self,
         api_key: str | None = None,

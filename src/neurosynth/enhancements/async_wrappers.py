@@ -363,8 +363,10 @@ class AsyncPDFDocument:
             raise RuntimeError("Document not opened")
 
         def get_page():
-            if 0 <= page_num < len(self.doc):
-                return self.doc[page_num]
+            # Type narrowing: self.doc is not None here (checked above)
+            doc = self.doc
+            if doc is not None and 0 <= page_num < len(doc):
+                return doc[page_num]
             return None
 
         return await async_wrap(get_page)
@@ -395,7 +397,9 @@ class AsyncPDFDocument:
         if not self.doc:
             raise RuntimeError("Document not opened")
 
-        return await async_wrap(lambda: len(self.doc))
+        # Type narrowing: capture doc in closure
+        doc = self.doc
+        return await async_wrap(lambda: len(doc) if doc is not None else 0)
 
     async def extract_images(self, page_num: int) -> list[dict]:
         """

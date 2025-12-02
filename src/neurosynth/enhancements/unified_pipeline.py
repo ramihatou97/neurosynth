@@ -184,7 +184,7 @@ class UnifiedExtractionPipeline:
 
         # Processing state
         self._doc = None
-        self._result = None
+        self._result: ExtractionResult | None = None
 
     def extract_from_pdf(
         self, pdf_path: str, pages: set[int] = None, output_dir: str = None
@@ -606,7 +606,9 @@ class AsyncExtractionPipeline:
             return await self.extract_async(pdf_path, output_dir=output_dir)
 
         tasks = [process_one(p) for p in pdf_paths]
-        return await asyncio.gather(*tasks, return_exceptions=True)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        # Filter out exceptions from results
+        return [r for r in results if isinstance(r, ExtractionResult)]
 
 
 # =============================================================================

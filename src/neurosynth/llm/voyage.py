@@ -22,7 +22,7 @@ try:
     from voyageai.error import RateLimitError as VoyageRateLimitError
 except ImportError:
     # Fallback if error module structure differs
-    VoyageRateLimitError = Exception
+    VoyageRateLimitError = Exception  # type: ignore[misc, assignment]
 
 # Additional retryable exceptions
 RETRYABLE_EXCEPTIONS = (
@@ -116,7 +116,7 @@ class VoyageClient:
         )
 
         # Get cache reference for storing new embeddings
-        cache = (
+        write_cache: PersistentEmbeddingCache | None = (
             get_persistent_cache()
             if (use_cache and settings.embedding_cache_enabled)
             else None
@@ -136,14 +136,15 @@ class VoyageClient:
                 try:
                     # Run in executor since voyageai is sync
                     loop = asyncio.get_event_loop()
-                    result = await loop.run_in_executor(
-                        None,
-                        lambda b=batch_texts: self.client.embed(
-                            b,
+
+                    def embed_batch(texts: list[str]):
+                        return self.client.embed(
+                            texts,
                             model=self.model_name,
                             input_type="document",
-                        ),
-                    )
+                        )
+
+                    result = await loop.run_in_executor(None, embed_batch, batch_texts)
 
                     # Validate API response before processing
                     if len(result.embeddings) != len(batch_items):
@@ -160,11 +161,11 @@ class VoyageClient:
                         all_embeddings[orig_idx] = embedding
 
                         # Cache the new embedding
-                        if cache is not None:
+                        if write_cache is not None:
                             content_hash = (
                                 PersistentEmbeddingCache.compute_content_hash(text)
                             )
-                            cache.set(content_hash, embedding)
+                            write_cache.set(content_hash, embedding)
 
                     # Progress indicator for large batches
                     if len(texts_to_embed) > batch_size:

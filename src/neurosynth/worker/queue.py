@@ -103,7 +103,7 @@ class JobQueue:
             message: Progress message
             percent: Optional progress percentage
         """
-        progress = {
+        progress: dict[str, str | float] = {
             "stage": stage,
             "message": message,
             "updated_at": datetime.utcnow().isoformat(),

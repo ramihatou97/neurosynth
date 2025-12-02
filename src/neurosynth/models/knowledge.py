@@ -48,10 +48,13 @@ class Perspective:
     @classmethod
     def from_dict(cls, data: dict, chunk_lookup: dict) -> "Perspective":
         """Create Perspective from dictionary."""
+        chunk = chunk_lookup.get(data["chunk_id"])
+        if chunk is None:
+            raise ValueError(f"Chunk not found for id: {data['chunk_id']}")
         return cls(
             claim=data["claim"],
             source=Source.from_dict(data["source"]),
-            chunk=chunk_lookup.get(data["chunk_id"]),
+            chunk=chunk,
             confidence=data.get("confidence", 1.0),
         )
 

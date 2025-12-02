@@ -410,7 +410,10 @@ Write the section content now:"""
         if detected_conflicts:
             conflict_strs = []
             for c in detected_conflicts:
-                perspectives: list[dict] = c.get("perspectives", [])
+                perspectives_raw: Any = c.get("perspectives", [])
+                perspectives: list[dict] = (
+                    perspectives_raw if isinstance(perspectives_raw, list) else []
+                )
                 persp_str = "; ".join(
                     f"{p.get('source', 'Unknown')}: {p.get('claim', '')}"
                     for p in perspectives
