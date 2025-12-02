@@ -230,7 +230,8 @@ async def process_batch(
             *[process_one(item) for item in batch], return_exceptions=True
         )
 
-        results.extend(batch_results)
+        # Filter out exceptions (keep only successful results)
+        results.extend([r for r in batch_results if not isinstance(r, BaseException)])
 
     return results
 
@@ -293,7 +294,8 @@ async def process_batch_with_progress(
             *[process_one(item) for item in batch], return_exceptions=True
         )
 
-        results.extend(batch_results)
+        # Filter out exceptions (keep only successful results)
+        results.extend([r for r in batch_results if not isinstance(r, BaseException)])
 
     return results
 

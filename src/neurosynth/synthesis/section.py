@@ -225,7 +225,7 @@ class SectionSynthesizer:
         # Sort by original index to maintain order, handle errors
         sections_with_index = []
         for result in results:
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 # This shouldn't happen anymore since we catch inside synthesize_with_limit
                 console.print(
                     f"[red]Unexpected error in synthesis task: {result}[/red]"

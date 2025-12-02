@@ -145,7 +145,7 @@ class ClusterMerger:
         # Handle any exceptions and filter results
         final_results = []
         for i, result in enumerate(results):
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 console.print(f"[red]Error merging cluster {i}: {result}[/red]")
                 # Create empty result for failed cluster
                 final_results.append(
