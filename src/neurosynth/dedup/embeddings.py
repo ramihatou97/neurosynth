@@ -76,6 +76,10 @@ class EmbeddingGenerator:
         if chunk2.embedding is None:
             await self.generate_embeddings([chunk2])
 
+        # Type narrowing: ensure embeddings are not None after generation
+        if chunk1.embedding is None or chunk2.embedding is None:
+            return 0.0  # Should not happen after generate_embeddings, but satisfy mypy
+
         return float(
             np.dot(chunk1.embedding, chunk2.embedding)
             / (np.linalg.norm(chunk1.embedding) * np.linalg.norm(chunk2.embedding))
@@ -89,8 +93,8 @@ class EmbeddingGenerator:
         # Ensure all chunks have embeddings
         await self.generate_embeddings(chunks, show_progress=True)
 
-        # Stack embeddings
-        embeddings = np.vstack([c.embedding for c in chunks])
+        # Stack embeddings (filter None to satisfy mypy, though they should all be populated)
+        embeddings = np.vstack([c.embedding for c in chunks if c.embedding is not None])
 
         # Normalize
         norms = np.linalg.norm(embeddings, axis=1, keepdims=True)

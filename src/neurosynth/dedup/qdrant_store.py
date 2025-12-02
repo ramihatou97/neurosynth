@@ -126,7 +126,10 @@ class QdrantVisualStore:
             return 0
 
         # Ensure collection exists with correct vector size
-        vector_size = len(to_store[0].visual_embedding)
+        first_embedding = to_store[0].visual_embedding
+        if first_embedding is None:  # Should not happen after filter, but satisfy mypy
+            return 0
+        vector_size = len(first_embedding)
         self._ensure_collection(vector_size)
 
         # Create points

@@ -26,10 +26,14 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # API Keys
-    anthropic_api_key: str = Field(..., description="Anthropic API key for Claude")
-    google_api_key: str = Field(..., description="Google API key for Gemini")
-    voyage_api_key: str = Field(..., description="Voyage AI API key for embeddings")
+    # API Keys (loaded from environment variables)
+    anthropic_api_key: str = Field(
+        default="", description="Anthropic API key for Claude"
+    )
+    google_api_key: str = Field(default="", description="Google API key for Gemini")
+    voyage_api_key: str = Field(
+        default="", description="Voyage AI API key for embeddings"
+    )
 
     # Model Configuration
     gemini_model: str = Field(

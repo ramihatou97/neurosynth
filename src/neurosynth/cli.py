@@ -616,14 +616,14 @@ async def _run_full_pipeline(
         if clusters_json.exists():
             import json
 
-            with open(clusters_json, encoding="utf-8") as f:
-                clusters_data = json.load(f)
+            with open(clusters_json, encoding="utf-8") as json_file:
+                clusters_data = json.load(json_file)
             checkpoint.save_stage("clusters", clusters_data)
         elif clusters_pkl.exists():
             import pickle
 
-            with open(clusters_pkl, "rb") as f:
-                clusters_data = pickle.load(f)
+            with open(clusters_pkl, "rb") as pkl_file:
+                clusters_data = pickle.load(pkl_file)
             checkpoint.save_stage("clusters", clusters_data)
 
         # Synthesize

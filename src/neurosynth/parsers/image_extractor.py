@@ -362,7 +362,7 @@ class ImageExtractor:
 
                 # Convert CMYK and other modes to RGB for compatibility
                 if pil_image.mode not in ("RGB", "L"):
-                    pil_image = pil_image.convert("RGB")
+                    pil_image = pil_image.convert("RGB")  # type: ignore[assignment]
                     buf = io.BytesIO()
                     pil_image.save(buf, format="PNG")
                     image_bytes = buf.getvalue()
@@ -370,7 +370,9 @@ class ImageExtractor:
 
                 # Resize if too large
                 if width > self.max_size or height > self.max_size:
-                    pil_image.thumbnail((self.max_size, self.max_size), Image.LANCZOS)
+                    pil_image.thumbnail(
+                        (self.max_size, self.max_size), Image.Resampling.LANCZOS
+                    )
                     buf = io.BytesIO()
                     pil_image.save(buf, format="PNG")
                     image_bytes = buf.getvalue()
@@ -688,7 +690,7 @@ class ImageExtractor:
         """
         try:
             # Resize to 8x8, convert to grayscale
-            small = image.resize((8, 8), Image.LANCZOS).convert("L")
+            small = image.resize((8, 8), Image.Resampling.LANCZOS).convert("L")
             pixels = list(small.getdata())
             avg = sum(pixels) / len(pixels)
 

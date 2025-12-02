@@ -149,8 +149,10 @@ class FAISSClusterer:
         # Ensure all chunks have embeddings
         await self.embedding_generator.generate_embeddings(chunks)
 
-        # Stack and normalize embeddings
-        embeddings = np.vstack([c.embedding for c in chunks]).astype(np.float32)
+        # Stack and normalize embeddings (filter None to satisfy mypy)
+        embeddings = np.vstack(
+            [c.embedding for c in chunks if c.embedding is not None]
+        ).astype(np.float32)
         faiss.normalize_L2(embeddings)
 
         # Build FAISS index
