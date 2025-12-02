@@ -65,7 +65,7 @@ def validate_pdf_file(file_path: Path) -> tuple[bool, str]:
         with open(file_path, "rb") as f:
             header = f.read(5)
             if header != b"%PDF-":
-                return False, f"Invalid PDF header (found: {header})"
+                return False, f"Invalid PDF header (found: {header!r})"
 
             # Check for EOF marker in last 1KB
             f.seek(max(0, file_size - 1024))

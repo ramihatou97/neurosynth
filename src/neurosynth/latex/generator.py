@@ -265,7 +265,7 @@ class LaTeXGenerator:
                 # Check PDF magic bytes
                 header = f.read(5)
                 if header != b"%PDF-":
-                    return False, f"Invalid PDF header (expected %PDF-, found {header})"
+                    return False, f"Invalid PDF header (expected %PDF-, found {header!r})"
 
                 # Check for EOF marker in last 1KB
                 f.seek(max(0, file_size - 1024))

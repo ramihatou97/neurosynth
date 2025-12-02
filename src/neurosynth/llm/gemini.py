@@ -144,12 +144,13 @@ Return ONLY valid JSON."""
         except json.JSONDecodeError:
             pass
 
-        return {
+        result: dict[str, Any] = {
             "topic": "Unknown",
             "subtopic": "",
             "key_concepts": [],
             "section_suggestion": "Introduction",
         }
+        return result
 
     async def segment_into_chunks(
         self,
@@ -224,6 +225,9 @@ Return ONLY valid JSON."""
                 return json.loads(response[start:end])
         except json.JSONDecodeError:
             pass
+
+        # Return empty metadata if parsing fails
+        return {}
 
     async def synthesize_section(
         self,

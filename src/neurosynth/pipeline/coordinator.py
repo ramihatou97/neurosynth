@@ -89,6 +89,7 @@ class PipelineState:
     clusters: list[KnowledgeCluster] = field(default_factory=list)
     knowledge_base: KnowledgeBase | None = None
     chapter: Chapter | None = None
+    outline: Any = None  # ChapterOutline or similar structure
 
     # Visual content
     all_visuals: list["VisualElement"] = field(default_factory=list)
@@ -262,6 +263,8 @@ class Pipeline:
             console.print("\n[bold green]Pipeline complete![/bold green]")
             self._print_summary()
 
+            if self.state.chapter is None:
+                raise RuntimeError("Chapter generation failed - no chapter produced")
             return self.state.chapter
 
         except Exception as e:
@@ -640,15 +643,17 @@ class Pipeline:
         # Choose clustering backend
         use_faiss = self.config.use_faiss_clustering and FAISS_AVAILABLE
 
-        clusterer: FAISSClusterer | SemanticClusterer
         if use_faiss:
             console.print("  Using FAISS IndexFlatIP for clustering", style="dim")
-            clusterer = FAISSClusterer(
+            faiss_clusterer = FAISSClusterer(
                 similarity_threshold=self.config.similarity_threshold,
             )
             # FAISS clusterer handles embedding generation internally
-            result = await clusterer.cluster_chunks(self.state.all_chunks)
+            faiss_result = await faiss_clusterer.cluster_chunks(self.state.all_chunks)
+            self.state.clusters = faiss_result.clusters
             self.state.metrics["clustering_backend"] = "faiss"
+            self.state.metrics["clusters_created"] = faiss_result.num_clusters
+            self.state.metrics["dedup_ratio"] = faiss_result.dedup_ratio
         else:
             if self.config.use_faiss_clustering and not FAISS_AVAILABLE:
                 console.print(
@@ -658,15 +663,14 @@ class Pipeline:
             generator = EmbeddingGenerator(use_cache=self.config.use_cache)
             await generator.generate_embeddings(self.state.all_chunks)
 
-            clusterer = SemanticClusterer(
+            sklearn_clusterer = SemanticClusterer(
                 similarity_threshold=self.config.similarity_threshold,
             )
-            result = await clusterer.cluster_chunks(self.state.all_chunks)
+            sklearn_result = await sklearn_clusterer.cluster_chunks(self.state.all_chunks)
+            self.state.clusters = sklearn_result.clusters
             self.state.metrics["clustering_backend"] = "sklearn"
-
-        self.state.clusters = result.clusters
-        self.state.metrics["clusters_created"] = result.num_clusters
-        self.state.metrics["dedup_ratio"] = result.dedup_ratio
+            self.state.metrics["clusters_created"] = sklearn_result.num_clusters
+            self.state.metrics["dedup_ratio"] = sklearn_result.dedup_ratio
 
     async def _merge_clusters(self) -> None:
         """Merge content within clusters."""
@@ -730,6 +734,9 @@ class Pipeline:
         if self.config.output_format == "latex":
             generator = LaTeXGenerator()
             output_name = self.topic.lower().replace(" ", "_")
+
+            if self.state.chapter is None:
+                raise RuntimeError("Cannot generate output - no chapter available")
 
             tex_path = generator.generate_to_file(
                 self.state.chapter,
