@@ -19,7 +19,7 @@ from neurosynth.models.document import ContentChunk
 from neurosynth.models.knowledge import KnowledgeCluster
 
 if TYPE_CHECKING:
-    pass
+    from neurosynth.dedup.clustering import SemanticClusterer
 
 console = Console()
 
@@ -142,7 +142,9 @@ class FAISSClusterer:
             )
 
         n = len(chunks)
-        console.print(f"[blue]FAISS clustering {n} chunks (threshold={self.threshold})...[/blue]")
+        console.print(
+            f"[blue]FAISS clustering {n} chunks (threshold={self.threshold})...[/blue]"
+        )
 
         # Ensure all chunks have embeddings
         await self.embedding_generator.generate_embeddings(chunks)
@@ -168,7 +170,9 @@ class FAISSClusterer:
         similarities, indices = index.search(embeddings, k)
 
         search_time_ms = (time.time() - start) * 1000
-        console.print(f"  FAISS search completed in {search_time_ms:.1f}ms", style="dim")
+        console.print(
+            f"  FAISS search completed in {search_time_ms:.1f}ms", style="dim"
+        )
 
         # Build clusters using Union-Find
         uf = UnionFind(n)
@@ -194,7 +198,7 @@ class FAISSClusterer:
 
         # Create KnowledgeCluster objects
         knowledge_clusters = []
-        for root, member_indices in groups.items():
+        for _root, member_indices in groups.items():
             if len(member_indices) >= self.min_cluster_size:
                 cluster_chunks = [chunks[i] for i in member_indices]
 
@@ -269,7 +273,9 @@ class FAISSClusterer:
         valid_clusters = []
 
         for cluster in clusters:
-            embeddings = [c.embedding for c in cluster.chunks if c.embedding is not None]
+            embeddings = [
+                c.embedding for c in cluster.chunks if c.embedding is not None
+            ]
             if embeddings:
                 avg = np.mean(embeddings, axis=0).astype(np.float32)
                 representatives.append(avg)
@@ -307,7 +313,7 @@ class FAISSClusterer:
         groups = uf.get_groups()
         merged = []
 
-        for root, member_indices in groups.items():
+        for _root, member_indices in groups.items():
             if len(member_indices) == 1:
                 merged.append(valid_clusters[member_indices[0]])
             else:

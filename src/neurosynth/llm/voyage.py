@@ -4,20 +4,12 @@ import asyncio
 import hashlib
 import pickle
 import sqlite3
-import time
 from pathlib import Path
-from typing import Optional
 
 import httpx
 import numpy as np
 import voyageai
 from rich.console import Console
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
 
 from neurosynth import get_logger
 from neurosynth.config import get_settings
@@ -89,11 +81,15 @@ class VoyageClient:
             cache = get_persistent_cache()
 
             # Compute hashes and check cache
-            text_hashes = [PersistentEmbeddingCache.compute_content_hash(t) for t in texts]
+            text_hashes = [
+                PersistentEmbeddingCache.compute_content_hash(t) for t in texts
+            ]
             cached = cache.get_batch(text_hashes)
 
             cache_hits = 0
-            for i, (text, text_hash) in enumerate(zip(texts, text_hashes)):
+            for i, (text, text_hash) in enumerate(
+                zip(texts, text_hashes, strict=False)
+            ):
                 if text_hash in cached:
                     all_embeddings[i] = cached[text_hash]
                     cache_hits += 1
@@ -101,7 +97,9 @@ class VoyageClient:
                     texts_to_embed.append((i, text))
 
             if cache_hits > 0:
-                logger.info(f"Cache hits: {cache_hits}/{len(texts)} ({100*cache_hits/len(texts):.1f}%)")
+                logger.info(
+                    f"Cache hits: {cache_hits}/{len(texts)} ({100*cache_hits/len(texts):.1f}%)"
+                )
                 console.print(
                     f"  [green]Embedding cache: {cache_hits}/{len(texts)} hits[/green]",
                     style="dim",
@@ -113,10 +111,16 @@ class VoyageClient:
             # All from cache
             return [e for e in all_embeddings if e is not None]
 
-        logger.debug(f"Embedding {len(texts_to_embed)} texts in batches of {batch_size}")
+        logger.debug(
+            f"Embedding {len(texts_to_embed)} texts in batches of {batch_size}"
+        )
 
         # Get cache reference for storing new embeddings
-        cache = get_persistent_cache() if (use_cache and settings.embedding_cache_enabled) else None
+        cache = (
+            get_persistent_cache()
+            if (use_cache and settings.embedding_cache_enabled)
+            else None
+        )
 
         # Process texts_to_embed in batches (preserving original indices)
         for batch_start in range(0, len(texts_to_embed), batch_size):
@@ -149,18 +153,24 @@ class VoyageClient:
                         )
 
                     # Store embeddings at correct indices and cache them
-                    for j, (orig_idx, (_, text)) in enumerate(zip(batch_indices, batch_items)):
+                    for j, (orig_idx, (_, text)) in enumerate(
+                        zip(batch_indices, batch_items, strict=False)
+                    ):
                         embedding = np.array(result.embeddings[j])
                         all_embeddings[orig_idx] = embedding
 
                         # Cache the new embedding
                         if cache is not None:
-                            content_hash = PersistentEmbeddingCache.compute_content_hash(text)
+                            content_hash = (
+                                PersistentEmbeddingCache.compute_content_hash(text)
+                            )
                             cache.set(content_hash, embedding)
 
                     # Progress indicator for large batches
                     if len(texts_to_embed) > batch_size:
-                        embedded_so_far = min(batch_start + batch_size, len(texts_to_embed))
+                        embedded_so_far = min(
+                            batch_start + batch_size, len(texts_to_embed)
+                        )
                         console.print(
                             f"  Embedded {embedded_so_far}/{len(texts_to_embed)} texts (+ {len(texts) - len(texts_to_embed)} cached)",
                             style="dim",
@@ -175,7 +185,9 @@ class VoyageClient:
                 except RETRYABLE_EXCEPTIONS as e:
                     if attempt < max_retries - 1:
                         # Exponential backoff with jitter
-                        wait_time = min(retry_delay * (2 ** attempt), 180)  # Max 3 minutes
+                        wait_time = min(
+                            retry_delay * (2**attempt), 180
+                        )  # Max 3 minutes
                         logger.warning(
                             f"Voyage API {type(e).__name__}, waiting {wait_time}s "
                             f"before retry {attempt + 2}/{max_retries}..."
@@ -325,7 +337,8 @@ class PersistentEmbeddingCache:
             conn.execute("PRAGMA busy_timeout=5000")
             conn.execute("PRAGMA synchronous=NORMAL")
 
-            conn.execute("""
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS embeddings (
                     content_hash TEXT NOT NULL,
                     model_name TEXT NOT NULL,
@@ -334,11 +347,14 @@ class PersistentEmbeddingCache:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     PRIMARY KEY (content_hash, model_name, chunk_config)
                 )
-            """)
-            conn.execute("""
+            """
+            )
+            conn.execute(
+                """
                 CREATE INDEX IF NOT EXISTS idx_model_config
                 ON embeddings(model_name, chunk_config)
-            """)
+            """
+            )
 
     def _cache_key(self, content_hash: str) -> tuple[str, str, str]:
         """Generate the cache key tuple."""
@@ -349,7 +365,7 @@ class PersistentEmbeddingCache:
         """Compute MD5 hash of text content."""
         return hashlib.md5(text.encode()).hexdigest()
 
-    def get(self, content_hash: str) -> Optional[np.ndarray]:
+    def get(self, content_hash: str) -> np.ndarray | None:
         """
         Get cached embedding by content hash.
 
@@ -513,9 +529,7 @@ class PersistentEmbeddingCache:
                 current_model = cursor.fetchone()[0]
 
                 # Get distinct models in cache
-                cursor = conn.execute(
-                    "SELECT DISTINCT model_name FROM embeddings"
-                )
+                cursor = conn.execute("SELECT DISTINCT model_name FROM embeddings")
                 models = [row[0] for row in cursor.fetchall()]
 
                 # Get oldest and newest entries
@@ -709,7 +723,7 @@ class EmbeddingCache:
 
 # Global cache instances
 embedding_cache = EmbeddingCache()  # Legacy in-memory cache
-_persistent_cache: Optional[PersistentEmbeddingCache] = None
+_persistent_cache: PersistentEmbeddingCache | None = None
 
 
 def get_persistent_cache() -> PersistentEmbeddingCache:

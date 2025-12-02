@@ -8,10 +8,9 @@ import logging
 import os
 import signal
 import sys
-from typing import Optional
 
-from neurosynth.worker.queue import JobQueue
 from neurosynth.worker.executor import JobExecutor
+from neurosynth.worker.queue import JobQueue
 
 # Configure logging
 logging.basicConfig(
@@ -25,17 +24,19 @@ logger = logging.getLogger(__name__)
 class Worker:
     """NeuroSynth job worker."""
 
-    def __init__(self, redis_url: Optional[str] = None):
+    def __init__(self, redis_url: str | None = None):
         """Initialize worker.
 
         Args:
             redis_url: Redis connection URL (defaults to REDIS_URL env var)
         """
-        self.redis_url = redis_url or os.environ.get("REDIS_URL", "redis://localhost:6379")
+        self.redis_url = redis_url or os.environ.get(
+            "REDIS_URL", "redis://localhost:6379"
+        )
         self.queue = JobQueue(self.redis_url)
         self.executor = JobExecutor(self.queue)
         self.running = False
-        self._current_job: Optional[str] = None
+        self._current_job: str | None = None
 
     def start(self) -> None:
         """Start the worker."""

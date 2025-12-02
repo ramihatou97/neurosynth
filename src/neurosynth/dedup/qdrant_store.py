@@ -94,7 +94,9 @@ class QdrantVisualStore:
                     distance=Distance.COSINE,
                 ),
             )
-            console.print(f"[dim]Created Qdrant collection: {self.collection_name}[/dim]")
+            console.print(
+                f"[dim]Created Qdrant collection: {self.collection_name}[/dim]"
+            )
 
     async def store_visual_elements(
         self,
@@ -135,8 +137,12 @@ class QdrantVisualStore:
                 vector=element.visual_embedding.tolist(),
                 payload={
                     "element_id": element.id,
-                    "image_path": str(element.image_path) if element.image_path else None,
-                    "source_pdf": str(element.source_pdf) if element.source_pdf else None,
+                    "image_path": (
+                        str(element.image_path) if element.image_path else None
+                    ),
+                    "source_pdf": (
+                        str(element.source_pdf) if element.source_pdf else None
+                    ),
                     "page_number": element.page_number,
                     "caption": element.caption[:500] if element.caption else "",
                     "image_type": element.image_type.value,

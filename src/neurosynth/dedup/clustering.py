@@ -58,7 +58,9 @@ class SemanticClusterer:
         console.print(f"[blue]Clustering {len(chunks)} chunks...[/blue]")
 
         # Build similarity matrix
-        similarity_matrix = await self.embedding_generator.build_similarity_matrix(chunks)
+        similarity_matrix = await self.embedding_generator.build_similarity_matrix(
+            chunks
+        )
 
         # Convert to distance matrix (1 - similarity)
         distance_matrix = 1 - similarity_matrix
@@ -96,7 +98,9 @@ class SemanticClusterer:
                         if i < j:
                             cluster_similarities.append(similarity_matrix[i, j])
 
-                avg_similarity = np.mean(cluster_similarities) if cluster_similarities else 1.0
+                avg_similarity = (
+                    np.mean(cluster_similarities) if cluster_similarities else 1.0
+                )
 
                 # Assign cluster IDs to chunks
                 cluster = KnowledgeCluster(
@@ -119,7 +123,17 @@ class SemanticClusterer:
             dedup_ratio=dedup_ratio,
             similarity_stats={
                 "mean": float(np.mean(similarity_matrix)),
-                "max": float(np.max(similarity_matrix[np.triu_indices_from(similarity_matrix, 1)])) if len(chunks) > 1 else 1.0,
+                "max": (
+                    float(
+                        np.max(
+                            similarity_matrix[
+                                np.triu_indices_from(similarity_matrix, 1)
+                            ]
+                        )
+                    )
+                    if len(chunks) > 1
+                    else 1.0
+                ),
                 "threshold": self.threshold,
             },
         )
@@ -163,7 +177,9 @@ class SemanticClusterer:
 
                 if rep_norm > 0:
                     # Compute cosine similarity efficiently
-                    similarity = float(np.dot(normalized_query, rep_embedding) / rep_norm)
+                    similarity = float(
+                        np.dot(normalized_query, rep_embedding) / rep_norm
+                    )
                     results.append((cluster, similarity))
 
         # Sort by similarity
@@ -191,7 +207,9 @@ class SemanticClusterer:
 
         for i, cluster in enumerate(clusters):
             if cluster.chunks:
-                embeddings = [c.embedding for c in cluster.chunks if c.embedding is not None]
+                embeddings = [
+                    c.embedding for c in cluster.chunks if c.embedding is not None
+                ]
                 if embeddings:
                     avg_embedding = np.mean(embeddings, axis=0)
                     representatives.append(avg_embedding)
@@ -393,7 +411,7 @@ class VisualAssociator:
     ) -> list["VisualElement"]:
         """Collect all unique visual elements from chunks."""
         seen_ids: set[str] = set()
-        visuals: list["VisualElement"] = []
+        visuals: list[VisualElement] = []
 
         for chunk in chunks:
             for visual in chunk.visual_elements:
@@ -417,9 +435,8 @@ class VisualAssociator:
         3. Page proximity: Visual on pages referenced by cluster chunks
         4. Semantic relevance: Caption/context matches cluster content
         """
-        from neurosynth.models.visual import ImageType
 
-        associated: list["VisualElement"] = []
+        associated: list[VisualElement] = []
         seen_ids: set[str] = set()
 
         # Get cluster context
@@ -451,7 +468,10 @@ class VisualAssociator:
                 relevance_score = max(relevance_score, text_score)
 
             # Include if meets threshold OR if we want comprehensive coverage
-            if relevance_score >= self.visual_relevance_threshold or self.include_all_visuals:
+            if (
+                relevance_score >= self.visual_relevance_threshold
+                or self.include_all_visuals
+            ):
                 # For comprehensive mode, still require some relevance
                 if self.include_all_visuals and relevance_score < 0.1:
                     continue
@@ -524,14 +544,12 @@ class VisualAssociator:
 
         # Extract significant words (length > 3, not common)
         common_words = {"the", "and", "for", "with", "from", "this", "that", "which"}
-        visual_words = set(
-            w for w in visual_text.split()
-            if len(w) > 3 and w not in common_words
-        )
-        cluster_words = set(
-            w for w in cluster_text.split()
-            if len(w) > 3 and w not in common_words
-        )
+        visual_words = {
+            w for w in visual_text.split() if len(w) > 3 and w not in common_words
+        }
+        cluster_words = {
+            w for w in cluster_text.split() if len(w) > 3 and w not in common_words
+        }
 
         if not visual_words or not cluster_words:
             return 0.0
@@ -599,7 +617,8 @@ class VisualAssociator:
 
         # Prioritize surgical steps and high-confidence anatomical
         inline_candidates = [
-            v for v in cluster.visual_elements
+            v
+            for v in cluster.visual_elements
             if v.image_type.value in ("surgical_step", "anatomical")
             and v.type_confidence >= 0.5
         ]

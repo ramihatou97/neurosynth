@@ -37,19 +37,23 @@ class EmbeddingGenerator:
             uncached_indices.append(i)
 
         if not uncached_chunks:
-            console.print(f"[green]All {len(chunks)} embeddings loaded from cache[/green]")
+            console.print(
+                f"[green]All {len(chunks)} embeddings loaded from cache[/green]"
+            )
             return chunks
 
         # Generate embeddings for uncached chunks
         texts = [c.content for c in uncached_chunks]
 
         if show_progress:
-            console.print(f"[blue]Generating embeddings for {len(texts)} chunks...[/blue]")
+            console.print(
+                f"[blue]Generating embeddings for {len(texts)} chunks...[/blue]"
+            )
 
         embeddings = await self.client.embed_texts(texts)
 
         # Assign embeddings and cache
-        for chunk, embedding in zip(uncached_chunks, embeddings):
+        for chunk, embedding in zip(uncached_chunks, embeddings, strict=False):
             chunk.embedding = embedding
             if self.use_cache:
                 embedding_cache.set(chunk.content_hash, embedding)

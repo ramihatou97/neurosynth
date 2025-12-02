@@ -6,16 +6,14 @@ import shutil
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Form
-from fastapi.responses import FileResponse
 import redis.asyncio as redis
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 
 from neurosynth.api.deps import get_redis, get_settings
 from neurosynth.api.models.job import (
     JobConfig,
-    JobCreate,
     JobListResponse,
     JobProgress,
     JobResponse,
@@ -81,7 +79,7 @@ def validate_pdf_file(file_path: Path) -> tuple[bool, str]:
     return True, ""
 
 
-async def _get_job(job_id: str, redis_client: redis.Redis) -> Optional[dict]:
+async def _get_job(job_id: str, redis_client: redis.Redis) -> dict | None:
     """Get job data from Redis."""
     data = await redis_client.hgetall(job_key(job_id))
     if not data:
@@ -103,12 +101,18 @@ async def _job_to_response(job_id: str, data: dict) -> JobResponse:
         topic=data.get("topic", ""),
         progress=progress,
         config=config,
-        created_at=datetime.fromisoformat(data.get("created_at", datetime.utcnow().isoformat())),
+        created_at=datetime.fromisoformat(
+            data.get("created_at", datetime.utcnow().isoformat())
+        ),
         started_at=(
-            datetime.fromisoformat(data["started_at"]) if data.get("started_at") else None
+            datetime.fromisoformat(data["started_at"])
+            if data.get("started_at")
+            else None
         ),
         completed_at=(
-            datetime.fromisoformat(data["completed_at"]) if data.get("completed_at") else None
+            datetime.fromisoformat(data["completed_at"])
+            if data.get("completed_at")
+            else None
         ),
         error=data.get("error"),
         output_path=data.get("output_path"),
@@ -193,7 +197,7 @@ async def create_job(
 
 @router.get("", response_model=JobListResponse)
 async def list_jobs(
-    status: Optional[JobStatus] = None,
+    status: JobStatus | None = None,
     limit: int = 20,
     offset: int = 0,
     redis_client: redis.Redis = Depends(get_redis),
@@ -278,7 +282,11 @@ async def get_job_output(
                 detail=f"Generated PDF file is corrupted: {error_msg}. Please contact support.",
             )
 
-    media_type = "application/pdf" if output_path.endswith(".pdf") else "application/octet-stream"
+    media_type = (
+        "application/pdf"
+        if output_path.endswith(".pdf")
+        else "application/octet-stream"
+    )
 
     return FileResponse(
         output_path,

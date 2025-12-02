@@ -1,11 +1,11 @@
 """API models for request/response schemas."""
 
 from neurosynth.api.models.job import (
+    JobConfig,
     JobCreate,
+    JobProgress,
     JobResponse,
     JobStatus,
-    JobProgress,
-    JobConfig,
 )
 
 __all__ = [

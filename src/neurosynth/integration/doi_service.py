@@ -11,7 +11,6 @@ Features:
 """
 
 import asyncio
-import hashlib
 import json
 import re
 import sqlite3
@@ -66,22 +65,22 @@ class BibliographicRecord:
 
         lines = [
             f"@{entry_type}{{{self.bibkey},",
-            f'    author = {{{authors_str}}},',
+            f"    author = {{{authors_str}}},",
             f'    title = {{{self.title or "Untitled"}}},',
             f'    year = {{{self.year or "n.d."}}},',
         ]
 
         if self.journal:
-            lines.append(f'    journal = {{{self.journal}}},')
+            lines.append(f"    journal = {{{self.journal}}},")
         if self.volume:
-            lines.append(f'    volume = {{{self.volume}}},')
+            lines.append(f"    volume = {{{self.volume}}},")
         if self.issue:
-            lines.append(f'    number = {{{self.issue}}},')
+            lines.append(f"    number = {{{self.issue}}},")
         if self.pages:
-            lines.append(f'    pages = {{{self.pages}}},')
+            lines.append(f"    pages = {{{self.pages}}},")
         if self.publisher:
-            lines.append(f'    publisher = {{{self.publisher}}},')
-        lines.append(f'    doi = {{{self.doi}}},')
+            lines.append(f"    publisher = {{{self.publisher}}},")
+        lines.append(f"    doi = {{{self.doi}}},")
         lines.append("}")
 
         return "\n".join(lines)
@@ -104,18 +103,22 @@ class DOICache:
         """Initialize database schema."""
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("""
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS doi_cache (
                     doi TEXT PRIMARY KEY,
                     data TEXT NOT NULL,
                     resolved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     expires_at TIMESTAMP
                 )
-            """)
-            conn.execute("""
+            """
+            )
+            conn.execute(
+                """
                 CREATE INDEX IF NOT EXISTS idx_expires
                 ON doi_cache(expires_at)
-            """)
+            """
+            )
 
     def get(self, doi: str) -> dict[str, Any] | None:
         """Get cached DOI resolution."""
@@ -280,7 +283,9 @@ class DOIService:
         semaphore = asyncio.Semaphore(concurrency)
         results = {}
 
-        async def resolve_with_semaphore(doi: str) -> tuple[str, BibliographicRecord | None]:
+        async def resolve_with_semaphore(
+            doi: str,
+        ) -> tuple[str, BibliographicRecord | None]:
             async with semaphore:
                 record = await self.resolve(doi)
                 return doi, record

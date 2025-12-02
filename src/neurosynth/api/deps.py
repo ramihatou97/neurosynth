@@ -1,8 +1,7 @@
 """API dependencies - Redis connection, settings, etc."""
 
-import os
+from collections.abc import AsyncGenerator
 from functools import lru_cache
-from typing import AsyncGenerator
 
 import redis.asyncio as redis
 from pydantic_settings import BaseSettings

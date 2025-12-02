@@ -3,7 +3,6 @@
 import asyncio
 import shutil
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -22,7 +21,9 @@ app = typer.Typer(
 console = Console()
 
 
-def safe_copy(src: Path, dst: Path, checkpoint: Optional[SynthesisCheckpoint] = None) -> bool:
+def safe_copy(
+    src: Path, dst: Path, checkpoint: SynthesisCheckpoint | None = None
+) -> bool:
     """Copy file with error handling and logging.
 
     Args:
@@ -44,7 +45,7 @@ def safe_copy(src: Path, dst: Path, checkpoint: Optional[SynthesisCheckpoint] = 
         return False
 
 
-def run_async_safe(coro, checkpoint: Optional[SynthesisCheckpoint] = None):
+def run_async_safe(coro, checkpoint: SynthesisCheckpoint | None = None):
     """Run async coroutine with exception handling to preserve checkpoints.
 
     Args:
@@ -80,9 +81,9 @@ def _print_recovery_info(checkpoint: SynthesisCheckpoint):
     console.print(f"[yellow]Recovery directory: {summary['recovery_dir']}[/yellow]")
     console.print(f"[yellow]Sections saved: {summary['section_count']}[/yellow]")
     console.print(f"[yellow]Figures saved: {summary['figure_count']}[/yellow]")
-    if summary['has_latex']:
+    if summary["has_latex"]:
         console.print("[green]✓ LaTeX source preserved[/green]")
-    if summary['has_pdf']:
+    if summary["has_pdf"]:
         console.print("[green]✓ PDF preserved[/green]")
     console.print("[yellow]═══════════════════════════[/yellow]\n")
 
@@ -195,10 +196,10 @@ def process(
 async def _process_async(project: Path, use_cache: bool):
     """Async processing implementation."""
     from neurosynth.chunking import SemanticChunker
+    from neurosynth.config import get_settings, load_project_config
     from neurosynth.dedup import ClusterMerger, EmbeddingGenerator, SemanticClusterer
     from neurosynth.dedup.embeddings import ExactDeduplicator
     from neurosynth.parsers import ParserFactory
-    from neurosynth.config import load_project_config, get_settings
 
     sources_dir = project / "sources"
     processed_dir = project / "processed"
@@ -208,9 +209,11 @@ async def _process_async(project: Path, use_cache: bool):
     load_project_config(project)
     settings = get_settings()
 
-    console.print(f"[dim]Config: chunk_size={settings.chunk_size}, "
-                  f"chunk_overlap={settings.chunk_overlap}, "
-                  f"similarity_threshold={settings.similarity_threshold}[/dim]")
+    console.print(
+        f"[dim]Config: chunk_size={settings.chunk_size}, "
+        f"chunk_overlap={settings.chunk_overlap}, "
+        f"similarity_threshold={settings.similarity_threshold}[/dim]"
+    )
 
     if not sources_dir.exists():
         console.print("[red]Error: sources/ directory not found[/red]")
@@ -248,7 +251,9 @@ async def _process_async(project: Path, use_cache: bool):
                 chunks = await chunker.chunk_document(doc)
                 all_chunks.extend(chunks)
 
-                progress.update(task, advance=1, description=f"Parsed: {file_path.name}")
+                progress.update(
+                    task, advance=1, description=f"Parsed: {file_path.name}"
+                )
             except Exception as e:
                 console.print(f"[red]Error parsing {file_path.name}: {e}[/red]")
 
@@ -280,6 +285,7 @@ async def _process_async(project: Path, use_cache: bool):
 
     # Save processed data as JSON (portable, debuggable)
     import json
+
     from neurosynth.utils.serialization import NumpyEncoder
 
     clusters_data = [c.to_dict() for c in result.clusters]
@@ -297,7 +303,9 @@ async def _process_async(project: Path, use_cache: bool):
     table.add_row("Dedup Ratio", f"{result.dedup_ratio:.1f}:1")
 
     console.print(table)
-    console.print(f"\n[green]Processing complete. Data saved to {processed_dir}[/green]")
+    console.print(
+        f"\n[green]Processing complete. Data saved to {processed_dir}[/green]"
+    )
 
 
 @app.command()
@@ -308,7 +316,7 @@ def synthesize(
         "-p",
         help="Project directory",
     ),
-    topic: Optional[str] = typer.Option(
+    topic: str | None = typer.Option(
         None,
         "--topic",
         "-t",
@@ -327,10 +335,10 @@ def synthesize(
 
 async def _synthesize_async(
     project: Path,
-    topic: Optional[str],
+    topic: str | None,
     output_format: str,
-    checkpoint: Optional[SynthesisCheckpoint] = None,
-    manifest: Optional[dict] = None,
+    checkpoint: SynthesisCheckpoint | None = None,
+    manifest: dict | None = None,
 ):
     """Async synthesis implementation with checkpoint support.
 
@@ -343,15 +351,13 @@ async def _synthesize_async(
     """
     import pickle
 
-    import yaml
-
+    from neurosynth.config import get_settings, load_project_config
     from neurosynth.latex import LaTeXGenerator
     from neurosynth.synthesis import (
+        CategoryAwareOutlineGenerator,
         OutlineGenerator,
         SectionSynthesizer,
-        CategoryAwareOutlineGenerator,
     )
-    from neurosynth.config import load_project_config, get_settings
 
     processed_dir = project / "processed"
     output_dir = project / "output"
@@ -365,9 +371,11 @@ async def _synthesize_async(
 
     # Log loaded config values for transparency
     settings = get_settings()
-    console.print(f"[dim]Config: chunk_size={settings.chunk_size}, "
-                  f"chunk_overlap={settings.chunk_overlap}, "
-                  f"similarity_threshold={settings.similarity_threshold}[/dim]")
+    console.print(
+        f"[dim]Config: chunk_size={settings.chunk_size}, "
+        f"chunk_overlap={settings.chunk_overlap}, "
+        f"similarity_threshold={settings.similarity_threshold}[/dim]"
+    )
 
     # Load clusters (auto-detect format: .json preferred, .pkl for legacy)
     from neurosynth.models.knowledge import KnowledgeCluster
@@ -378,12 +386,15 @@ async def _synthesize_async(
     if clusters_json.exists():
         # New JSON format
         import json
-        with open(clusters_json, "r", encoding="utf-8") as f:
+
+        with open(clusters_json, encoding="utf-8") as f:
             clusters_data = json.load(f)
         clusters = [KnowledgeCluster.from_dict(c) for c in clusters_data]
     elif clusters_pkl.exists():
         # Legacy pickle format (backward compatibility)
-        console.print("[yellow]Note: Loading legacy .pkl format. Consider re-running 'neurosynth process'.[/yellow]")
+        console.print(
+            "[yellow]Note: Loading legacy .pkl format. Consider re-running 'neurosynth process'.[/yellow]"
+        )
         with open(clusters_pkl, "rb") as f:
             clusters = pickle.load(f)
     else:
@@ -396,11 +407,11 @@ async def _synthesize_async(
     # Check for manifest-driven synthesis (Category Aware)
     if manifest and (manifest.get("template_type") or manifest.get("category_summary")):
         progress_log("Using Category-Aware Synthesis...")
-        
+
         # Generate category-aware outline
         cat_outline_gen = CategoryAwareOutlineGenerator()
         outline = cat_outline_gen.generate(manifest)
-        
+
         # Save outline to checkpoint
         if checkpoint:
             outline_data = [{"title": n.title, "level": n.level} for n in outline]
@@ -410,12 +421,9 @@ async def _synthesize_async(
         progress_log("Synthesizing sections (this may take 5-20 minutes)...")
         synthesizer = SectionSynthesizer()
         chapter = await synthesizer.synthesize_chapter_from_category_outline(
-            topic, 
-            outline, 
-            manifest=manifest,
-            checkpoint=checkpoint
+            topic, outline, manifest=manifest, checkpoint=checkpoint
         )
-        
+
     else:
         # Standard Cluster-based Synthesis
         progress_log("Generating chapter outline...")
@@ -433,8 +441,10 @@ async def _synthesize_async(
         # Synthesize chapter with checkpoint support
         progress_log("Synthesizing sections (this may take 5-20 minutes)...")
         synthesizer = SectionSynthesizer()
-        chapter = await synthesizer.synthesize_chapter(topic, outline, checkpoint=checkpoint)
-    
+        chapter = await synthesizer.synthesize_chapter(
+            topic, outline, checkpoint=checkpoint
+        )
+
     progress_log("Chapter synthesis complete")
 
     # Generate output
@@ -448,7 +458,7 @@ async def _synthesize_async(
 
         # Save LaTeX to checkpoint BEFORE attempting PDF compilation
         if checkpoint:
-            latex_content = tex_path.read_text(encoding='utf-8')
+            latex_content = tex_path.read_text(encoding="utf-8")
             checkpoint.save_latex(latex_content)
 
             # Copy figures to checkpoint
@@ -505,7 +515,7 @@ def run(
         "-o",
         help="Output file path",
     ),
-    manifest: Optional[Path] = typer.Option(
+    manifest: Path | None = typer.Option(
         None,
         "--manifest",
         "-m",
@@ -521,12 +531,16 @@ def run(
     manifest_data = None
     if manifest and manifest.exists():
         import json
-        with open(manifest, "r", encoding="utf-8") as f:
+
+        with open(manifest, encoding="utf-8") as f:
             manifest_data = json.load(f)
             # Save manifest to checkpoint
             checkpoint.save_manifest(manifest_data)
 
-    run_async_safe(_run_full_pipeline(topic, sources, output, checkpoint, manifest_data), checkpoint)
+    run_async_safe(
+        _run_full_pipeline(topic, sources, output, checkpoint, manifest_data),
+        checkpoint,
+    )
 
 
 def progress_log(message: str):
@@ -538,8 +552,8 @@ async def _run_full_pipeline(
     topic: str,
     sources: Path,
     output: Path,
-    checkpoint: Optional[SynthesisCheckpoint] = None,
-    manifest: Optional[dict] = None,
+    checkpoint: SynthesisCheckpoint | None = None,
+    manifest: dict | None = None,
 ):
     """Run complete pipeline with checkpoint support.
 
@@ -577,7 +591,9 @@ async def _run_full_pipeline(
                 copy_failed += 1
 
         if copy_failed > 0:
-            console.print(f"[yellow]Warning: {copy_failed} files failed to copy[/yellow]")
+            console.print(
+                f"[yellow]Warning: {copy_failed} files failed to copy[/yellow]"
+            )
 
         # Create config
         config = f'topic: "{topic}"\n'
@@ -596,11 +612,13 @@ async def _run_full_pipeline(
 
         if clusters_json.exists():
             import json
-            with open(clusters_json, "r", encoding="utf-8") as f:
+
+            with open(clusters_json, encoding="utf-8") as f:
                 clusters_data = json.load(f)
             checkpoint.save_stage("clusters", clusters_data)
         elif clusters_pkl.exists():
             import pickle
+
             with open(clusters_pkl, "rb") as f:
                 clusters_data = pickle.load(f)
             checkpoint.save_stage("clusters", clusters_data)
@@ -619,7 +637,9 @@ async def _run_full_pipeline(
             if safe_copy(output_files[0], output, checkpoint):
                 checkpoint.copy_pdf(output)
                 progress_log(f"Complete! Saved to: {output.name}")
-                console.print(f"\n[bold green]Complete! Output saved to: {output}[/bold green]")
+                console.print(
+                    f"\n[bold green]Complete! Output saved to: {output}[/bold green]"
+                )
                 checkpoint.mark_complete()
             else:
                 console.print("[red]Failed to copy final PDF[/red]")
@@ -646,7 +666,9 @@ async def _run_full_pipeline(
 
 @app.command(name="import")
 def import_manifest(
-    manifest: Path = typer.Argument(..., help="Path to manifest.json from Reference Library"),
+    manifest: Path = typer.Argument(
+        ..., help="Path to manifest.json from Reference Library"
+    ),
     output: Path = typer.Option(
         None,
         "--output",
@@ -662,23 +684,26 @@ def import_manifest(
     """Import sources from Reference Library App manifest."""
     # Read manifest first to get topic for checkpoint
     import json
+
     if manifest.exists():
-        with open(manifest, "r", encoding="utf-8") as f:
+        with open(manifest, encoding="utf-8") as f:
             data = json.load(f)
         topic = data.get("topic", "Imported Chapter")
         checkpoint = SynthesisCheckpoint(topic)
         checkpoint.save_manifest(data)
         console.print(f"[dim]Recovery directory: {checkpoint.recovery_dir}[/dim]")
-        run_async_safe(_import_manifest_async(manifest, output, auto_run, checkpoint), checkpoint)
+        run_async_safe(
+            _import_manifest_async(manifest, output, auto_run, checkpoint), checkpoint
+        )
     else:
         run_async_safe(_import_manifest_async(manifest, output, auto_run))
 
 
 async def _import_manifest_async(
     manifest: Path,
-    output: Optional[Path],
+    output: Path | None,
     auto_run: bool,
-    checkpoint: Optional[SynthesisCheckpoint] = None
+    checkpoint: SynthesisCheckpoint | None = None,
 ):
     """Import from manifest file with checkpoint support.
 
@@ -695,7 +720,7 @@ async def _import_manifest_async(
         return
 
     # Load manifest
-    with open(manifest, "r", encoding="utf-8") as f:
+    with open(manifest, encoding="utf-8") as f:
         data = json.load(f)
 
     topic = data.get("topic", "Imported Chapter")
@@ -744,7 +769,9 @@ async def _import_manifest_async(
         await _run_full_pipeline(topic, sources_dir, output, checkpoint, data)
     else:
         console.print("\n[green]Import complete. Run synthesis with:[/green]")
-        console.print(f'neurosynth run "{topic}" --sources {sources_dir} --output {output}')
+        console.print(
+            f'neurosynth run "{topic}" --sources {sources_dir} --output {output}'
+        )
 
 
 @app.command()
@@ -769,7 +796,9 @@ def status(
     # Check sources
     if sources_dir.exists():
         source_count = len(list(sources_dir.glob("*.*")))
-        table.add_row("Sources", "✓" if source_count > 0 else "○", f"{source_count} files")
+        table.add_row(
+            "Sources", "✓" if source_count > 0 else "○", f"{source_count} files"
+        )
     else:
         table.add_row("Sources", "✗", "Directory not found")
 
@@ -803,7 +832,7 @@ def cache(
         ...,
         help="Action: stats, clear, or prune",
     ),
-    model: Optional[str] = typer.Option(
+    model: str | None = typer.Option(
         None,
         "--model",
         "-m",
@@ -840,11 +869,13 @@ def cache(
 
         table.add_row("Database Path", str(cache.db_path))
         table.add_row("Total Entries", str(stats.get("total_entries", 0)))
-        table.add_row("Current Model Entries", str(stats.get("current_model_entries", 0)))
+        table.add_row(
+            "Current Model Entries", str(stats.get("current_model_entries", 0))
+        )
         table.add_row("Memory Cache Size", str(stats.get("memory_cache_size", 0)))
         table.add_row(
             "Size",
-            f"{stats.get('size_mb', 0):.2f} MB / {stats.get('max_size_mb', 'unlimited')} MB"
+            f"{stats.get('size_mb', 0):.2f} MB / {stats.get('max_size_mb', 'unlimited')} MB",
         )
         table.add_row("Current Model", stats.get("model_name", "N/A"))
         table.add_row("Chunk Config", stats.get("chunk_config", "N/A"))
@@ -874,7 +905,9 @@ def cache(
         if model:
             # Clear specific model
             deleted = cache.invalidate_model(model)
-            console.print(f"[green]Cleared {deleted} entries for model: {model}[/green]")
+            console.print(
+                f"[green]Cleared {deleted} entries for model: {model}[/green]"
+            )
         else:
             # Clear all
             confirm = typer.confirm(
@@ -916,7 +949,9 @@ def cache(
                 f"New size: {new_stats.get('size_mb', 0):.2f}MB[/green]"
             )
         else:
-            console.print("[green]No pruning needed - cache is within target size[/green]")
+            console.print(
+                "[green]No pruning needed - cache is within target size[/green]"
+            )
 
     else:
         console.print(f"[red]Unknown action: {action}[/red]")

@@ -35,7 +35,7 @@ class GeminiClient:
         logger.info(f"Initialized GeminiClient with model: {self.model_name}")
 
     @retry(
-        stop=stop_after_attempt(5), # Will be updated in __init__ if possible
+        stop=stop_after_attempt(5),  # Will be updated in __init__ if possible
         wait=wait_exponential(multiplier=1, min=2, max=60),
         retry=retry_if_exception_type(
             (
@@ -70,9 +70,9 @@ class GeminiClient:
             response = await loop.run_in_executor(
                 None,
                 lambda: self.model.generate_content(
-                    prompt, 
+                    prompt,
                     generation_config=config,
-                    request_options={'timeout': self.timeout}
+                    request_options={"timeout": self.timeout},
                 ),
             )
 

@@ -1,13 +1,10 @@
 """Chapter synthesis engine."""
 
-from neurosynth.synthesis.conflicts import ConflictHandler
-from neurosynth.synthesis.outline import OutlineGenerator
-from neurosynth.synthesis.section import SectionSynthesizer
 from neurosynth.synthesis.category_outline import (
     CategoryAwareOutlineGenerator,
+    OutlineNode,
     OutlineTemplate,
     SectionBlueprint,
-    OutlineNode,
 )
 from neurosynth.synthesis.checkpoint import (
     SynthesisCheckpoint,
@@ -15,18 +12,21 @@ from neurosynth.synthesis.checkpoint import (
     list_recoveries,
 )
 from neurosynth.synthesis.citation_resolver import (
-    XMLToLatexResolver,
-    SourceMapping,
     CitationStats,
+    SourceMapping,
+    XMLToLatexResolver,
     resolve_xml_to_latex,
 )
+from neurosynth.synthesis.conflicts import ConflictHandler
+from neurosynth.synthesis.outline import OutlineGenerator
+from neurosynth.synthesis.section import SectionSynthesizer
 from neurosynth.synthesis.verifier import (
     SynthesisVerifier,
+    VerificationIssue,
     VerificationResult,
     VerificationStatus,
-    VerificationIssue,
-    verify_synthesis,
     get_verifier,
+    verify_synthesis,
 )
 
 __all__ = [

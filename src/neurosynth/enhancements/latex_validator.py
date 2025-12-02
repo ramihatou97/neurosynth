@@ -13,13 +13,12 @@ Key features:
 Version: 1.0
 """
 
+import logging
+import os
 import re
 import subprocess
 import tempfile
-import os
-import logging
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +26,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 # DATA STRUCTURES
 # =============================================================================
+
 
 @dataclass
 class ValidationResult:
@@ -36,10 +36,11 @@ class ValidationResult:
     Provides validation status, error/warning messages, and optionally
     an auto-fixed version of the code.
     """
+
     is_valid: bool
-    errors: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
-    fixed_code: Optional[str] = None  # Auto-fixed version (if fixable)
+    errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    fixed_code: str | None = None  # Auto-fixed version (if fixable)
 
     def __str__(self) -> str:
         """Human-readable validation result."""
@@ -61,6 +62,7 @@ class ValidationResult:
 # STRING UTILITIES
 # =============================================================================
 
+
 def escape_latex(text: str) -> str:
     """
     Escape special LaTeX characters in text.
@@ -81,16 +83,16 @@ def escape_latex(text: str) -> str:
 
     # Order matters: backslash first, then others
     replacements = [
-        ('\\', r'\textbackslash{}'),
-        ('&', r'\&'),
-        ('%', r'\%'),
-        ('$', r'\$'),
-        ('#', r'\#'),
-        ('_', r'\_'),
-        ('{', r'\{'),
-        ('}', r'\}'),
-        ('~', r'\textasciitilde{}'),
-        ('^', r'\textasciicircum{}'),
+        ("\\", r"\textbackslash{}"),
+        ("&", r"\&"),
+        ("%", r"\%"),
+        ("$", r"\$"),
+        ("#", r"\#"),
+        ("_", r"\_"),
+        ("{", r"\{"),
+        ("}", r"\}"),
+        ("~", r"\textasciitilde{}"),
+        ("^", r"\textasciicircum{}"),
     ]
 
     escaped = text
@@ -122,13 +124,13 @@ def sanitize_label(label: str) -> str:
     sanitized = label.lower()
 
     # Replace spaces and special chars with dash
-    sanitized = re.sub(r'[^a-z0-9_-]', '-', sanitized)
+    sanitized = re.sub(r"[^a-z0-9_-]", "-", sanitized)
 
     # Remove consecutive dashes
-    sanitized = re.sub(r'-+', '-', sanitized)
+    sanitized = re.sub(r"-+", "-", sanitized)
 
     # Remove leading/trailing dashes
-    sanitized = sanitized.strip('-')
+    sanitized = sanitized.strip("-")
 
     # Ensure not empty
     if not sanitized:
@@ -158,16 +160,16 @@ def unescape_latex(text: str) -> str:
         return ""
 
     replacements = [
-        (r'\textbackslash{}', '\\'),
-        (r'\&', '&'),
-        (r'\%', '%'),
-        (r'\$', '$'),
-        (r'\#', '#'),
-        (r'\_', '_'),
-        (r'\{', '{'),
-        (r'\}', '}'),
-        (r'\textasciitilde{}', '~'),
-        (r'\textasciicircum{}', '^'),
+        (r"\textbackslash{}", "\\"),
+        (r"\&", "&"),
+        (r"\%", "%"),
+        (r"\$", "$"),
+        (r"\#", "#"),
+        (r"\_", "_"),
+        (r"\{", "{"),
+        (r"\}", "}"),
+        (r"\textasciitilde{}", "~"),
+        (r"\textasciicircum{}", "^"),
     ]
 
     unescaped = text
@@ -180,6 +182,7 @@ def unescape_latex(text: str) -> str:
 # =============================================================================
 # LATEX VALIDATOR
 # =============================================================================
+
 
 class LaTeXValidator:
     """
@@ -204,7 +207,7 @@ class LaTeXValidator:
                                (requires TeX installation)
         """
         self.enable_compilation = enable_compilation
-        self.special_chars = r'&%$#_{}~^\\'
+        self.special_chars = r"&%$#_{}~^\\"
 
         # Check if pdflatex available
         self.has_pdflatex = False
@@ -224,9 +227,7 @@ class LaTeXValidator:
         """Check if pdflatex is available on system."""
         try:
             result = subprocess.run(
-                ['pdflatex', '--version'],
-                capture_output=True,
-                timeout=5
+                ["pdflatex", "--version"], capture_output=True, timeout=5
             )
             return result.returncode == 0
         except (subprocess.TimeoutExpired, FileNotFoundError):
@@ -283,16 +284,11 @@ class LaTeXValidator:
                 warnings.append(f"Auto-fix failed: {e}")
 
         return ValidationResult(
-            is_valid=is_valid,
-            errors=errors,
-            warnings=warnings,
-            fixed_code=fixed_code
+            is_valid=is_valid, errors=errors, warnings=warnings, fixed_code=fixed_code
         )
 
     def validate_with_compilation(
-        self,
-        latex_code: str,
-        timeout: float = 10.0
+        self, latex_code: str, timeout: float = 10.0
     ) -> ValidationResult:
         """
         Validate by compiling with pdflatex.
@@ -309,7 +305,7 @@ class LaTeXValidator:
         if not self.has_pdflatex:
             return ValidationResult(
                 is_valid=False,
-                errors=["pdflatex not available for compilation validation"]
+                errors=["pdflatex not available for compilation validation"],
             )
 
         try:
@@ -321,16 +317,16 @@ class LaTeXValidator:
                 # Wrap code in minimal document
                 full_doc = self._wrap_in_document(latex_code)
 
-                with open(tex_file, 'w', encoding='utf-8') as f:
+                with open(tex_file, "w", encoding="utf-8") as f:
                     f.write(full_doc)
 
                 # Run pdflatex
                 result = subprocess.run(
-                    ['pdflatex', '-interaction=nonstopmode', 'test.tex'],
+                    ["pdflatex", "-interaction=nonstopmode", "test.tex"],
                     cwd=tmpdir,
                     capture_output=True,
                     text=True,
-                    timeout=timeout
+                    timeout=timeout,
                 )
 
                 # Parse output for errors
@@ -339,19 +335,15 @@ class LaTeXValidator:
                 return ValidationResult(
                     is_valid=(result.returncode == 0 and not errors),
                     errors=errors,
-                    warnings=warnings
+                    warnings=warnings,
                 )
 
         except subprocess.TimeoutExpired:
             return ValidationResult(
-                is_valid=False,
-                errors=[f"Compilation timed out after {timeout}s"]
+                is_valid=False, errors=[f"Compilation timed out after {timeout}s"]
             )
         except Exception as e:
-            return ValidationResult(
-                is_valid=False,
-                errors=[f"Compilation failed: {e}"]
-            )
+            return ValidationResult(is_valid=False, errors=[f"Compilation failed: {e}"])
 
     def fix_common_errors(self, latex_code: str) -> str:
         """
@@ -377,17 +369,13 @@ class LaTeXValidator:
             return f"\\caption{{{escaped_text}}}"
 
         fixed = re.sub(
-            r'\\caption\{([^}]*)\}',
-            escape_caption_content,
-            fixed,
-            flags=re.DOTALL
+            r"\\caption\{([^}]*)\}", escape_caption_content, fixed, flags=re.DOTALL
         )
 
         # Fix 2: Add missing \centering if not present
-        if r'\centering' not in fixed and r'\begin{figure}' in fixed:
+        if r"\centering" not in fixed and r"\begin{figure}" in fixed:
             fixed = fixed.replace(
-                r'\begin{figure}',
-                r'\begin{figure}' + '\n  \\centering'
+                r"\begin{figure}", r"\begin{figure}" + "\n  \\centering"
             )
 
         # Fix 3: Ensure label is sanitized
@@ -396,15 +384,11 @@ class LaTeXValidator:
             sanitized = sanitize_label(label_text)
             return f"\\label{{{sanitized}}}"
 
-        fixed = re.sub(
-            r'\\label\{([^}]*)\}',
-            sanitize_label_content,
-            fixed
-        )
+        fixed = re.sub(r"\\label\{([^}]*)\}", sanitize_label_content, fixed)
 
         return fixed
 
-    def _check_balanced_braces(self, latex_code: str) -> List[str]:
+    def _check_balanced_braces(self, latex_code: str) -> list[str]:
         """
         Check if braces are balanced.
 
@@ -419,15 +403,13 @@ class LaTeXValidator:
         position = 0
 
         for i, char in enumerate(latex_code):
-            if char == '{':
+            if char == "{":
                 depth += 1
-            elif char == '}':
+            elif char == "}":
                 depth -= 1
 
             if depth < 0:
-                errors.append(
-                    f"Unbalanced braces: Extra '}}' at position {i}"
-                )
+                errors.append(f"Unbalanced braces: Extra '}}' at position {i}")
                 break
 
             position = i
@@ -439,7 +421,7 @@ class LaTeXValidator:
 
         return errors
 
-    def _check_required_commands(self, latex_code: str) -> List[str]:
+    def _check_required_commands(self, latex_code: str) -> list[str]:
         """
         Check for required LaTeX commands in figure code.
 
@@ -452,9 +434,9 @@ class LaTeXValidator:
         errors = []
 
         required_patterns = [
-            (r'\\begin\{figure\}', r'\begin{figure}'),
-            (r'\\includegraphics', r'\includegraphics'),
-            (r'\\end\{figure\}', r'\end{figure}'),
+            (r"\\begin\{figure\}", r"\begin{figure}"),
+            (r"\\includegraphics", r"\includegraphics"),
+            (r"\\end\{figure\}", r"\end{figure}"),
         ]
 
         for pattern, command_name in required_patterns:
@@ -463,7 +445,7 @@ class LaTeXValidator:
 
         return errors
 
-    def _check_label_format(self, latex_code: str) -> List[str]:
+    def _check_label_format(self, latex_code: str) -> list[str]:
         """
         Check label format validity.
 
@@ -476,12 +458,12 @@ class LaTeXValidator:
         warnings = []
 
         # Find all \label{...} commands
-        label_pattern = r'\\label\{([^}]*)\}'
+        label_pattern = r"\\label\{([^}]*)\}"
         labels = re.findall(label_pattern, latex_code)
 
         for label in labels:
             # Check for invalid characters
-            if not re.match(r'^[a-zA-Z0-9_-]+$', label):
+            if not re.match(r"^[a-zA-Z0-9_-]+$", label):
                 warnings.append(
                     f"Label '{label}' contains invalid characters "
                     "(should be alphanumeric, dash, or underscore only)"
@@ -489,7 +471,7 @@ class LaTeXValidator:
 
         return warnings
 
-    def _check_caption_escaping(self, latex_code: str) -> List[str]:
+    def _check_caption_escaping(self, latex_code: str) -> list[str]:
         """
         Check if caption text is properly escaped.
 
@@ -502,7 +484,7 @@ class LaTeXValidator:
         warnings = []
 
         # Find all \caption{...} commands
-        caption_pattern = r'\\caption\{([^}]*)\}'
+        caption_pattern = r"\\caption\{([^}]*)\}"
         captions = re.findall(caption_pattern, latex_code, re.DOTALL)
 
         for caption in captions:
@@ -510,13 +492,13 @@ class LaTeXValidator:
             unescaped_chars = []
 
             # Don't check for \ since it could be intentional commands
-            dangerous_chars = '&%$#_'
+            dangerous_chars = "&%$#_"
             for char in dangerous_chars:
                 # Check if char appears without backslash before it
                 if char in caption:
                     # Simple check: if char appears, warn
                     # (More sophisticated: check if \char appears)
-                    if f'\\{char}' not in caption:
+                    if f"\\{char}" not in caption:
                         unescaped_chars.append(char)
 
             if unescaped_chars:
@@ -545,11 +527,7 @@ class LaTeXValidator:
 \\end{{document}}
 """
 
-    def _parse_latex_log(
-        self,
-        stdout: str,
-        stderr: str
-    ) -> Tuple[List[str], List[str]]:
+    def _parse_latex_log(self, stdout: str, stderr: str) -> tuple[list[str], list[str]]:
         """
         Parse pdflatex output for errors and warnings.
 
@@ -566,14 +544,14 @@ class LaTeXValidator:
         combined_output = stdout + "\n" + stderr
 
         # Extract error lines (start with !)
-        error_pattern = r'^!\s*(.+)$'
+        error_pattern = r"^!\s*(.+)$"
         for match in re.finditer(error_pattern, combined_output, re.MULTILINE):
             error_msg = match.group(1).strip()
             if error_msg:
                 errors.append(error_msg)
 
         # Extract warning lines
-        warning_pattern = r'(LaTeX Warning|Warning):\s*(.+)$'
+        warning_pattern = r"(LaTeX Warning|Warning):\s*(.+)$"
         for match in re.finditer(warning_pattern, combined_output, re.MULTILINE):
             warning_msg = match.group(2).strip()
             if warning_msg:
@@ -582,9 +560,7 @@ class LaTeXValidator:
         return errors, warnings
 
     def validate_figure_code(
-        self,
-        latex_code: str,
-        use_compilation: bool = False
+        self, latex_code: str, use_compilation: bool = False
     ) -> ValidationResult:
         """
         Validate figure code using syntax or compilation validation.
@@ -610,6 +586,7 @@ class LaTeXValidator:
 # VALIDATION HELPERS
 # =============================================================================
 
+
 def validate_figure_environment(latex_code: str) -> bool:
     """
     Quick check if code contains a valid figure environment.
@@ -620,14 +597,14 @@ def validate_figure_environment(latex_code: str) -> bool:
     Returns:
         True if contains \\begin{figure} ... \\end{figure}
     """
-    has_begin = r'\begin{figure}' in latex_code
-    has_end = r'\end{figure}' in latex_code
-    has_includegraphics = r'\includegraphics' in latex_code
+    has_begin = r"\begin{figure}" in latex_code
+    has_end = r"\end{figure}" in latex_code
+    has_includegraphics = r"\includegraphics" in latex_code
 
     return has_begin and has_end and has_includegraphics
 
 
-def extract_label_from_code(latex_code: str) -> Optional[str]:
+def extract_label_from_code(latex_code: str) -> str | None:
     """
     Extract label from LaTeX figure code.
 
@@ -640,13 +617,13 @@ def extract_label_from_code(latex_code: str) -> Optional[str]:
     Example:
         extract_label_from_code(r"\\label{fig:test}") → "fig:test"
     """
-    match = re.search(r'\\label\{([^}]*)\}', latex_code)
+    match = re.search(r"\\label\{([^}]*)\}", latex_code)
     if match:
         return match.group(1)
     return None
 
 
-def extract_caption_from_code(latex_code: str) -> Optional[str]:
+def extract_caption_from_code(latex_code: str) -> str | None:
     """
     Extract caption from LaTeX figure code.
 
@@ -659,7 +636,7 @@ def extract_caption_from_code(latex_code: str) -> Optional[str]:
     Example:
         extract_caption_from_code(r"\\caption{Test}") → "Test"
     """
-    match = re.search(r'\\caption\{([^}]*)\}', latex_code, re.DOTALL)
+    match = re.search(r"\\caption\{([^}]*)\}", latex_code, re.DOTALL)
     if match:
         caption_text = match.group(1)
         return unescape_latex(caption_text)
@@ -671,12 +648,12 @@ def extract_caption_from_code(latex_code: str) -> Optional[str]:
 # =============================================================================
 
 __all__ = [
-    'ValidationResult',
-    'escape_latex',
-    'sanitize_label',
-    'unescape_latex',
-    'LaTeXValidator',
-    'validate_figure_environment',
-    'extract_label_from_code',
-    'extract_caption_from_code',
+    "ValidationResult",
+    "escape_latex",
+    "sanitize_label",
+    "unescape_latex",
+    "LaTeXValidator",
+    "validate_figure_environment",
+    "extract_label_from_code",
+    "extract_caption_from_code",
 ]

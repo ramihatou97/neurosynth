@@ -79,16 +79,17 @@ class ColPaliClient:
             from colpali_engine.models import ColPali, ColPaliProcessor
 
             # Determine dtype based on device
-            if self.device == "cpu":
-                dtype = torch.float32
-            else:
-                dtype = torch.float16
+            dtype = torch.float32 if self.device == "cpu" else torch.float16
 
             # Load model
-            ColPaliClient._model = ColPali.from_pretrained(
-                self.model_name,
-                torch_dtype=dtype,
-            ).to(self.device).eval()
+            ColPaliClient._model = (
+                ColPali.from_pretrained(
+                    self.model_name,
+                    torch_dtype=dtype,
+                )
+                .to(self.device)
+                .eval()
+            )
 
             # Load processor
             ColPaliClient._processor = ColPaliProcessor.from_pretrained(self.model_name)
@@ -176,7 +177,9 @@ class ColPaliClient:
                 try:
                     pil_images.append(Image.open(img).convert("RGB"))
                 except Exception as e:
-                    console.print(f"[yellow]Warning: Could not load image {img}: {e}[/yellow]")
+                    console.print(
+                        f"[yellow]Warning: Could not load image {img}: {e}[/yellow]"
+                    )
                     continue
             elif isinstance(img, Image.Image):
                 pil_images.append(img.convert("RGB"))
@@ -233,13 +236,17 @@ class ColPaliClient:
         """
         # Filter elements that need embedding
         to_embed = [
-            e for e in elements if e.visual_embedding is None and e.image_path and e.image_path.exists()
+            e
+            for e in elements
+            if e.visual_embedding is None and e.image_path and e.image_path.exists()
         ]
 
         if not to_embed:
             return elements
 
-        console.print(f"[blue]Generating ColPali embeddings for {len(to_embed)} images...[/blue]")
+        console.print(
+            f"[blue]Generating ColPali embeddings for {len(to_embed)} images...[/blue]"
+        )
 
         # Get image paths
         image_paths = [e.image_path for e in to_embed]
@@ -248,7 +255,7 @@ class ColPaliClient:
         embeddings = await self.embed_images(image_paths)
 
         # Assign embeddings to elements
-        for element, embedding in zip(to_embed, embeddings):
+        for element, embedding in zip(to_embed, embeddings, strict=False):
             element.visual_embedding = embedding
             element.embedding_model = self.model_name
 

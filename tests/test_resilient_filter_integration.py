@@ -5,14 +5,14 @@ with fallback chain: Enhanced → Basic → Permissive → Legacy.
 
 Integration: image_extractor.py - added filter_image() method
 """
-import pytest
+
 import io
 import random
+
 from PIL import Image
-from pathlib import Path
-from neurosynth.parsers.image_extractor import ImageExtractor
+
 from neurosynth.models.visual import ImageType
-from neurosynth.config import Settings
+from neurosynth.parsers.image_extractor import ImageExtractor
 
 
 def create_complex_image(width: int, height: int) -> bytes:
@@ -47,12 +47,14 @@ class TestResilientFilterIntegration:
         extractor = ImageExtractor()
 
         # Should have filter_image method
-        assert hasattr(extractor, 'filter_image'), \
-            "ImageExtractor should have filter_image() method"
+        assert hasattr(
+            extractor, "filter_image"
+        ), "ImageExtractor should have filter_image() method"
 
         # Should have filter_stats
-        assert hasattr(extractor, 'filter_stats'), \
-            "ImageExtractor should have filter_stats dict"
+        assert hasattr(
+            extractor, "filter_stats"
+        ), "ImageExtractor should have filter_stats dict"
 
         # May or may not have resilient_filter depending on config
         has_resilient = extractor.resilient_filter is not None
@@ -81,11 +83,15 @@ class TestResilientFilterIntegration:
         )
 
         # Verify result structure
-        assert hasattr(result, 'is_valid'), "Result should have is_valid"
-        assert hasattr(result, 'rejection_reason'), "Result should have rejection_reason"
-        assert hasattr(result, 'confidence'), "Result should have confidence"
+        assert hasattr(result, "is_valid"), "Result should have is_valid"
+        assert hasattr(
+            result, "rejection_reason"
+        ), "Result should have rejection_reason"
+        assert hasattr(result, "confidence"), "Result should have confidence"
 
-        print(f"  ✓ filter_image() works (500x400: {'ACCEPT' if result.is_valid else 'REJECT'})")
+        print(
+            f"  ✓ filter_image() works (500x400: {'ACCEPT' if result.is_valid else 'REJECT'})"
+        )
 
     def test_filter_accepts_valid_medical_image(self):
         """Test that valid medical images are accepted."""
@@ -103,10 +109,16 @@ class TestResilientFilterIntegration:
             context_text="intraoperative view of craniotomy",
         )
 
-        assert result.is_valid, f"Should accept 800x600 surgical image: {result.rejection_reason}"
-        assert result.confidence >= 0.2, f"Should have some confidence: {result.confidence}"
+        assert (
+            result.is_valid
+        ), f"Should accept 800x600 surgical image: {result.rejection_reason}"
+        assert (
+            result.confidence >= 0.2
+        ), f"Should have some confidence: {result.confidence}"
 
-        print(f"  ✓ Valid surgical image accepted (confidence: {result.confidence:.2f})")
+        print(
+            f"  ✓ Valid surgical image accepted (confidence: {result.confidence:.2f})"
+        )
 
     def test_filter_rejects_tiny_icon(self):
         """Test that tiny icons are rejected."""
@@ -152,17 +164,17 @@ class TestResilientFilterIntegration:
         extractor = ImageExtractor()
 
         # Reset stats
-        extractor.filter_stats = {k: 0 for k in extractor.filter_stats}
+        extractor.filter_stats = dict.fromkeys(extractor.filter_stats, 0)
 
         # Process several images
         test_images = [
-            (800, 600, True, "complex"),   # Accept
-            (32, 32, False, "simple"),      # Reject
-            (500, 400, True, "complex"),   # Accept
-            (1000, 5, False, "simple"),    # Reject
+            (800, 600, True, "complex"),  # Accept
+            (32, 32, False, "simple"),  # Reject
+            (500, 400, True, "complex"),  # Accept
+            (1000, 5, False, "simple"),  # Reject
         ]
 
-        for width, height, should_accept, complexity in test_images:
+        for width, height, _should_accept, complexity in test_images:
             if complexity == "complex":
                 image_bytes = create_complex_image(width, height)
             else:
@@ -179,9 +191,9 @@ class TestResilientFilterIntegration:
 
         # Check stats
         stats = extractor.filter_stats
-        assert stats['total_filtered'] == 4, "Should have processed 4 images"
-        assert stats['accepted'] > 0, "Should have accepted some images"
-        assert stats['rejected'] > 0, "Should have rejected some images"
+        assert stats["total_filtered"] == 4, "Should have processed 4 images"
+        assert stats["accepted"] > 0, "Should have accepted some images"
+        assert stats["rejected"] > 0, "Should have rejected some images"
 
         print(f"  ✓ Statistics tracked: {stats['total_filtered']} processed")
         print(f"    Accepted: {stats['accepted']}, Rejected: {stats['rejected']}")
@@ -207,18 +219,18 @@ class TestResilientFilterIntegration:
         )
 
         # Should get a result regardless of which filter tier was used
-        assert hasattr(result, 'is_valid')
-        assert hasattr(result, 'confidence')
+        assert hasattr(result, "is_valid")
+        assert hasattr(result, "confidence")
 
         # Check which filter was used
         stats = extractor.filter_stats
-        if stats['enhanced_used'] > 0:
+        if stats["enhanced_used"] > 0:
             print("  ✓ Enhanced (Tier 1) filter used")
-        elif stats['basic_fallback'] > 0:
+        elif stats["basic_fallback"] > 0:
             print("  ✓ Basic (Tier 2) filter used")
-        elif stats['permissive_fallback'] > 0:
+        elif stats["permissive_fallback"] > 0:
             print("  ✓ Permissive (Tier 3) filter used")
-        elif stats['legacy_used'] > 0:
+        elif stats["legacy_used"] > 0:
             print("  ✓ Legacy 6-rule filter used")
 
     def test_backward_compatibility(self):
@@ -246,9 +258,9 @@ class TestResilientFilterIntegration:
 
 def run_all_tests():
     """Run all resilient filter integration tests."""
-    print("="*70)
+    print("=" * 70)
     print("PHASE 3.3: RESILIENT FILTER INTEGRATION TESTING")
-    print("="*70)
+    print("=" * 70)
     print()
 
     test = TestResilientFilterIntegration()
@@ -281,9 +293,9 @@ def run_all_tests():
     test.test_resilient_filter_fallback_chain()
     print()
 
-    print("="*70)
+    print("=" * 70)
     print("✅ ALL RESILIENT FILTER INTEGRATION TESTS PASSED")
-    print("="*70)
+    print("=" * 70)
 
 
 if __name__ == "__main__":

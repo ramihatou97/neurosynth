@@ -1,7 +1,6 @@
 """Custom exceptions for LaTeX/PDF generation."""
 
 from pathlib import Path
-from typing import Any
 
 
 class PDFGenerationError(Exception):

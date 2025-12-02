@@ -7,13 +7,13 @@ from rich.console import Console
 
 from neurosynth.config import get_settings
 from neurosynth.llm.claude import ClaudeClient
+from neurosynth.models.document import ContentChunk
 from neurosynth.models.knowledge import (
     Conflict,
     ConflictType,
     KnowledgeCluster,
     Perspective,
 )
-from neurosynth.models.document import ContentChunk
 
 console = Console()
 
@@ -85,8 +85,10 @@ class ClusterMerger:
         return MergeResult(
             merged_content=merged_content,
             conflicts=conflicts,
-            sources_used=len(set(c.source.id for c in cluster.chunks)),
-            unique_details_preserved=self._count_unique_details(chunk_data, merged_content),
+            sources_used=len({c.source.id for c in cluster.chunks}),
+            unique_details_preserved=self._count_unique_details(
+                chunk_data, merged_content
+            ),
         )
 
     async def merge_all_clusters(
@@ -104,7 +106,9 @@ class ClusterMerger:
         """
         settings = get_settings()
         max_concurrent = max_concurrent or settings.merge_concurrency
-        console.print(f"[blue]Merging {len(clusters)} clusters (parallel, max {max_concurrent} concurrent)...[/blue]")
+        console.print(
+            f"[blue]Merging {len(clusters)} clusters (parallel, max {max_concurrent} concurrent)...[/blue]"
+        )
 
         # Semaphore to limit concurrent API calls
         semaphore = asyncio.Semaphore(max_concurrent)
@@ -113,7 +117,9 @@ class ClusterMerger:
         completed = 0
         total_multi_chunk = sum(1 for c in clusters if len(c.chunks) > 1)
 
-        async def merge_with_limit(cluster: KnowledgeCluster, index: int) -> MergeResult:
+        async def merge_with_limit(
+            cluster: KnowledgeCluster, index: int
+        ) -> MergeResult:
             nonlocal completed
             async with semaphore:
                 if len(cluster.chunks) > 1:
@@ -131,10 +137,7 @@ class ClusterMerger:
                 return result
 
         # Create tasks for all clusters
-        tasks = [
-            merge_with_limit(cluster, i)
-            for i, cluster in enumerate(clusters)
-        ]
+        tasks = [merge_with_limit(cluster, i) for i, cluster in enumerate(clusters)]
 
         # Execute all in parallel with semaphore limiting concurrency
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -145,12 +148,14 @@ class ClusterMerger:
             if isinstance(result, Exception):
                 console.print(f"[red]Error merging cluster {i}: {result}[/red]")
                 # Create empty result for failed cluster
-                final_results.append(MergeResult(
-                    merged_content="",
-                    conflicts=[],
-                    sources_used=0,
-                    unique_details_preserved=0,
-                ))
+                final_results.append(
+                    MergeResult(
+                        merged_content="",
+                        conflicts=[],
+                        sources_used=0,
+                        unique_details_preserved=0,
+                    )
+                )
             else:
                 final_results.append(result)
 
@@ -181,10 +186,14 @@ class ClusterMerger:
             for p in raw.get("perspectives", []):
                 # Find matching chunk for source attribution
                 source_key = p.get("source", "")
-                
+
                 # Find index of matching chunk in chunk_data
                 match_index = next(
-                    (i for i, c in enumerate(chunk_data) if source_key in c.get("source", "")),
+                    (
+                        i
+                        for i, c in enumerate(chunk_data)
+                        if source_key in c.get("source", "")
+                    ),
                     None,
                 )
 
@@ -298,5 +307,7 @@ class ConflictResolver:
 
         return sorted(
             conflicts,
-            key=lambda c: priority_order.index(c.type) if c.type in priority_order else 99,
+            key=lambda c: (
+                priority_order.index(c.type) if c.type in priority_order else 99
+            ),
         )

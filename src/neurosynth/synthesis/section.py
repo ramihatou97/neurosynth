@@ -2,23 +2,22 @@
 
 import asyncio
 from dataclasses import dataclass
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from rich.console import Console
 
 from neurosynth.config import get_settings
 from neurosynth.llm.claude import ClaudeClient
+from neurosynth.models.document import DocumentFormat, Source
 from neurosynth.models.output import Chapter, Section
-from neurosynth.models.document import Source, DocumentFormat
-from neurosynth.models.visual import VisualElement, ImageType, FigurePlate
+from neurosynth.models.visual import FigurePlate, VisualElement
 from neurosynth.synthesis.conflicts import ConflictHandler
 from neurosynth.synthesis.outline import OutlineEntry
 from neurosynth.synthesis.prompts import (
     SECTION_ENHANCEMENT_PROMPT,
-    SUBSECTION_GENERATION_PROMPT,
     SECTION_SYNTHESIS_DESCRIPTIVE,
     SECTION_SYNTHESIS_IMPERATIVE,
-    CATEGORY_AWARE_SECTION_PROMPT,
+    SUBSECTION_GENERATION_PROMPT,
 )
 
 if TYPE_CHECKING:
@@ -58,7 +57,9 @@ class SectionSynthesizer:
         )
 
         if not entry.assigned_clusters:
-            console.print(f"[yellow]Warning: No content for section '{entry.title}'[/yellow]")
+            console.print(
+                f"[yellow]Warning: No content for section '{entry.title}'[/yellow]"
+            )
             section.content = f"[Content pending for {entry.title}]"
             return section
 
@@ -89,10 +90,17 @@ class SectionSynthesizer:
             )
         except Exception as e:
             error_msg = str(e).lower()
-            if "credit balance" in error_msg or "rate limit" in error_msg or "overloaded" in error_msg:
-                console.print(f"[yellow]Claude API unavailable ({e}). Falling back to Gemini...[/yellow]")
+            if (
+                "credit balance" in error_msg
+                or "rate limit" in error_msg
+                or "overloaded" in error_msg
+            ):
+                console.print(
+                    f"[yellow]Claude API unavailable ({e}). Falling back to Gemini...[/yellow]"
+                )
                 try:
                     from neurosynth.llm.gemini import GeminiClient
+
                     gemini = GeminiClient()
                     content = await gemini.synthesize_section(
                         section_title=entry.title,
@@ -107,7 +115,9 @@ class SectionSynthesizer:
 
         # Add conflict presentations if any
         if self.config.present_conflicts:
-            conflict_text = self.conflict_handler.generate_conflict_text(entry.assigned_clusters)
+            conflict_text = self.conflict_handler.generate_conflict_text(
+                entry.assigned_clusters
+            )
             if conflict_text:
                 content += f"\n\n{conflict_text}"
 
@@ -134,7 +144,9 @@ class SectionSynthesizer:
         """
         settings = get_settings()
         max_concurrent = max_concurrent or settings.synthesis_concurrency
-        console.print(f"[blue]Synthesizing chapter: {topic} (parallel, max {max_concurrent} concurrent)[/blue]")
+        console.print(
+            f"[blue]Synthesizing chapter: {topic} (parallel, max {max_concurrent} concurrent)[/blue]"
+        )
 
         # Create chapter
         chapter = Chapter(
@@ -150,7 +162,9 @@ class SectionSynthesizer:
         total = len(outline)
         failed_sections = []
 
-        async def synthesize_with_limit(entry: OutlineEntry, index: int) -> tuple[int, Section, bool]:
+        async def synthesize_with_limit(
+            entry: OutlineEntry, index: int
+        ) -> tuple[int, Section, bool]:
             """Synthesize section with immediate checkpoint save.
 
             Returns:
@@ -161,26 +175,34 @@ class SectionSynthesizer:
                 try:
                     section = await self.synthesize_section(entry)
                     completed += 1
-                    console.print(f"  [dim]Completed {completed}/{total} sections[/dim]")
+                    console.print(
+                        f"  [dim]Completed {completed}/{total} sections[/dim]"
+                    )
 
                     # IMMEDIATE SAVE to checkpoint after each section
                     if checkpoint:
-                        checkpoint.save_section(index, section.content, title=entry.title)
+                        checkpoint.save_section(
+                            index, section.content, title=entry.title
+                        )
 
                     return index, section, True
 
                 except Exception as e:
                     completed += 1
-                    console.print(f"  [red]Section {index} ({entry.title}) failed: {e}[/red]")
+                    console.print(
+                        f"  [red]Section {index} ({entry.title}) failed: {e}[/red]"
+                    )
 
                     # Log error and create placeholder section
                     if checkpoint:
-                        checkpoint.log_error(f"Section {index} ({entry.title}) failed: {e}")
+                        checkpoint.log_error(
+                            f"Section {index} ({entry.title}) failed: {e}"
+                        )
                         # Save placeholder so user knows which section failed
                         checkpoint.save_section(
                             index,
                             f"[SYNTHESIS FAILED]\n\nError: {e}\n\nSection: {entry.title}",
-                            title=f"[FAILED] {entry.title}"
+                            title=f"[FAILED] {entry.title}",
                         )
 
                     # Create placeholder section instead of losing everything
@@ -195,10 +217,7 @@ class SectionSynthesizer:
                     return index, placeholder, False
 
         # Create tasks for all sections
-        tasks = [
-            synthesize_with_limit(entry, i)
-            for i, entry in enumerate(outline)
-        ]
+        tasks = [synthesize_with_limit(entry, i) for i, entry in enumerate(outline)]
 
         # Execute all in parallel with semaphore limiting concurrency
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -208,7 +227,9 @@ class SectionSynthesizer:
         for result in results:
             if isinstance(result, Exception):
                 # This shouldn't happen anymore since we catch inside synthesize_with_limit
-                console.print(f"[red]Unexpected error in synthesis task: {result}[/red]")
+                console.print(
+                    f"[red]Unexpected error in synthesis task: {result}[/red]"
+                )
                 if checkpoint:
                     checkpoint.log_error(f"Unexpected synthesis task error: {result}")
                 continue
@@ -225,21 +246,34 @@ class SectionSynthesizer:
 
         # Report failures
         if failed_sections:
-            console.print(f"[yellow]Warning: {len(failed_sections)} section(s) failed synthesis[/yellow]")
+            console.print(
+                f"[yellow]Warning: {len(failed_sections)} section(s) failed synthesis[/yellow]"
+            )
             if checkpoint:
-                checkpoint._update_stage_status("sections", f"partial ({len(failed_sections)} failed)")
+                checkpoint._update_stage_status(
+                    "sections", f"partial ({len(failed_sections)} failed)"
+                )
 
         # Generate abstract (must wait for all sections)
-        all_content = "\n\n".join(s.content for s in chapter.sections if not s.content.startswith("[Section"))
+        all_content = "\n\n".join(
+            s.content for s in chapter.sections if not s.content.startswith("[Section")
+        )
 
         try:
             chapter.abstract = await self.claude.generate_abstract(all_content, topic)
         except Exception as e:
             error_msg = str(e).lower()
-            if "credit balance" in error_msg or "rate limit" in error_msg or "overloaded" in error_msg:
-                console.print(f"[yellow]Claude API unavailable for abstract ({e}). Falling back to Gemini...[/yellow]")
+            if (
+                "credit balance" in error_msg
+                or "rate limit" in error_msg
+                or "overloaded" in error_msg
+            ):
+                console.print(
+                    f"[yellow]Claude API unavailable for abstract ({e}). Falling back to Gemini...[/yellow]"
+                )
                 try:
                     from neurosynth.llm.gemini import GeminiClient
+
                     gemini = GeminiClient()
                     system = "You write concise, informative medical abstracts."
                     prompt = f"""Write a structured abstract for this neurosurgical chapter on {topic}.
@@ -255,10 +289,14 @@ The abstract should:
 
 Write the abstract:"""
                     full_prompt = f"{system}\n\n{prompt}"
-                    chapter.abstract = await gemini.generate(full_prompt, temperature=0.2, max_tokens=500)
+                    chapter.abstract = await gemini.generate(
+                        full_prompt, temperature=0.2, max_tokens=500
+                    )
                 except Exception as gemini_e:
-                     console.print(f"[red]Gemini abstract fallback failed: {gemini_e}[/red]")
-                     chapter.abstract = "[Abstract generation failed]"
+                    console.print(
+                        f"[red]Gemini abstract fallback failed: {gemini_e}[/red]"
+                    )
+                    chapter.abstract = "[Abstract generation failed]"
             else:
                 console.print(f"[yellow]Abstract generation failed: {e}[/yellow]")
                 if checkpoint:
@@ -270,10 +308,17 @@ Write the abstract:"""
             chapter.keywords = await self.claude.extract_keywords(all_content)
         except Exception as e:
             error_msg = str(e).lower()
-            if "credit balance" in error_msg or "rate limit" in error_msg or "overloaded" in error_msg:
-                console.print(f"[yellow]Claude API unavailable for keywords ({e}). Falling back to Gemini...[/yellow]")
+            if (
+                "credit balance" in error_msg
+                or "rate limit" in error_msg
+                or "overloaded" in error_msg
+            ):
+                console.print(
+                    f"[yellow]Claude API unavailable for keywords ({e}). Falling back to Gemini...[/yellow]"
+                )
                 try:
                     from neurosynth.llm.gemini import GeminiClient
+
                     gemini = GeminiClient()
                     prompt = f"""Extract 8-12 medical keywords/phrases from this neurosurgical chapter content.
 
@@ -287,8 +332,11 @@ Return as a JSON array of strings. Include:
 - Key concepts
 
 Return ONLY a JSON array."""
-                    response = await gemini.generate(prompt, temperature=0.0, max_tokens=200)
+                    response = await gemini.generate(
+                        prompt, temperature=0.0, max_tokens=200
+                    )
                     import json
+
                     try:
                         start = response.find("[")
                         end = response.rfind("]") + 1
@@ -299,7 +347,9 @@ Return ONLY a JSON array."""
                     except json.JSONDecodeError:
                         chapter.keywords = []
                 except Exception as gemini_e:
-                    console.print(f"[red]Gemini keyword fallback failed: {gemini_e}[/red]")
+                    console.print(
+                        f"[red]Gemini keyword fallback failed: {gemini_e}[/red]"
+                    )
                     chapter.keywords = []
             else:
                 console.print(f"[yellow]Keyword extraction failed: {e}[/yellow]")
@@ -350,7 +400,6 @@ Return ONLY a JSON array."""
         - allowed_groups restrictions (only uses assigned sources)
         - tone instructions (imperative vs descriptive)
         """
-        from neurosynth.synthesis.category_outline import OutlineNode
         import uuid
 
         section = Section(
@@ -360,12 +409,16 @@ Return ONLY a JSON array."""
         )
 
         if not node.assigned_sources:
-            console.print(f"[yellow]Warning: No content for section '{node.title}'[/yellow]")
+            console.print(
+                f"[yellow]Warning: No content for section '{node.title}'[/yellow]"
+            )
             section.content = f"[Content pending for {node.title}]"
             return section
 
         # Prepare source content
-        source_content = self._prepare_source_content(node.assigned_sources, used_figure_ids)
+        source_content = self._prepare_source_content(
+            node.assigned_sources, used_figure_ids
+        )
 
         # Select prompt based on tone
         if node.tone == "imperative":
@@ -389,21 +442,28 @@ Return ONLY a JSON array."""
             content = await self.claude.generate(prompt, temperature=0.3)
         except Exception as e:
             error_msg = str(e).lower()
-            if "credit balance" in error_msg or "rate limit" in error_msg or "overloaded" in error_msg:
-                console.print(f"[yellow]Claude API unavailable ({e}). Falling back to Gemini...[/yellow]")
+            if (
+                "credit balance" in error_msg
+                or "rate limit" in error_msg
+                or "overloaded" in error_msg
+            ):
+                console.print(
+                    f"[yellow]Claude API unavailable ({e}). Falling back to Gemini...[/yellow]"
+                )
                 try:
                     from neurosynth.llm.gemini import GeminiClient
+
                     gemini = GeminiClient()
-                    # Gemini doesn't have a generic generate with system prompt in the same way, 
+                    # Gemini doesn't have a generic generate with system prompt in the same way,
                     # so we prepend system prompt to user prompt
                     # Note: synthesize_category_section constructs prompt differently than synthesize_section
                     # We can use gemini.generate() directly here
-                    
+
                     # Construct full prompt for Gemini
                     full_prompt = prompt
                     # For category section, prompt already includes instructions, but we might want to add system context if it was separate
                     # In synthesize_category_section, prompt is formatted from templates which include instructions.
-                    
+
                     content = await gemini.generate(full_prompt, temperature=0.3)
                 except Exception as gemini_e:
                     console.print(f"[red]Gemini fallback failed: {gemini_e}[/red]")
@@ -418,7 +478,7 @@ Return ONLY a JSON array."""
                 fig_id = fig.get("id")
                 if used_figure_ids and fig_id in used_figure_ids:
                     continue
-                    
+
                 if fig.get("image_path"):
                     try:
                         visual = VisualElement(
@@ -435,24 +495,27 @@ Return ONLY a JSON array."""
                         )
                         visuals.append(visual)
                     except Exception as e:
-                        console.print(f"[yellow]Warning: Could not load visual: {e}[/yellow]")
+                        console.print(
+                            f"[yellow]Warning: Could not load visual: {e}[/yellow]"
+                        )
 
         # Assign visuals to section
         if visuals:
             # Simple heuristic: first 2 high-priority inline, rest in plate
-            high_priority = [v for v in visuals if v.image_type in ("surgical_step", "anatomical")]
+            high_priority = [
+                v for v in visuals if v.image_type in ("surgical_step", "anatomical")
+            ]
             other = [v for v in visuals if v not in high_priority]
-            
+
             # Sort high priority by page number
             high_priority.sort(key=lambda v: v.page_number)
-            
+
             section.inline_figures = high_priority[:5]
             plate_figures = high_priority[5:] + other
-            
+
             if plate_figures:
                 section.figure_plate = FigurePlate(
-                    section_title=f"{node.title} - Visuals",
-                    figures=plate_figures
+                    section_title=f"{node.title} - Visuals", figures=plate_figures
                 )
 
             # Mark figures as used
@@ -474,7 +537,7 @@ Return ONLY a JSON array."""
         self,
         topic: str,
         outline,  # list[OutlineNode]
-        manifest: Optional[dict] = None,
+        manifest: dict | None = None,
         max_concurrent: int | None = None,
         checkpoint: Optional["SynthesisCheckpoint"] = None,
     ) -> Chapter:
@@ -490,7 +553,9 @@ Return ONLY a JSON array."""
         """
         settings = get_settings()
         max_concurrent = max_concurrent or settings.synthesis_concurrency
-        console.print(f"[blue]Synthesizing category-aware chapter: {topic} (parallel, max {max_concurrent} concurrent)[/blue]")
+        console.print(
+            f"[blue]Synthesizing category-aware chapter: {topic} (parallel, max {max_concurrent} concurrent)[/blue]"
+        )
 
         # Create chapter
         chapter = Chapter(
@@ -501,18 +566,20 @@ Return ONLY a JSON array."""
         # Sequential synthesis to track used figures
         used_figure_ids = set()
         failed_sections = []
-        
+
         for i, node in enumerate(outline):
             try:
-                console.print(f"  Synthesizing section {i+1}/{len(outline)}: {node.title}")
+                console.print(
+                    f"  Synthesizing section {i+1}/{len(outline)}: {node.title}"
+                )
                 section = await self.synthesize_category_section(node, used_figure_ids)
-                
+
                 # IMMEDIATE SAVE to checkpoint
                 if checkpoint:
                     checkpoint.save_section(i, section.content, title=node.title)
-                
+
                 chapter.sections.append(section)
-                
+
             except Exception as e:
                 failed_sections.append(i)
                 console.print(f"  [red]Section {i} ({node.title}) failed: {e}[/red]")
@@ -521,9 +588,9 @@ Return ONLY a JSON array."""
                     checkpoint.save_section(
                         i,
                         f"[SYNTHESIS FAILED]\n\nError: {e}\n\nSection: {node.title}",
-                        title=f"[FAILED] {node.title}"
+                        title=f"[FAILED] {node.title}",
                     )
-                
+
                 # Create placeholder
                 placeholder = Section(
                     title=node.title,
@@ -536,12 +603,18 @@ Return ONLY a JSON array."""
 
         # Report failures
         if failed_sections:
-            console.print(f"[yellow]Warning: {len(failed_sections)} section(s) failed synthesis[/yellow]")
+            console.print(
+                f"[yellow]Warning: {len(failed_sections)} section(s) failed synthesis[/yellow]"
+            )
             if checkpoint:
-                checkpoint._update_stage_status("sections", f"partial ({len(failed_sections)} failed)")
+                checkpoint._update_stage_status(
+                    "sections", f"partial ({len(failed_sections)} failed)"
+                )
 
         # Generate abstract (must wait for all sections)
-        all_content = "\n\n".join(s.content for s in chapter.sections if not s.content.startswith("[Section"))
+        all_content = "\n\n".join(
+            s.content for s in chapter.sections if not s.content.startswith("[Section")
+        )
 
         try:
             chapter.abstract = await self.claude.generate_abstract(all_content, topic)
@@ -574,7 +647,9 @@ Return ONLY a JSON array."""
 
         return chapter
 
-    def _prepare_source_content(self, sources: list[dict], used_figure_ids: set[str] | None = None) -> str:
+    def _prepare_source_content(
+        self, sources: list[dict], used_figure_ids: set[str] | None = None
+    ) -> str:
         """Prepare source content for synthesis prompt."""
         content_parts = []
 
@@ -607,7 +682,7 @@ Return ONLY a JSON array."""
                     fig_id = fig.get("id", "unknown")
                     if used_figure_ids and fig_id in used_figure_ids:
                         continue
-                        
+
                     caption = fig.get("caption", "No caption")
                     img_type = fig.get("image_type", "unknown")
                     part += f"- [FIGURE_ID: {fig_id}] Type: {img_type}, Caption: {caption}\n"
@@ -627,11 +702,11 @@ Return ONLY a JSON array."""
             original = source.get("original_source", "")
             if original and original not in seen:
                 seen.add(original)
-                
+
                 # Create Source object
                 path_str = source.get("original_path", original)
                 path = Path(path_str)
-                
+
                 # Determine format or default to PDF
                 try:
                     fmt = DocumentFormat.from_path(path)
@@ -707,7 +782,9 @@ class SubsectionGenerator:
             return []  # Too short to subdivide
 
         prompt = SUBSECTION_GENERATION_PROMPT.format(
-            title=section.title, content=section.content, max_subsections=max_subsections
+            title=section.title,
+            content=section.content,
+            max_subsections=max_subsections,
         )
 
         response = await self.claude.generate(prompt, temperature=0.1)

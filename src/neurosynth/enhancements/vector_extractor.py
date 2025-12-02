@@ -11,14 +11,13 @@ Version: 1.0
 
 import logging
 import uuid
-import re
-from dataclasses import dataclass, field
-from typing import List, Tuple, Dict, Set, Optional
 from collections import defaultdict
+from dataclasses import dataclass, field
 
 try:
     import fitz
     import numpy as np
+
     HAS_DEPENDENCIES = True
 except ImportError:
     HAS_DEPENDENCIES = False
@@ -32,6 +31,7 @@ logger = logging.getLogger(__name__)
 # DATA STRUCTURES
 # =============================================================================
 
+
 @dataclass
 class VectorGraphic:
     """
@@ -40,21 +40,23 @@ class VectorGraphic:
     Vector graphics include flowcharts, anatomical diagrams, and schematics
     that are defined by drawing commands rather than raster images.
     """
-    graphic_id: str                                  # Unique identifier
-    page_number: int                                 # Source page (0-indexed in PyMuPDF)
-    bbox: Tuple[float, float, float, float]          # Bounding box (x0, y0, x1, y1)
-    graphic_type: str                                # "flowchart", "diagram", "schematic", "unknown"
-    confidence: float                                # Classification confidence (0-1)
-    rendered_image: Optional[bytes] = None           # PNG render at configured DPI
-    num_paths: int = 0                               # Number of drawing paths
-    has_text: bool = False                           # Whether contains text elements
-    contains_arrows: bool = False                    # Arrow detection (indicates flowchart)
-    keywords_found: List[str] = field(default_factory=list)  # Matched keywords
+
+    graphic_id: str  # Unique identifier
+    page_number: int  # Source page (0-indexed in PyMuPDF)
+    bbox: tuple[float, float, float, float]  # Bounding box (x0, y0, x1, y1)
+    graphic_type: str  # "flowchart", "diagram", "schematic", "unknown"
+    confidence: float  # Classification confidence (0-1)
+    rendered_image: bytes | None = None  # PNG render at configured DPI
+    num_paths: int = 0  # Number of drawing paths
+    has_text: bool = False  # Whether contains text elements
+    contains_arrows: bool = False  # Arrow detection (indicates flowchart)
+    keywords_found: list[str] = field(default_factory=list)  # Matched keywords
 
 
 # =============================================================================
 # VECTOR GRAPHICS EXTRACTOR
 # =============================================================================
+
 
 class VectorGraphicsExtractor:
     """
@@ -92,12 +94,10 @@ class VectorGraphicsExtractor:
         self.render_dpi = self.vg_config.render_dpi
 
         # Keywords for classification
-        self.flowchart_keywords = set(
+        self.flowchart_keywords = {
             kw.lower() for kw in self.vg_config.flowchart_keywords
-        )
-        self.diagram_keywords = set(
-            kw.lower() for kw in self.vg_config.diagram_keywords
-        )
+        }
+        self.diagram_keywords = {kw.lower() for kw in self.vg_config.diagram_keywords}
 
         logger.info(
             f"VectorGraphicsExtractor initialized: "
@@ -107,11 +107,8 @@ class VectorGraphicsExtractor:
         )
 
     def extract_from_page(
-        self,
-        page: fitz.Page,
-        page_num: int,
-        context_text: str = ""
-    ) -> List[VectorGraphic]:
+        self, page: fitz.Page, page_num: int, context_text: str = ""
+    ) -> list[VectorGraphic]:
         """
         Extract vector graphics from a single page.
 
@@ -159,17 +156,17 @@ class VectorGraphicsExtractor:
                 contains_arrows = self._detect_arrows(cluster)
 
                 # Classify type
-                graphic_type, confidence, matched_keywords = self._classify_graphic_type(
-                    context_text, contains_arrows
+                graphic_type, confidence, matched_keywords = (
+                    self._classify_graphic_type(context_text, contains_arrows)
                 )
 
                 # Generate unique ID
-                graphic_id = f"vec_{page_num:03d}_{cluster_idx:02d}_{uuid.uuid4().hex[:8]}"
+                graphic_id = (
+                    f"vec_{page_num:03d}_{cluster_idx:02d}_{uuid.uuid4().hex[:8]}"
+                )
 
                 # Render to image
-                rendered_image = self._render_cluster_to_image(
-                    page, cluster, bbox
-                )
+                rendered_image = self._render_cluster_to_image(page, cluster, bbox)
 
                 # Create VectorGraphic object
                 vector_graphic = VectorGraphic(
@@ -182,7 +179,7 @@ class VectorGraphicsExtractor:
                     num_paths=len(cluster),
                     has_text=False,  # Would need text extraction to determine
                     contains_arrows=contains_arrows,
-                    keywords_found=matched_keywords
+                    keywords_found=matched_keywords,
                 )
 
                 vector_graphics.append(vector_graphic)
@@ -193,13 +190,12 @@ class VectorGraphicsExtractor:
             return vector_graphics
 
         except Exception as e:
-            logger.error(f"Page {page_num}: Vector extraction failed: {e}", exc_info=True)
+            logger.error(
+                f"Page {page_num}: Vector extraction failed: {e}", exc_info=True
+            )
             return []
 
-    def _filter_complex_paths(
-        self,
-        drawings: List[Dict]
-    ) -> List[Dict]:
+    def _filter_complex_paths(self, drawings: list[dict]) -> list[dict]:
         """
         Filter drawing commands by complexity.
 
@@ -216,7 +212,7 @@ class VectorGraphicsExtractor:
 
         for drawing in drawings:
             # Count drawing operations
-            num_operations = len(drawing.get('items', []))
+            num_operations = len(drawing.get("items", []))
 
             # Filter by complexity threshold
             if num_operations >= self.min_complexity:
@@ -225,10 +221,8 @@ class VectorGraphicsExtractor:
         return complex_paths
 
     def _cluster_nearby_paths(
-        self,
-        paths: List[Dict],
-        page_rect: fitz.Rect
-    ) -> List[List[Dict]]:
+        self, paths: list[dict], page_rect: fitz.Rect
+    ) -> list[list[dict]]:
         """
         Cluster paths that are spatially close using grid-based grouping.
 
@@ -259,7 +253,7 @@ class VectorGraphicsExtractor:
 
         for path in paths:
             # Get path bounding box
-            path_rect = path.get('rect')
+            path_rect = path.get("rect")
             if not path_rect:
                 continue
 
@@ -303,7 +297,7 @@ class VectorGraphicsExtractor:
             return cluster_paths
 
         # Create clusters from connected grid cells
-        for (row, col), cell_paths in grid.items():
+        for (row, col), _cell_paths in grid.items():
             if (row, col) not in visited:
                 cluster = flood_fill(row, col)
                 if len(cluster) >= self.min_paths:
@@ -312,9 +306,8 @@ class VectorGraphicsExtractor:
         return clusters
 
     def _compute_cluster_bbox(
-        self,
-        cluster: List[Dict]
-    ) -> Tuple[float, float, float, float]:
+        self, cluster: list[dict]
+    ) -> tuple[float, float, float, float]:
         """
         Compute bounding box for a cluster of paths.
 
@@ -327,13 +320,13 @@ class VectorGraphicsExtractor:
         if not cluster:
             return (0, 0, 0, 0)
 
-        x0 = float('inf')
-        y0 = float('inf')
-        x1 = float('-inf')
-        y1 = float('-inf')
+        x0 = float("inf")
+        y0 = float("inf")
+        x1 = float("-inf")
+        y1 = float("-inf")
 
         for path in cluster:
-            rect = path.get('rect')
+            rect = path.get("rect")
             if rect:
                 x0 = min(x0, rect.x0)
                 y0 = min(y0, rect.y0)
@@ -341,15 +334,12 @@ class VectorGraphicsExtractor:
                 y1 = max(y1, rect.y1)
 
         # Handle edge case where no rects found
-        if x0 == float('inf'):
+        if x0 == float("inf"):
             return (0, 0, 0, 0)
 
         return (x0, y0, x1, y1)
 
-    def _detect_arrows(
-        self,
-        cluster: List[Dict]
-    ) -> bool:
+    def _detect_arrows(self, cluster: list[dict]) -> bool:
         """
         Detect if cluster contains arrow shapes (indicates flowchart).
 
@@ -370,10 +360,10 @@ class VectorGraphicsExtractor:
         # Simplified heuristic: check for triangular fills
         # (arrow heads are often rendered as filled triangles)
         for path in cluster:
-            items = path.get('items', [])
+            items = path.get("items", [])
             for item in items:
                 # Check if item is a filled path (potential arrow head)
-                if item[0] == 'f':  # 'f' = fill operation in PyMuPDF
+                if item[0] == "f":  # 'f' = fill operation in PyMuPDF
                     # If we find filled shapes, consider it potentially an arrow
                     # More sophisticated detection would analyze geometry
                     return True
@@ -381,10 +371,8 @@ class VectorGraphicsExtractor:
         return False
 
     def _classify_graphic_type(
-        self,
-        context_text: str,
-        contains_arrows: bool
-    ) -> Tuple[str, float, List[str]]:
+        self, context_text: str, contains_arrows: bool
+    ) -> tuple[str, float, list[str]]:
         """
         Classify graphic type using keyword matching and arrow detection.
 
@@ -405,13 +393,9 @@ class VectorGraphicsExtractor:
 
         # Check for keywords
         flowchart_matches = [
-            kw for kw in self.flowchart_keywords
-            if kw in context_lower
+            kw for kw in self.flowchart_keywords if kw in context_lower
         ]
-        diagram_matches = [
-            kw for kw in self.diagram_keywords
-            if kw in context_lower
-        ]
+        diagram_matches = [kw for kw in self.diagram_keywords if kw in context_lower]
 
         matched_keywords = flowchart_matches + diagram_matches
 
@@ -431,9 +415,9 @@ class VectorGraphicsExtractor:
     def _render_cluster_to_image(
         self,
         page: fitz.Page,
-        cluster: List[Dict],
-        bbox: Tuple[float, float, float, float]
-    ) -> Optional[bytes]:
+        cluster: list[dict],
+        bbox: tuple[float, float, float, float],
+    ) -> bytes | None:
         """
         Render a cluster region to PNG image.
 
@@ -459,10 +443,7 @@ class VectorGraphicsExtractor:
             # Create clip rect with small padding
             padding = 10
             clip_rect = fitz.Rect(
-                max(0, x0 - padding),
-                max(0, y0 - padding),
-                x1 + padding,
-                y1 + padding
+                max(0, x0 - padding), max(0, y0 - padding), x1 + padding, y1 + padding
             )
 
             # Compute zoom factor for desired DPI
@@ -472,9 +453,7 @@ class VectorGraphicsExtractor:
 
             # Render page region to pixmap
             pix = page.get_pixmap(
-                matrix=mat,
-                clip=clip_rect,
-                alpha=False  # No transparency
+                matrix=mat, clip=clip_rect, alpha=False  # No transparency
             )
 
             # Convert to PNG bytes
@@ -497,6 +476,6 @@ class VectorGraphicsExtractor:
 # =============================================================================
 
 __all__ = [
-    'VectorGraphic',
-    'VectorGraphicsExtractor',
+    "VectorGraphic",
+    "VectorGraphicsExtractor",
 ]

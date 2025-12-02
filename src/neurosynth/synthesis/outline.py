@@ -147,7 +147,8 @@ class OutlineGenerator:
         assigned = sum(len(e.assigned_clusters) for e in outline)
         unassigned = len(clusters) - assigned
         console.print(
-            f"[green]Assigned {assigned} clusters to sections " f"({unassigned} unassigned)[/green]"
+            f"[green]Assigned {assigned} clusters to sections "
+            f"({unassigned} unassigned)[/green]"
         )
 
         return outline
@@ -162,13 +163,42 @@ class OutlineGenerator:
             "history": {"history", "historical", "evolution", "discovery"},
             "epidemiology": {"epidemiology", "incidence", "prevalence", "demographics"},
             "anatomy": {"anatomy", "anatomical", "neuroanatomy", "structure", "region"},
-            "pathophysiology": {"pathophysiology", "mechanism", "pathology", "etiology"},
-            "clinical": {"clinical", "presentation", "symptoms", "signs", "examination"},
-            "diagnostic": {"diagnostic", "imaging", "mri", "ct", "workup", "evaluation"},
+            "pathophysiology": {
+                "pathophysiology",
+                "mechanism",
+                "pathology",
+                "etiology",
+            },
+            "clinical": {
+                "clinical",
+                "presentation",
+                "symptoms",
+                "signs",
+                "examination",
+            },
+            "diagnostic": {
+                "diagnostic",
+                "imaging",
+                "mri",
+                "ct",
+                "workup",
+                "evaluation",
+            },
             "classification": {"classification", "grading", "staging", "type"},
             "treatment": {"treatment", "therapy", "management", "conservative"},
-            "surgical indications": {"indication", "criteria", "selection", "candidate"},
-            "surgical technique": {"technique", "surgical", "operative", "approach", "procedure"},
+            "surgical indications": {
+                "indication",
+                "criteria",
+                "selection",
+                "candidate",
+            },
+            "surgical technique": {
+                "technique",
+                "surgical",
+                "operative",
+                "approach",
+                "procedure",
+            },
             "complications": {"complication", "risk", "adverse", "morbidity"},
             "outcomes": {"outcome", "prognosis", "result", "survival", "follow-up"},
             "controversies": {"controversy", "debate", "emerging", "future", "novel"},

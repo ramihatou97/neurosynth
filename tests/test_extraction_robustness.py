@@ -6,12 +6,12 @@ Tests the fixes for:
 3. Silent failures in batch operations
 """
 
-import pytest
-from pathlib import Path
-from unittest.mock import MagicMock, patch, PropertyMock
-from dataclasses import dataclass
-from typing import Any, Optional
 import sys
+from dataclasses import dataclass
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 # Add reference-library to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "reference-library" / "src"))
@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "reference-library" / "src
 @dataclass
 class MockSearchResult:
     """Mock search result for testing."""
+
     pdf_path: Path
     page_number: int
     book_series: str = "Test Book"
@@ -27,10 +28,10 @@ class MockSearchResult:
     chapter_title: str = "Test Chapter"
     chapter_number: int = 1
     context: str = "Sample context"
-    category: Optional[str] = None
-    category_confidence: Optional[float] = None
-    category_group: Optional[str] = None
-    category_reasoning: Optional[str] = None
+    category: str | None = None
+    category_confidence: float | None = None
+    category_group: str | None = None
+    category_reasoning: str | None = None
 
 
 class TestPageExtraction:
@@ -86,7 +87,7 @@ class TestPageExtraction:
                 pdf_path=pdf_path,
                 results=results,
                 output_dir=output_dir,
-                context_pages=0
+                context_pages=0,
             )
 
             # Should have successfully extracted 2 pages (1 and 3), skipping page 2
@@ -136,7 +137,7 @@ class TestPageExtraction:
                 pdf_path=pdf_path,
                 results=results,
                 output_dir=output_dir,
-                context_pages=0
+                context_pages=0,
             )
 
             # Result should be None due to exception
@@ -157,7 +158,9 @@ class TestPageExtraction:
         pdf_path.touch()
 
         # Request 5 pages
-        results = [MockSearchResult(pdf_path=pdf_path, page_number=i) for i in range(1, 6)]
+        results = [
+            MockSearchResult(pdf_path=pdf_path, page_number=i) for i in range(1, 6)
+        ]
 
         with patch("export.page_extractor.fitz") as mock_fitz:
             mock_doc = MagicMock()
@@ -187,7 +190,7 @@ class TestPageExtraction:
                 pdf_path=pdf_path,
                 results=results,
                 output_dir=output_dir,
-                context_pages=0
+                context_pages=0,
             )
 
             if result:
@@ -207,40 +210,63 @@ class TestImageExtraction:
 
     def test_page_indexing_fix_in_source(self):
         """Verify the off-by-one fix is present in the source code."""
-        bridge_path = Path(__file__).parent.parent / "reference-library" / "src" / "integration" / "neurosynth_bridge.py"
+        bridge_path = (
+            Path(__file__).parent.parent
+            / "reference-library"
+            / "src"
+            / "integration"
+            / "neurosynth_bridge.py"
+        )
         assert bridge_path.exists(), f"Bridge file not found at {bridge_path}"
 
         content = bridge_path.read_text()
 
         # Verify the fix is present: should convert 1-indexed to 0-indexed
-        assert "page_idx = page_num - 1" in content, \
-            "Off-by-one fix not found: should have 'page_idx = page_num - 1'"
+        assert (
+            "page_idx = page_num - 1" in content
+        ), "Off-by-one fix not found: should have 'page_idx = page_num - 1'"
 
         # Verify boundary check uses 0-indexed comparison
-        assert "page_idx < 0 or page_idx >= len(doc)" in content, \
-            "Boundary check should use page_idx (0-indexed)"
+        assert (
+            "page_idx < 0 or page_idx >= len(doc)" in content
+        ), "Boundary check should use page_idx (0-indexed)"
 
         # Verify doc access uses page_idx, not page_num
-        assert "page = doc[page_idx]" in content, \
-            "Document access should use page_idx, not page_num"
+        assert (
+            "page = doc[page_idx]" in content
+        ), "Document access should use page_idx, not page_num"
 
     def test_boundary_check_handles_negative(self):
         """Verify boundary check catches negative indices."""
-        bridge_path = Path(__file__).parent.parent / "reference-library" / "src" / "integration" / "neurosynth_bridge.py"
+        bridge_path = (
+            Path(__file__).parent.parent
+            / "reference-library"
+            / "src"
+            / "integration"
+            / "neurosynth_bridge.py"
+        )
         content = bridge_path.read_text()
 
         # The fix should check for page_idx < 0
-        assert "page_idx < 0" in content, \
-            "Boundary check should handle negative page indices"
+        assert (
+            "page_idx < 0" in content
+        ), "Boundary check should handle negative page indices"
 
     def test_warning_logged_for_out_of_bounds(self):
         """Verify out-of-bounds pages generate warnings."""
-        bridge_path = Path(__file__).parent.parent / "reference-library" / "src" / "integration" / "neurosynth_bridge.py"
+        bridge_path = (
+            Path(__file__).parent.parent
+            / "reference-library"
+            / "src"
+            / "integration"
+            / "neurosynth_bridge.py"
+        )
         content = bridge_path.read_text()
 
         # Should log a warning when page is out of bounds
-        assert "out of bounds" in content.lower(), \
-            "Should log warning message for out-of-bounds pages"
+        assert (
+            "out of bounds" in content.lower()
+        ), "Should log warning message for out-of-bounds pages"
 
 
 class TestIndexation:
@@ -248,31 +274,41 @@ class TestIndexation:
 
     def test_batch_failure_logging_in_source(self):
         """Verify failed files logging is present in library scanner source."""
-        scanner_path = Path(__file__).parent.parent / "reference-library" / "src" / "utils" / "library_scanner.py"
+        scanner_path = (
+            Path(__file__).parent.parent
+            / "reference-library"
+            / "src"
+            / "utils"
+            / "library_scanner.py"
+        )
         assert scanner_path.exists(), f"Scanner file not found at {scanner_path}"
 
         content = scanner_path.read_text()
 
         # Verify failure tracking list exists
-        assert "failed_files" in content, \
-            "library_scanner.py should have failed_files tracking list"
+        assert (
+            "failed_files" in content
+        ), "library_scanner.py should have failed_files tracking list"
 
         # Verify warning logging for failures
-        assert "Warning:" in content or 'print(f"Warning:' in content, \
-            "Should log warnings for scan failures"
+        assert (
+            "Warning:" in content or 'print(f"Warning:' in content
+        ), "Should log warnings for scan failures"
 
         # Verify error logging
-        assert "Error scanning" in content or 'print(f"Error' in content, \
-            "Should log errors for scan exceptions"
+        assert (
+            "Error scanning" in content or 'print(f"Error' in content
+        ), "Should log errors for scan exceptions"
 
         # Verify summary warning
-        assert "files failed to scan" in content, \
-            "Should log summary of failed scans"
+        assert "files failed to scan" in content, "Should log summary of failed scans"
 
     def test_semantic_index_idempotent(self, tmp_path):
         """Verify re-indexing same page doesn't create duplicates."""
         # Import from reference-library directly
-        sys.path.insert(0, str(Path(__file__).parent.parent / "reference-library" / "src"))
+        sys.path.insert(
+            0, str(Path(__file__).parent.parent / "reference-library" / "src")
+        )
         try:
             from cache.database import Database
 
@@ -292,7 +328,9 @@ class TestIndexation:
             assert count == 1
         finally:
             # Remove from path
-            sys.path.remove(str(Path(__file__).parent.parent / "reference-library" / "src"))
+            sys.path.remove(
+                str(Path(__file__).parent.parent / "reference-library" / "src")
+            )
 
 
 class TestResourceLeaks:
@@ -340,7 +378,7 @@ class TestResourceLeaks:
             mock_doc.load_page.return_value = mock_page
 
             # Run extraction
-            results = extract_relevant_pages(all_results, output_dir, context_pages=0)
+            extract_relevant_pages(all_results, output_dir, context_pages=0)
 
             # Verify close() was called for successfully opened documents
             # The exact count depends on which opens succeeded

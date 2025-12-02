@@ -210,9 +210,8 @@ class XMLToLatexResolver:
                     bibkey = self._get_bibkey(source_id)
                     parts.append(f"{claim.strip()} \\{self.citation_style}{{{bibkey}}}")
 
-                return (
-                    "Different approaches have been described: "
-                    + ", while ".join(parts)
+                return "Different approaches have been described: " + ", while ".join(
+                    parts
                 )
 
             elif conflict_type == "temporal":
@@ -278,22 +277,26 @@ class XMLToLatexResolver:
         for source_id in self.stats.unique_sources:
             if source_id in self.source_mappings:
                 mapping = self.source_mappings[source_id]
-                entries.append({
-                    "bibkey": mapping.bibkey,
-                    "author": mapping.author,
-                    "year": mapping.year,
-                    "title": mapping.title,
-                    "doi": mapping.doi,
-                })
+                entries.append(
+                    {
+                        "bibkey": mapping.bibkey,
+                        "author": mapping.author,
+                        "year": mapping.year,
+                        "title": mapping.title,
+                        "doi": mapping.doi,
+                    }
+                )
             else:
                 # Create placeholder entry
-                entries.append({
-                    "bibkey": self._normalize_bibkey(source_id),
-                    "author": source_id,
-                    "year": None,
-                    "title": None,
-                    "doi": None,
-                })
+                entries.append(
+                    {
+                        "bibkey": self._normalize_bibkey(source_id),
+                        "author": source_id,
+                        "year": None,
+                        "title": None,
+                        "doi": None,
+                    }
+                )
 
         return entries
 

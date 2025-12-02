@@ -112,7 +112,8 @@ class Conflict:
             type=ConflictType(data["type"]),
             description=data["description"],
             perspectives=[
-                Perspective.from_dict(p, chunk_lookup) for p in data.get("perspectives", [])
+                Perspective.from_dict(p, chunk_lookup)
+                for p in data.get("perspectives", [])
             ],
             suggested_resolution=data.get("suggested_resolution"),
         )
@@ -149,7 +150,7 @@ class KnowledgeCluster:
 
     def __post_init__(self):
         """Calculate derived fields."""
-        self.source_count = len(set(c.source.id for c in self.chunks))
+        self.source_count = len({c.source.id for c in self.chunks})
 
     @property
     def sources(self) -> list[Source]:
@@ -207,8 +208,10 @@ class KnowledgeCluster:
     def get_high_priority_visuals(self) -> list["VisualElement"]:
         """Get surgical steps and anatomical diagrams (for inline display)."""
         from neurosynth.models.visual import ImageType
+
         return [
-            v for v in self.visual_elements
+            v
+            for v in self.visual_elements
             if v.image_type in (ImageType.SURGICAL_STEP, ImageType.ANATOMICAL)
         ]
 
@@ -220,7 +223,9 @@ class KnowledgeCluster:
         """
         return {
             "id": self.id,
-            "chunks": [c.to_dict(include_embedding=include_embeddings) for c in self.chunks],
+            "chunks": [
+                c.to_dict(include_embedding=include_embeddings) for c in self.chunks
+            ],
             "merged_content": self.merged_content,
             "conflicts": [c.to_dict() for c in self.conflicts],
             "topic": self.topic,
@@ -245,8 +250,7 @@ class KnowledgeCluster:
         """
         # First reconstruct chunks to build chunk_lookup for conflicts
         chunks = [
-            ContentChunk.from_dict(c, visual_lookup)
-            for c in data.get("chunks", [])
+            ContentChunk.from_dict(c, visual_lookup) for c in data.get("chunks", [])
         ]
         chunk_lookup = {c.id: c for c in chunks}
 

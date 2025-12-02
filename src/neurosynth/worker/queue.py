@@ -3,7 +3,6 @@
 import json
 import logging
 from datetime import datetime
-from typing import Optional
 
 import redis
 
@@ -23,7 +22,7 @@ class JobQueue:
             redis_url: Redis connection URL
         """
         self.redis_url = redis_url
-        self._client: Optional[redis.Redis] = None
+        self._client: redis.Redis | None = None
 
     @property
     def client(self) -> redis.Redis:
@@ -44,7 +43,7 @@ class JobQueue:
     def _job_key(self, job_id: str) -> str:
         return f"jobs:{job_id}"
 
-    def dequeue(self, timeout: int = 0) -> Optional[str]:
+    def dequeue(self, timeout: int = 0) -> str | None:
         """Dequeue a job from the queue.
 
         Args:
@@ -61,7 +60,7 @@ class JobQueue:
             return job_id
         return None
 
-    def get_job_data(self, job_id: str) -> Optional[dict]:
+    def get_job_data(self, job_id: str) -> dict | None:
         """Get job data from Redis.
 
         Args:
@@ -94,7 +93,7 @@ class JobQueue:
         job_id: str,
         stage: str,
         message: str,
-        percent: Optional[float] = None,
+        percent: float | None = None,
     ) -> None:
         """Update job progress.
 

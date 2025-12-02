@@ -14,10 +14,8 @@ Note: You must provide real PDF files in tests/fixtures/:
     - sample_images.pdf: PDF with figures/images (optional)
 """
 
-import asyncio
 import shutil
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -56,9 +54,11 @@ def create_mock_embedding(dim: int = 1024) -> np.ndarray:
 @pytest.fixture
 def mock_llm_apis():
     """Mock all LLM API calls to avoid costs."""
-    with patch("neurosynth.llm.voyage.voyageai") as mock_voyage, \
-         patch("neurosynth.llm.claude.anthropic") as mock_claude, \
-         patch("neurosynth.llm.gemini.genai") as mock_gemini:
+    with (
+        patch("neurosynth.llm.voyage.voyageai") as mock_voyage,
+        patch("neurosynth.llm.claude.anthropic") as mock_claude,
+        patch("neurosynth.llm.gemini.genai") as mock_gemini,
+    ):
 
         # Mock Voyage embeddings - return consistent embeddings
         mock_voyage_client = MagicMock()
@@ -66,7 +66,7 @@ def mock_llm_apis():
         def mock_embed(texts, model, input_type):
             # Return embeddings based on text hash for consistency
             embeddings = []
-            for i, text in enumerate(texts):
+            for _i, text in enumerate(texts):
                 # Use text hash as seed for reproducibility
                 seed = hash(text) % (2**32)
                 embeddings.append(np.random.RandomState(seed).rand(1024).tolist())
@@ -83,7 +83,9 @@ def mock_llm_apis():
         def mock_claude_create(**kwargs):
             # Return synthesis-like response
             mock_response = MagicMock()
-            mock_response.content = [MagicMock(text="""
+            mock_response.content = [
+                MagicMock(
+                    text="""
 # Test Section
 
 This is synthesized content from the integration test.
@@ -99,7 +101,9 @@ These tumors account for approximately 8% of intracranial tumors.
 
 Multiple surgical approaches exist including retrosigmoid, middle fossa,
 and translabyrinthine approaches.
-""")]
+"""
+                )
+            ]
             return mock_response
 
         mock_claude_client.messages.create = mock_claude_create
@@ -131,8 +135,8 @@ class TestFullPipelineIntegration:
     @pytest.mark.asyncio
     async def test_parse_real_pdf(self, sample_pdf_path):
         """Test parsing a real PDF document."""
-        from neurosynth.parsers import ParserFactory
         from neurosynth.models.document import DocumentFormat, Source
+        from neurosynth.parsers import ParserFactory
 
         source = Source(
             path=sample_pdf_path,
@@ -151,9 +155,9 @@ class TestFullPipelineIntegration:
     @pytest.mark.asyncio
     async def test_parse_and_chunk_real_pdf(self, sample_pdf_path):
         """Test parsing and chunking a real PDF."""
-        from neurosynth.parsers import ParserFactory
         from neurosynth.chunking import Chunker
         from neurosynth.models.document import DocumentFormat, Source
+        from neurosynth.parsers import ParserFactory
 
         source = Source(
             path=sample_pdf_path,
@@ -180,10 +184,10 @@ class TestFullPipelineIntegration:
         self, integration_project, mock_llm_apis
     ):
         """Test full pipeline: parse -> chunk -> embed -> cluster -> synthesize."""
-        from neurosynth.parsers import ParserFactory
         from neurosynth.chunking import Chunker
-        from neurosynth.dedup import SemanticClusterer, ClusterMerger
+        from neurosynth.dedup import ClusterMerger, SemanticClusterer
         from neurosynth.models.document import DocumentFormat, Source
+        from neurosynth.parsers import ParserFactory
 
         # Parse
         pdf_path = integration_project / "sources" / "test_chapter.pdf"
@@ -214,7 +218,7 @@ class TestFullPipelineIntegration:
         assert len(embeddings) == len(chunks)
 
         # Assign embeddings to chunks
-        for chunk, emb in zip(chunks, embeddings):
+        for chunk, emb in zip(chunks, embeddings, strict=False):
             chunk.embedding = emb
 
         # Cluster
@@ -241,10 +245,11 @@ class TestPipelineOutputs:
     async def test_json_cluster_serialization(self, integration_project, mock_llm_apis):
         """Test that clusters can be serialized to JSON."""
         import json
-        from neurosynth.parsers import ParserFactory
+
         from neurosynth.chunking import Chunker
         from neurosynth.dedup import SemanticClusterer
         from neurosynth.models.document import DocumentFormat, Source
+        from neurosynth.parsers import ParserFactory
         from neurosynth.utils.serialization import NumpyEncoder
 
         # Parse and chunk
@@ -265,7 +270,7 @@ class TestPipelineOutputs:
 
         voyage = VoyageClient()
         embeddings = await voyage.embed_texts([c.content for c in chunks])
-        for chunk, emb in zip(chunks, embeddings):
+        for chunk, emb in zip(chunks, embeddings, strict=False):
             chunk.embedding = emb
 
         clusterer = SemanticClusterer(similarity_threshold=0.85)
@@ -293,8 +298,8 @@ class TestParserIntegration:
     @pytest.mark.asyncio
     async def test_pdf_metadata_extraction(self, sample_pdf_path):
         """Test that PDF metadata is properly extracted."""
-        from neurosynth.parsers import ParserFactory
         from neurosynth.models.document import DocumentFormat, Source
+        from neurosynth.parsers import ParserFactory
 
         source = Source(
             path=sample_pdf_path,
@@ -313,8 +318,8 @@ class TestParserIntegration:
     @pytest.mark.asyncio
     async def test_pdf_toc_extraction(self, sample_pdf_path):
         """Test table of contents extraction if available."""
-        from neurosynth.parsers import ParserFactory
         from neurosynth.models.document import DocumentFormat, Source
+        from neurosynth.parsers import ParserFactory
 
         source = Source(
             path=sample_pdf_path,

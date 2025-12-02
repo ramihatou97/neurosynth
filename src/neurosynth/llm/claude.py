@@ -44,19 +44,27 @@ class ClaudeClient:
         self.max_retries = settings.llm_max_retries
 
         self.client = anthropic.Anthropic(api_key=self.api_key, timeout=self.timeout)
-        self.async_client = anthropic.AsyncAnthropic(api_key=self.api_key, timeout=self.timeout)
+        self.async_client = anthropic.AsyncAnthropic(
+            api_key=self.api_key, timeout=self.timeout
+        )
         logger.info(f"Initialized ClaudeClient with model: {self.model_name}")
 
     @retry(
-        stop=stop_after_attempt(5),  # Will be updated in __init__ if possible, but decorator runs at import time.
+        stop=stop_after_attempt(
+            5
+        ),  # Will be updated in __init__ if possible, but decorator runs at import time.
         # We can use a custom retry strategy or just keep the hardcoded 5 for now as it matches the default in config.
-        wait=wait_exponential(multiplier=2, min=4, max=120),  # Longer waits: 4s, 8s, 16s, 32s, 64s (max 120s)
-        retry=retry_if_exception_type((
-            anthropic.RateLimitError,
-            anthropic.APIConnectionError,
-            anthropic.APITimeoutError,  # Added timeout
-            anthropic.InternalServerError,  # Added server errors (500s)
-        )),
+        wait=wait_exponential(
+            multiplier=2, min=4, max=120
+        ),  # Longer waits: 4s, 8s, 16s, 32s, 64s (max 120s)
+        retry=retry_if_exception_type(
+            (
+                anthropic.RateLimitError,
+                anthropic.APIConnectionError,
+                anthropic.APITimeoutError,  # Added timeout
+                anthropic.InternalServerError,  # Added server errors (500s)
+            )
+        ),
         before_sleep=_log_retry,
     )
     async def generate(
@@ -86,8 +94,12 @@ class ClaudeClient:
             logger.debug(f"Generated response (length: {len(result)})")
             return result
 
-        except (anthropic.RateLimitError, anthropic.APIConnectionError,
-                anthropic.APITimeoutError, anthropic.InternalServerError):
+        except (
+            anthropic.RateLimitError,
+            anthropic.APIConnectionError,
+            anthropic.APITimeoutError,
+            anthropic.InternalServerError,
+        ):
             # Let tenacity handle these retryable errors
             raise
         except anthropic.APIError as e:
@@ -258,8 +270,16 @@ Return ONLY valid JSON array."""
         # Fallback to standard outline
         return [
             {"title": "Introduction", "level": 1, "description": "Overview"},
-            {"title": "Anatomy", "level": 1, "description": "Anatomical considerations"},
-            {"title": "Surgical Technique", "level": 1, "description": "Operative details"},
+            {
+                "title": "Anatomy",
+                "level": 1,
+                "description": "Anatomical considerations",
+            },
+            {
+                "title": "Surgical Technique",
+                "level": 1,
+                "description": "Operative details",
+            },
             {"title": "Outcomes", "level": 1, "description": "Results and prognosis"},
         ]
 
@@ -341,7 +361,9 @@ Requirements:
 
 Write the section content now:"""
 
-        return await self.generate(prompt, system=system, temperature=0.3, max_tokens=4096)
+        return await self.generate(
+            prompt, system=system, temperature=0.3, max_tokens=4096
+        )
 
     async def synthesize_section_with_conflict_preservation(
         self,
@@ -421,7 +443,9 @@ Requirements:
 
 Write the section content now:"""
 
-        return await self.generate(prompt, system=system, temperature=0.3, max_tokens=4096)
+        return await self.generate(
+            prompt, system=system, temperature=0.3, max_tokens=4096
+        )
 
     async def generate_abstract(
         self,
@@ -444,7 +468,9 @@ The abstract should:
 
 Write the abstract:"""
 
-        return await self.generate(prompt, system=system, temperature=0.2, max_tokens=500)
+        return await self.generate(
+            prompt, system=system, temperature=0.2, max_tokens=500
+        )
 
     async def extract_keywords(self, chapter_content: str) -> list[str]:
         """Extract relevant medical keywords from the chapter."""

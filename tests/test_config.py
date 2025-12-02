@@ -74,8 +74,8 @@ class TestSettings:
 
     def test_settings_missing_required_key_raises(self):
         """Test that missing API keys raise validation error."""
-        from pydantic_settings import BaseSettings, SettingsConfigDict
         from pydantic import Field
+        from pydantic_settings import BaseSettings, SettingsConfigDict
 
         # Create a minimal Settings class without file loading for this test
         class TestSettings(BaseSettings):

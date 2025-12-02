@@ -35,6 +35,7 @@ class NumpyEncoder(json.JSONEncoder):
         elif isinstance(obj, bytes):
             # Rare case - encode bytes as base64 if encountered
             import base64
+
             return {"_bytes_": base64.b64encode(obj).decode("utf-8")}
         return super().default(obj)
 
@@ -48,6 +49,7 @@ def numpy_decoder_hook(dct: dict) -> Any:
     """
     if "_bytes_" in dct:
         import base64
+
         return base64.b64decode(dct["_bytes_"])
     return dct
 
@@ -76,7 +78,7 @@ def load_json_with_numpy(path: Path) -> Any:
     Returns:
         Loaded data with bytes objects reconstructed
     """
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f, object_hook=numpy_decoder_hook)
 
 

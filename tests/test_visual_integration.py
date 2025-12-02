@@ -4,14 +4,10 @@ These tests verify that the visual processing pipeline components
 can be imported and instantiated correctly.
 """
 
-import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
-
-
 # ============================================================================
 # Model Import Tests
 # ============================================================================
+
 
 class TestVisualModelsImport:
     """Test that visual model classes can be imported."""
@@ -52,7 +48,7 @@ class TestVisualModelsImport:
 
     def test_visual_index_import(self):
         """Test VisualIndex class import."""
-        from neurosynth.models.visual import VisualIndex, VisualElement, ImageType
+        from neurosynth.models.visual import ImageType, VisualElement, VisualIndex
 
         index = VisualIndex()
         assert index.total_count == 0
@@ -67,6 +63,7 @@ class TestVisualModelsImport:
 # ============================================================================
 # Image Extractor Tests
 # ============================================================================
+
 
 class TestImageExtractorImport:
     """Test that image extractor can be imported."""
@@ -101,6 +98,7 @@ class TestImageExtractorImport:
 # ColPali Client Tests
 # ============================================================================
 
+
 class TestColPaliClientImport:
     """Test that ColPali client can be imported."""
 
@@ -134,6 +132,7 @@ class TestColPaliClientImport:
 # Qdrant Store Tests
 # ============================================================================
 
+
 class TestQdrantStoreImport:
     """Test that Qdrant store can be imported."""
 
@@ -153,6 +152,7 @@ class TestQdrantStoreImport:
 # ============================================================================
 # Visual Associator Tests
 # ============================================================================
+
 
 class TestVisualAssociatorImport:
     """Test that VisualAssociator can be imported."""
@@ -175,6 +175,7 @@ class TestVisualAssociatorImport:
 # ============================================================================
 # LaTeX Generator Tests
 # ============================================================================
+
 
 class TestLaTeXGeneratorImport:
     """Test that LaTeX generator visual methods work."""
@@ -205,6 +206,7 @@ class TestLaTeXGeneratorImport:
 # Output Model Tests
 # ============================================================================
 
+
 class TestOutputModelsImport:
     """Test that output models with visual support work."""
 
@@ -230,6 +232,7 @@ class TestOutputModelsImport:
 # ============================================================================
 # Pipeline Integration Tests
 # ============================================================================
+
 
 class TestPipelineVisualIntegration:
     """Test that pipeline coordinator supports visual processing."""

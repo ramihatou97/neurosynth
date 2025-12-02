@@ -14,12 +14,14 @@ Version: 1.0
 
 import asyncio
 import logging
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from typing import Callable, TypeVar, List, Dict, Any, Optional
 from functools import wraps
+from typing import Any, Optional, TypeVar
 
 try:
     import fitz
+
     HAS_FITZ = True
 except ImportError:
     HAS_FITZ = False
@@ -27,7 +29,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 # Type variable for generic async wrapping
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 # =============================================================================
@@ -35,7 +37,7 @@ T = TypeVar('T')
 # =============================================================================
 
 # Singleton thread pool (initialized on first access)
-_EXECUTOR_POOL: Optional['ExecutorPool'] = None
+_EXECUTOR_POOL: Optional["ExecutorPool"] = None
 _MAX_WORKERS = 4  # Default thread pool size
 
 
@@ -60,12 +62,7 @@ class ExecutorPool:
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         logger.info(f"ExecutorPool initialized with {max_workers} workers")
 
-    async def run_in_thread(
-        self,
-        func: Callable[..., T],
-        *args,
-        **kwargs
-    ) -> T:
+    async def run_in_thread(self, func: Callable[..., T], *args, **kwargs) -> T:
         """
         Run a synchronous function in the thread pool.
 
@@ -78,10 +75,7 @@ class ExecutorPool:
             Result from func
         """
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(
-            self._executor,
-            lambda: func(*args, **kwargs)
-        )
+        return await loop.run_in_executor(self._executor, lambda: func(*args, **kwargs))
 
     def shutdown(self, wait: bool = True):
         """
@@ -134,11 +128,8 @@ def shutdown_executor_pool():
 # ASYNC FUNCTION WRAPPERS
 # =============================================================================
 
-async def async_wrap(
-    func: Callable[..., T],
-    *args,
-    **kwargs
-) -> T:
+
+async def async_wrap(func: Callable[..., T], *args, **kwargs) -> T:
     """
     Wrap a synchronous function for async execution.
 
@@ -177,6 +168,7 @@ def async_wrapper(func: Callable[..., T]) -> Callable[..., asyncio.Future]:
 
         result = await process_data(5)  # Returns 10
     """
+
     @wraps(func)
     async def wrapper(*args, **kwargs):
         return await async_wrap(func, *args, **kwargs)
@@ -188,12 +180,13 @@ def async_wrapper(func: Callable[..., T]) -> Callable[..., asyncio.Future]:
 # BATCH PROCESSING
 # =============================================================================
 
+
 async def process_batch(
-    items: List[Any],
+    items: list[Any],
     processor: Callable[[Any], T],
     batch_size: int = 20,
-    max_concurrent: int = 4
-) -> List[T]:
+    max_concurrent: int = 4,
+) -> list[T]:
     """
     Process items in batches with concurrency control.
 
@@ -230,12 +223,11 @@ async def process_batch(
 
     # Split into batches
     for i in range(0, len(items), batch_size):
-        batch = items[i:i + batch_size]
+        batch = items[i : i + batch_size]
 
         # Process batch concurrently
         batch_results = await asyncio.gather(
-            *[process_one(item) for item in batch],
-            return_exceptions=True
+            *[process_one(item) for item in batch], return_exceptions=True
         )
 
         results.extend(batch_results)
@@ -244,12 +236,12 @@ async def process_batch(
 
 
 async def process_batch_with_progress(
-    items: List[Any],
+    items: list[Any],
     processor: Callable[[Any], T],
     batch_size: int = 20,
     max_concurrent: int = 4,
-    progress_callback: Optional[Callable[[int, int], None]] = None
-) -> List[T]:
+    progress_callback: Callable[[int, int], None] | None = None,
+) -> list[T]:
     """
     Process items in batches with progress callbacks.
 
@@ -294,12 +286,11 @@ async def process_batch_with_progress(
 
     # Split into batches
     for i in range(0, len(items), batch_size):
-        batch = items[i:i + batch_size]
+        batch = items[i : i + batch_size]
 
         # Process batch concurrently
         batch_results = await asyncio.gather(
-            *[process_one(item) for item in batch],
-            return_exceptions=True
+            *[process_one(item) for item in batch], return_exceptions=True
         )
 
         results.extend(batch_results)
@@ -310,6 +301,7 @@ async def process_batch_with_progress(
 # =============================================================================
 # ASYNC PDF DOCUMENT
 # =============================================================================
+
 
 class AsyncPDFDocument:
     """
@@ -335,7 +327,7 @@ class AsyncPDFDocument:
             raise ImportError("PyMuPDF (fitz) required for async PDF operations")
 
         self.pdf_path = pdf_path
-        self.doc: Optional[fitz.Document] = None
+        self.doc: fitz.Document | None = None
 
     async def __aenter__(self):
         """Open PDF document asynchronously."""
@@ -343,11 +335,7 @@ class AsyncPDFDocument:
         pool = get_executor_pool()
 
         # Open document in thread pool (file I/O)
-        self.doc = await loop.run_in_executor(
-            pool._executor,
-            fitz.open,
-            self.pdf_path
-        )
+        self.doc = await loop.run_in_executor(pool._executor, fitz.open, self.pdf_path)
 
         logger.debug(f"Opened PDF document: {self.pdf_path}")
         return self
@@ -359,7 +347,7 @@ class AsyncPDFDocument:
             self.doc = None
             logger.debug(f"Closed PDF document: {self.pdf_path}")
 
-    async def extract_page(self, page_num: int) -> Optional[fitz.Page]:
+    async def extract_page(self, page_num: int) -> fitz.Page | None:
         """
         Extract a page from the document.
 
@@ -407,7 +395,7 @@ class AsyncPDFDocument:
 
         return await async_wrap(lambda: len(self.doc))
 
-    async def extract_images(self, page_num: int) -> List[Dict]:
+    async def extract_images(self, page_num: int) -> list[dict]:
         """
         Extract image list from a page.
 
@@ -429,12 +417,12 @@ class AsyncPDFDocument:
 # =============================================================================
 
 __all__ = [
-    'ExecutorPool',
-    'get_executor_pool',
-    'shutdown_executor_pool',
-    'async_wrap',
-    'async_wrapper',
-    'process_batch',
-    'process_batch_with_progress',
-    'AsyncPDFDocument',
+    "ExecutorPool",
+    "get_executor_pool",
+    "shutdown_executor_pool",
+    "async_wrap",
+    "async_wrapper",
+    "process_batch",
+    "process_batch_with_progress",
+    "AsyncPDFDocument",
 ]

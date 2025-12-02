@@ -317,7 +317,7 @@ class EvidenceDetector:
         annotations.sort(key=lambda x: x[0], reverse=True)
 
         annotated = text
-        for start, end, level in annotations:
+        for _start, end, level in annotations:
             marker = f" [Evidence: {level.value}]"
             annotated = annotated[:end] + marker + annotated[end:]
 
@@ -332,7 +332,7 @@ class EvidenceDetector:
         Returns:
             Summary dict with counts and distributions
         """
-        level_counts: dict[EvidenceLevel, int] = {level: 0 for level in EvidenceLevel}
+        level_counts: dict[EvidenceLevel, int] = dict.fromkeys(EvidenceLevel, 0)
         high_quality_chunks = []
         low_quality_chunks = []
 
@@ -356,10 +356,18 @@ class EvidenceDetector:
 
         return {
             "total_chunks": total,
-            "level_counts": {level.value: count for level, count in level_counts.items()},
-            "high_quality_percentage": (high_quality_count / total * 100) if total > 0 else 0,
+            "level_counts": {
+                level.value: count for level, count in level_counts.items()
+            },
+            "high_quality_percentage": (
+                (high_quality_count / total * 100) if total > 0 else 0
+            ),
             "strongest_evidence": min(
-                (level for level, count in level_counts.items() if count > 0 and level != EvidenceLevel.UNKNOWN),
+                (
+                    level
+                    for level, count in level_counts.items()
+                    if count > 0 and level != EvidenceLevel.UNKNOWN
+                ),
                 key=lambda x: x.numeric_rank,
                 default=EvidenceLevel.UNKNOWN,
             ).value,

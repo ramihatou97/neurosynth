@@ -63,7 +63,9 @@ class TestAddCommand:
 
     def test_add_nonexistent_file(self, temp_project, tmp_path):
         """Test adding nonexistent file shows warning."""
-        result = runner.invoke(app, ["add", "/nonexistent/file.pdf", "-p", str(temp_project)])
+        result = runner.invoke(
+            app, ["add", "/nonexistent/file.pdf", "-p", str(temp_project)]
+        )
 
         assert "Not found:" in result.stdout
 

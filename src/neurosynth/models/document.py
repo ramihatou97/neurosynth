@@ -5,7 +5,7 @@ import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, TypedDict, Unpack, Any
+from typing import TYPE_CHECKING, Any, TypedDict, Unpack
 
 import numpy as np
 
@@ -150,7 +150,9 @@ class ContentChunk:
     def __post_init__(self):
         """Calculate derived fields."""
         self.word_count = len(self.content.split())
-        self.content_hash = hashlib.sha256(self.content.strip().lower().encode()).hexdigest()[:16]
+        self.content_hash = hashlib.sha256(
+            self.content.strip().lower().encode()
+        ).hexdigest()[:16]
 
     @property
     def location_str(self) -> str:

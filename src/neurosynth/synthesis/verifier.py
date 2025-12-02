@@ -134,11 +134,21 @@ class SynthesisVerifier:
         low_severity = sum(1 for i in issues if i.severity == "low")
 
         # Scoring: high = -0.3, medium = -0.1, low = -0.02
-        score = max(0.0, 1.0 - (high_severity * 0.3) - (medium_severity * 0.1) - (low_severity * 0.02))
+        score = max(
+            0.0,
+            1.0
+            - (high_severity * 0.3)
+            - (medium_severity * 0.1)
+            - (low_severity * 0.02),
+        )
 
         # Determine status
         if high_severity > 0:
-            status = VerificationStatus.FAILED if self.strict_mode else VerificationStatus.WARNING
+            status = (
+                VerificationStatus.FAILED
+                if self.strict_mode
+                else VerificationStatus.WARNING
+            )
         elif medium_severity > 2:
             status = VerificationStatus.WARNING
         else:
@@ -314,24 +324,32 @@ Return ONLY valid JSON."""
                 # Simple keyword overlap check (could be made more sophisticated)
                 claim_words = set(claim_lower.split())
                 source_words = set(source_content.split())
-                overlap = len(claim_words & source_words) / len(claim_words) if claim_words else 0
+                overlap = (
+                    len(claim_words & source_words) / len(claim_words)
+                    if claim_words
+                    else 0
+                )
 
                 if overlap > 0.3:  # At least 30% word overlap
                     results["verified"] += 1
                 else:
                     results["unverified"] += 1
-                    results["issues"].append({
-                        "source_id": source_id,
-                        "claim": claim_text[:100],
-                        "issue": "Low overlap with source content",
-                    })
+                    results["issues"].append(
+                        {
+                            "source_id": source_id,
+                            "claim": claim_text[:100],
+                            "issue": "Low overlap with source content",
+                        }
+                    )
             else:
                 results["unverified"] += 1
-                results["issues"].append({
-                    "source_id": source_id,
-                    "claim": claim_text[:100],
-                    "issue": "Source ID not found in provided chunks",
-                })
+                results["issues"].append(
+                    {
+                        "source_id": source_id,
+                        "claim": claim_text[:100],
+                        "issue": "Source ID not found in provided chunks",
+                    }
+                )
 
         return results
 

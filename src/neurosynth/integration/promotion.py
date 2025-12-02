@@ -17,17 +17,15 @@ Data Reuse:
 """
 
 import json
-import sqlite3
 import zipfile
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from rich.console import Console
 
 from neurosynth import get_logger
-from neurosynth.config import get_settings
 from neurosynth.shared.database import SharedDatabase
 
 console = Console()
@@ -100,23 +98,29 @@ class PromotionPipeline:
         try:
             with self.rl_db.get_connection() as conn:
                 # Query the documents table
-                cursor = conn.execute("""
+                cursor = conn.execute(
+                    """
                     SELECT id, file_path, title, authors, year, doi, created_at
                     FROM documents
                     WHERE extracted_text IS NOT NULL
                     ORDER BY created_at DESC
-                """)
+                """
+                )
 
                 for row in cursor:
-                    papers.append({
-                        "id": row["id"],
-                        "path": row["file_path"],
-                        "title": row["title"],
-                        "authors": json.loads(row["authors"]) if row["authors"] else [],
-                        "year": row["year"],
-                        "doi": row["doi"],
-                        "added_at": row["created_at"],
-                    })
+                    papers.append(
+                        {
+                            "id": row["id"],
+                            "path": row["file_path"],
+                            "title": row["title"],
+                            "authors": (
+                                json.loads(row["authors"]) if row["authors"] else []
+                            ),
+                            "year": row["year"],
+                            "doi": row["doi"],
+                            "added_at": row["created_at"],
+                        }
+                    )
         except Exception as e:
             logger.warning(f"Could not list papers from Reference Library: {e}")
 
@@ -194,11 +198,14 @@ class PromotionPipeline:
         """Load paper data from Reference Library cache."""
         try:
             with self.rl_db.get_connection() as conn:
-                cursor = conn.execute("""
+                cursor = conn.execute(
+                    """
                     SELECT file_path, title, authors, year, doi, extracted_text
                     FROM documents
                     WHERE id = ?
-                """, (paper_id,))
+                """,
+                    (paper_id,),
+                )
 
                 row = cursor.fetchone()
                 if not row:
@@ -216,12 +223,15 @@ class PromotionPipeline:
                 )
 
                 # Load page texts if available
-                page_cursor = conn.execute("""
+                page_cursor = conn.execute(
+                    """
                     SELECT page_number, text
                     FROM pages
                     WHERE document_id = ?
                     ORDER BY page_number
-                """, (paper_id,))
+                """,
+                    (paper_id,),
+                )
 
                 for page_row in page_cursor:
                     paper.page_texts[page_row["page_number"]] = page_row["text"]
@@ -276,7 +286,9 @@ class PromotionImporter:
             # Read manifest
             manifest_data = json.loads(zf.read("manifest.json"))
 
-            console.print(f"[blue]Importing promotion bundle: {manifest_data['id']}[/blue]")
+            console.print(
+                f"[blue]Importing promotion bundle: {manifest_data['id']}[/blue]"
+            )
             console.print(f"  Papers: {manifest_data['paper_count']}")
 
             for paper_data in manifest_data["papers"]:

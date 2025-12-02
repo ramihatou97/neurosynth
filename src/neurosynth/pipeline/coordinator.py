@@ -1,9 +1,10 @@
 """Main pipeline coordinator for NeuroSynth."""
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, TypedDict, Unpack
+from typing import TYPE_CHECKING, Any, TypedDict, Unpack
 
 from rich.console import Console
 
@@ -35,6 +36,7 @@ class PipelineKwargs(TypedDict, total=False):
     visual_relevance_threshold: float
     use_faiss_clustering: bool
 
+
 console = Console()
 
 
@@ -44,7 +46,9 @@ class PipelineConfig:
 
     # Input
     source_dir: Path = field(default_factory=lambda: Path("sources"))
-    supported_formats: list[str] = field(default_factory=lambda: [".pdf", ".epub", ".docx", ".txt"])
+    supported_formats: list[str] = field(
+        default_factory=lambda: [".pdf", ".epub", ".docx", ".txt"]
+    )
 
     # Processing
     chunk_size: int = 1000
@@ -71,7 +75,9 @@ class PipelineConfig:
     visual_relevance_threshold: float = 0.3
 
     # Clustering
-    use_faiss_clustering: bool = True  # Use FAISS for large-scale clustering (if available)
+    use_faiss_clustering: bool = (
+        True  # Use FAISS for large-scale clustering (if available)
+    )
 
 
 @dataclass
@@ -126,6 +132,7 @@ class Pipeline:
 
         # Check if visual processing is available
         from neurosynth.llm import VISUAL_AVAILABLE
+
         if self.config.enable_visual_extraction and not VISUAL_AVAILABLE:
             console.print(
                 "[yellow]Visual extraction disabled: optional dependencies not installed.\n"
@@ -144,47 +151,59 @@ class Pipeline:
         # Initialize keyword scorer for Phase 3.5 (neurosurgical keyword relevance)
         self.keyword_scorer = None
         self.keyword_stats = {
-            'enhanced_associations': 0,
-            'legacy_associations': 0,
-            'keyword_matched_count': 0,
-            'total_keywords_found': 0,
+            "enhanced_associations": 0,
+            "legacy_associations": 0,
+            "keyword_matched_count": 0,
+            "total_keywords_found": 0,
         }
 
         settings = get_settings()
         if settings.enable_enhancements and settings.enable_keyword_scoring:
             try:
-                from neurosynth.enhancements.visual_cluster_associator import NeurosurgicalKeywordScorer
                 from neurosynth.enhancements.config import NeuroSynthEnhancedConfig
+                from neurosynth.enhancements.visual_cluster_associator import (
+                    NeurosurgicalKeywordScorer,
+                )
 
                 enh_config = NeuroSynthEnhancedConfig()
                 self.keyword_scorer = NeurosurgicalKeywordScorer(config=enh_config)
-                console.print("  [dim]✓ NeurosurgicalKeywordScorer initialized (340+ medical terms)[/dim]")
+                console.print(
+                    "  [dim]✓ NeurosurgicalKeywordScorer initialized (340+ medical terms)[/dim]"
+                )
             except Exception as e:
-                console.print(f"  [yellow]Could not initialize keyword scorer: {e}[/yellow]")
+                console.print(
+                    f"  [yellow]Could not initialize keyword scorer: {e}[/yellow]"
+                )
                 self.keyword_scorer = None
 
         if not self.keyword_scorer:
-            console.print("  [dim]Using legacy visual association (no keyword scoring)[/dim]")
+            console.print(
+                "  [dim]Using legacy visual association (no keyword scoring)[/dim]"
+            )
 
         # Initialize procedural sequence detector for Phase 3.6
         self.procedural_detector = None
         self.sequence_stats = {
-            'sequences_detected': 0,
-            'total_sequence_elements': 0,
-            'procedural_confidence_avg': 0.0,
-            'sequence_type_counts': {},
+            "sequences_detected": 0,
+            "total_sequence_elements": 0,
+            "procedural_confidence_avg": 0.0,
+            "sequence_type_counts": {},
         }
 
         if settings.enable_enhancements and settings.enable_procedural_detection:
             try:
-                from neurosynth.enhancements.procedural_detector import ProceduralSequenceDetector
                 from neurosynth.enhancements.config import NeuroSynthEnhancedConfig
+                from neurosynth.enhancements.procedural_detector import (
+                    ProceduralSequenceDetector,
+                )
 
                 enh_config = NeuroSynthEnhancedConfig()
                 self.procedural_detector = ProceduralSequenceDetector(config=enh_config)
                 console.print("  [dim]✓ ProceduralSequenceDetector initialized[/dim]")
             except Exception as e:
-                console.print(f"  [yellow]Could not initialize procedural detector: {e}[/yellow]")
+                console.print(
+                    f"  [yellow]Could not initialize procedural detector: {e}[/yellow]"
+                )
                 self.procedural_detector = None
 
     def on(self, event: str, callback: Callable) -> None:
@@ -224,7 +243,9 @@ class Pipeline:
 
             # Stage 7: Detect procedural sequences (Phase 3.6)
             if self.config.enable_visual_extraction and self.state.all_visuals:
-                await self._run_stage("detect_sequences", self._detect_procedural_sequences)
+                await self._run_stage(
+                    "detect_sequences", self._detect_procedural_sequences
+                )
 
             # Stage 8: Merge clusters
             await self._run_stage("merge", self._merge_clusters)
@@ -326,7 +347,9 @@ class Pipeline:
         from neurosynth.chunking import ChunkingStrategy, SemanticChunker
 
         strategy = (
-            ChunkingStrategy.SEMANTIC if self.config.use_llm_chunking else ChunkingStrategy.HYBRID
+            ChunkingStrategy.SEMANTIC
+            if self.config.use_llm_chunking
+            else ChunkingStrategy.HYBRID
         )
 
         chunker = SemanticChunker(
@@ -359,10 +382,12 @@ class Pipeline:
             return
 
         try:
-            from neurosynth.llm.colpali import get_colpali_client
             from neurosynth.dedup.qdrant_store import get_qdrant_store
+            from neurosynth.llm.colpali import get_colpali_client
 
-            console.print(f"  Generating embeddings for {len(self.state.all_visuals)} images...")
+            console.print(
+                f"  Generating embeddings for {len(self.state.all_visuals)} images..."
+            )
 
             # Get ColPali client and generate embeddings
             colpali = get_colpali_client()
@@ -420,7 +445,7 @@ class Pipeline:
         # Count associations
         total_associations = sum(len(c.visual_elements) for c in self.state.clusters)
         self.state.metrics["visual_associations"] = total_associations
-        self.keyword_stats['legacy_associations'] = total_associations
+        self.keyword_stats["legacy_associations"] = total_associations
 
         console.print(f"  Created {total_associations} visual-cluster associations")
 
@@ -445,7 +470,7 @@ class Pipeline:
                     )
 
                     if keyword_score > 0:
-                        keywords = details.get('keywords', [])
+                        keywords = details.get("keywords", [])
 
                         # Apply keyword scores to all visuals in this cluster
                         for visual in cluster.visual_elements:
@@ -456,9 +481,9 @@ class Pipeline:
                                 total_keywords += len(keywords)
 
                 # Update statistics
-                self.keyword_stats['enhanced_associations'] = keyword_enhanced
-                self.keyword_stats['keyword_matched_count'] = keyword_enhanced
-                self.keyword_stats['total_keywords_found'] = total_keywords
+                self.keyword_stats["enhanced_associations"] = keyword_enhanced
+                self.keyword_stats["keyword_matched_count"] = keyword_enhanced
+                self.keyword_stats["total_keywords_found"] = total_keywords
 
                 if keyword_enhanced > 0:
                     console.print(
@@ -481,7 +506,7 @@ class Pipeline:
 
         # Get text from representative chunks (top 3 by priority)
         for chunk in cluster.chunks[:3]:
-            if hasattr(chunk, 'content') and chunk.content:
+            if hasattr(chunk, "content") and chunk.content:
                 text_parts.append(chunk.content[:500])  # Limit per chunk
 
         # Include visual captions if available
@@ -508,7 +533,9 @@ class Pipeline:
             console.print("  [dim]No visuals to analyze for sequences[/dim]")
             return
 
-        console.print(f"  Detecting procedural sequences from {len(self.state.all_visuals)} visuals...")
+        console.print(
+            f"  Detecting procedural sequences from {len(self.state.all_visuals)} visuals..."
+        )
 
         try:
             # Convert VisualElements to detector input format
@@ -520,18 +547,21 @@ class Pipeline:
                 figure_id = ""
                 if visual.caption:
                     import re
-                    fig_match = re.search(r'[Ff]ig(?:ure)?\.?\s*(\d+[a-zA-Z]?)', visual.caption)
+
+                    fig_match = re.search(
+                        r"[Ff]ig(?:ure)?\.?\s*(\d+[a-zA-Z]?)", visual.caption
+                    )
                     if fig_match:
                         figure_id = fig_match.group(1)
 
                 img_dict = {
-                    'id': visual.id,
-                    'page': visual.page_number or 0,
-                    'bbox': visual.bbox or (0, 0, 0, 0),
-                    'caption': visual.caption or "",
-                    'figure_id': figure_id,
-                    'context': visual.context_text or "",
-                    'chapter': None,  # Could extract from document metadata if available
+                    "id": visual.id,
+                    "page": visual.page_number or 0,
+                    "bbox": visual.bbox or (0, 0, 0, 0),
+                    "caption": visual.caption or "",
+                    "figure_id": figure_id,
+                    "context": visual.context_text or "",
+                    "chapter": None,  # Could extract from document metadata if available
                 }
                 images_for_detection.append(img_dict)
                 visual_map[visual.id] = visual
@@ -552,9 +582,9 @@ class Pipeline:
                         visual.procedural_confidence = elem.confidence
 
             # Update statistics
-            self.sequence_stats['sequences_detected'] = len(sequences)
+            self.sequence_stats["sequences_detected"] = len(sequences)
             total_elements = sum(len(s.elements) for s in sequences)
-            self.sequence_stats['total_sequence_elements'] = total_elements
+            self.sequence_stats["total_sequence_elements"] = total_elements
 
             # Calculate average confidence
             if total_elements > 0:
@@ -565,22 +595,28 @@ class Pipeline:
                     if e.confidence is not None
                 ]
                 if confidences:
-                    self.sequence_stats['procedural_confidence_avg'] = sum(confidences) / len(confidences)
+                    self.sequence_stats["procedural_confidence_avg"] = sum(
+                        confidences
+                    ) / len(confidences)
 
             # Count by sequence type
             type_counts = {}
             for seq in sequences:
                 seq_type = seq.sequence_type.value
                 type_counts[seq_type] = type_counts.get(seq_type, 0) + 1
-            self.sequence_stats['sequence_type_counts'] = type_counts
+            self.sequence_stats["sequence_type_counts"] = type_counts
 
             # Store sequences in state
             self.state.procedural_sequences = sequences
-            self.state.metrics['sequences_detected'] = len(sequences)
-            self.state.metrics['procedural_elements'] = total_elements
-            self.state.metrics['procedural_confidence_avg'] = self.sequence_stats['procedural_confidence_avg']
+            self.state.metrics["sequences_detected"] = len(sequences)
+            self.state.metrics["procedural_elements"] = total_elements
+            self.state.metrics["procedural_confidence_avg"] = self.sequence_stats[
+                "procedural_confidence_avg"
+            ]
 
-            console.print(f"  Detected {len(sequences)} procedural sequences ({total_elements} elements)")
+            console.print(
+                f"  Detected {len(sequences)} procedural sequences ({total_elements} elements)"
+            )
             if type_counts:
                 type_summary = ", ".join(f"{k}: {v}" for k, v in type_counts.items())
                 console.print(f"  Types: {type_summary}")
@@ -588,14 +624,15 @@ class Pipeline:
         except Exception as e:
             console.print(f"  [yellow]Sequence detection failed: {e}[/yellow]")
             import traceback
+
             console.print(f"  [dim]{traceback.format_exc()}[/dim]")
-            self.state.metrics['sequences_detected'] = 0
+            self.state.metrics["sequences_detected"] = 0
 
     async def _cluster_chunks(self) -> None:
         """Cluster chunks semantically using FAISS (if available) or sklearn."""
         from neurosynth.dedup import (
-            EmbeddingGenerator,
             FAISS_AVAILABLE,
+            EmbeddingGenerator,
             FAISSClusterer,
             SemanticClusterer,
         )
@@ -715,10 +752,7 @@ class Pipeline:
 
         for key, value in self.state.metrics.items():
             display_key = key.replace("_", " ").title()
-            if isinstance(value, float):
-                display_value = f"{value:.2f}"
-            else:
-                display_value = str(value)
+            display_value = f"{value:.2f}" if isinstance(value, float) else str(value)
             table.add_row(display_key, display_value)
 
         console.print(table)

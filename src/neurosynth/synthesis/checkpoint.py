@@ -6,12 +6,12 @@ never lost even on partial failures.
 """
 
 import json
+import logging
 import pickle
 import shutil
-import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ class SynthesisCheckpoint:
     # Maximum number of recovery directories to keep
     MAX_RECOVERY_DIRS = 10
 
-    def __init__(self, topic: str, base_dir: Optional[Path] = None):
+    def __init__(self, topic: str, base_dir: Path | None = None):
         """Initialize checkpoint manager.
 
         Args:
@@ -102,7 +102,7 @@ class SynthesisCheckpoint:
         self.stage_status["last_updated"] = datetime.now().isoformat()
 
         status_path = self.recovery_dir / "stage_status.json"
-        with open(status_path, 'w', encoding='utf-8') as f:
+        with open(status_path, "w", encoding="utf-8") as f:
             json.dump(self.stage_status, f, indent=2)
 
     def save_stage(self, stage: str, data: Any) -> Path:
@@ -120,7 +120,7 @@ class SynthesisCheckpoint:
         # Try JSON first (more portable)
         json_path = self.recovery_dir / f"{stage}.json"
         try:
-            with open(json_path, 'w', encoding='utf-8') as f:
+            with open(json_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, default=str)
             self._update_stage_status(stage, "completed")
             logger.debug(f"Saved stage {stage} as JSON: {json_path}")
@@ -128,13 +128,13 @@ class SynthesisCheckpoint:
         except (TypeError, ValueError):
             # Fall back to pickle for non-JSON-serializable data
             pkl_path = self.recovery_dir / f"{stage}.pkl"
-            with open(pkl_path, 'wb') as f:
+            with open(pkl_path, "wb") as f:
                 pickle.dump(data, f)
             self._update_stage_status(stage, "completed")
             logger.debug(f"Saved stage {stage} as pickle: {pkl_path}")
             return pkl_path
 
-    def save_section(self, index: int, content: str, title: Optional[str] = None) -> Path:
+    def save_section(self, index: int, content: str, title: str | None = None) -> Path:
         """Immediately save a synthesized section.
 
         This is called after EACH section is synthesized, not after all are done.
@@ -157,7 +157,7 @@ class SynthesisCheckpoint:
             header = f"# {title}"
 
         full_content = f"{header}\n\n{content}"
-        path.write_text(full_content, encoding='utf-8')
+        path.write_text(full_content, encoding="utf-8")
 
         # Update index file
         self._update_sections_index()
@@ -172,17 +172,23 @@ class SynthesisCheckpoint:
         sections = []
         for section_file in sorted(self.sections_dir.glob("section_*.md")):
             # Read first line for title
-            with open(section_file, 'r', encoding='utf-8') as f:
+            with open(section_file, encoding="utf-8") as f:
                 first_line = f.readline().strip()
-                title = first_line.lstrip("# ") if first_line.startswith("#") else section_file.stem
+                title = (
+                    first_line.lstrip("# ")
+                    if first_line.startswith("#")
+                    else section_file.stem
+                )
 
-            sections.append({
-                "file": section_file.name,
-                "title": title,
-                "saved_at": datetime.now().isoformat()
-            })
+            sections.append(
+                {
+                    "file": section_file.name,
+                    "title": title,
+                    "saved_at": datetime.now().isoformat(),
+                }
+            )
 
-        with open(index_path, 'w', encoding='utf-8') as f:
+        with open(index_path, "w", encoding="utf-8") as f:
             json.dump({"sections": sections, "count": len(sections)}, f, indent=2)
 
     def save_latex(self, latex: str) -> Path:
@@ -197,7 +203,7 @@ class SynthesisCheckpoint:
         self._update_stage_status("latex", "in_progress")
 
         path = self.recovery_dir / "chapter.tex"
-        path.write_text(latex, encoding='utf-8')
+        path.write_text(latex, encoding="utf-8")
 
         self._update_stage_status("latex", "completed")
         logger.info(f"LaTeX saved to recovery: {path}")
@@ -213,7 +219,7 @@ class SynthesisCheckpoint:
             Path to saved manifest file
         """
         path = self.recovery_dir / "manifest.json"
-        with open(path, 'w', encoding='utf-8') as f:
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(manifest, f, indent=2, ensure_ascii=False)
 
         logger.debug(f"Manifest saved: {path}")
@@ -258,22 +264,28 @@ class SynthesisCheckpoint:
 
         # Update figures index
         figures_list = list(self.figures_dir.glob("*"))
-        figures_list = [f for f in figures_list if f.is_file() and not f.name.startswith("_")]
+        figures_list = [
+            f for f in figures_list if f.is_file() and not f.name.startswith("_")
+        ]
 
         index_path = self.figures_dir / "_index.json"
-        with open(index_path, 'w', encoding='utf-8') as f:
-            json.dump({
-                "total_copied": copied,
-                "total_failed": len(failed),
-                "failed_files": failed,
-                "figures": [fig.name for fig in figures_list]
-            }, f, indent=2)
+        with open(index_path, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "total_copied": copied,
+                    "total_failed": len(failed),
+                    "failed_files": failed,
+                    "figures": [fig.name for fig in figures_list],
+                },
+                f,
+                indent=2,
+            )
 
         self._update_stage_status("figures", "completed" if not failed else "partial")
         logger.info(f"Copied {copied}/{len(figures)} figures to recovery")
         return copied
 
-    def copy_pdf(self, pdf_path: Path) -> Optional[Path]:
+    def copy_pdf(self, pdf_path: Path) -> Path | None:
         """Copy the final PDF to recovery directory.
 
         Args:
@@ -305,7 +317,7 @@ class SynthesisCheckpoint:
         timestamp = datetime.now().isoformat()
         log_line = f"[{timestamp}] {message}\n"
 
-        with open(self.error_log_path, 'a', encoding='utf-8') as f:
+        with open(self.error_log_path, "a", encoding="utf-8") as f:
             f.write(log_line)
 
         logger.error(f"Checkpoint error: {message}")
@@ -335,14 +347,22 @@ class SynthesisCheckpoint:
             "has_latex": (self.recovery_dir / "chapter.tex").exists(),
             "has_pdf": (self.recovery_dir / "chapter.pdf").exists(),
             "section_count": len(list(self.sections_dir.glob("section_*.md"))),
-            "figure_count": len([f for f in self.figures_dir.iterdir()
-                               if f.is_file() and not f.name.startswith("_")]),
-            "has_errors": self.error_log_path.exists() and self.error_log_path.stat().st_size > 0,
+            "figure_count": len(
+                [
+                    f
+                    for f in self.figures_dir.iterdir()
+                    if f.is_file() and not f.name.startswith("_")
+                ]
+            ),
+            "has_errors": self.error_log_path.exists()
+            and self.error_log_path.stat().st_size > 0,
         }
 
         # Read errors if any
         if summary["has_errors"]:
-            summary["errors"] = self.error_log_path.read_text(encoding='utf-8').strip().split('\n')
+            summary["errors"] = (
+                self.error_log_path.read_text(encoding="utf-8").strip().split("\n")
+            )
 
         return summary
 
@@ -365,7 +385,7 @@ class SynthesisCheckpoint:
         recovery_dirs.sort(key=lambda x: x[1], reverse=True)
 
         # Remove directories beyond the limit
-        for old_dir, _ in recovery_dirs[self.MAX_RECOVERY_DIRS - 1:]:
+        for old_dir, _ in recovery_dirs[self.MAX_RECOVERY_DIRS - 1 :]:
             try:
                 shutil.rmtree(old_dir)
                 logger.debug(f"Cleaned up old checkpoint: {old_dir}")
@@ -380,12 +400,16 @@ class SynthesisCheckpoint:
         """
         try:
             shutil.rmtree(self.recovery_dir)
-            logger.info(f"Cleaned up recovery directory after success: {self.recovery_dir}")
+            logger.info(
+                f"Cleaned up recovery directory after success: {self.recovery_dir}"
+            )
         except Exception as e:
             logger.warning(f"Failed to cleanup recovery dir: {e}")
 
 
-def get_latest_recovery(topic: Optional[str] = None, base_dir: Optional[Path] = None) -> Optional[Path]:
+def get_latest_recovery(
+    topic: str | None = None, base_dir: Path | None = None
+) -> Path | None:
     """Get the most recent recovery directory, optionally filtered by topic.
 
     Args:
@@ -424,7 +448,7 @@ def get_latest_recovery(topic: Optional[str] = None, base_dir: Optional[Path] = 
     return recovery_dirs[0][0]
 
 
-def list_recoveries(base_dir: Optional[Path] = None) -> list[dict]:
+def list_recoveries(base_dir: Path | None = None) -> list[dict]:
     """List all available recovery directories.
 
     Args:
@@ -455,21 +479,27 @@ def list_recoveries(base_dir: Optional[Path] = None) -> list[dict]:
             # Check status
             status_path = d / "stage_status.json"
             if status_path.exists():
-                with open(status_path, 'r') as f:
+                with open(status_path) as f:
                     status = json.load(f)
             else:
                 status = {}
 
-            recoveries.append({
-                "path": str(d),
-                "topic": topic,
-                "timestamp": timestamp,
-                "has_latex": (d / "chapter.tex").exists(),
-                "has_pdf": (d / "chapter.pdf").exists(),
-                "section_count": len(list((d / "sections").glob("section_*.md"))) if (d / "sections").exists() else 0,
-                "is_complete": (d / "_COMPLETE").exists(),
-                "last_stage": status.get("last_updated", "unknown"),
-            })
+            recoveries.append(
+                {
+                    "path": str(d),
+                    "topic": topic,
+                    "timestamp": timestamp,
+                    "has_latex": (d / "chapter.tex").exists(),
+                    "has_pdf": (d / "chapter.pdf").exists(),
+                    "section_count": (
+                        len(list((d / "sections").glob("section_*.md")))
+                        if (d / "sections").exists()
+                        else 0
+                    ),
+                    "is_complete": (d / "_COMPLETE").exists(),
+                    "last_stage": status.get("last_updated", "unknown"),
+                }
+            )
         except Exception:
             continue
 

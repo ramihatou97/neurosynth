@@ -119,7 +119,9 @@ class TestGeminiClient:
     @pytest.mark.asyncio
     async def test_extract_metadata(self, mock_gemini_response):
         """Test metadata extraction."""
-        mock_gemini_response.text = '{"title": "Test", "authors": ["Smith"], "year": 2023}'
+        mock_gemini_response.text = (
+            '{"title": "Test", "authors": ["Smith"], "year": 2023}'
+        )
 
         with patch("neurosynth.llm.gemini.genai") as mock_genai:
             mock_model = MagicMock()
@@ -195,8 +197,7 @@ class TestVoyageClient:
             # Use unique text to avoid cache hits from other tests
             client = VoyageClient()
             similarity = await client.compute_similarity(
-                "Unique text for similarity test A",
-                "Unique text for similarity test B"
+                "Unique text for similarity test A", "Unique text for similarity test B"
             )
 
             # Identical vectors should have similarity of 1.0

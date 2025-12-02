@@ -5,10 +5,11 @@ FigurePlate.figures (not .elements) to avoid AttributeError.
 
 Bug fixed: output.py:75 - changed .elements to .figures
 """
+
 import pytest
-from pathlib import Path
+
 from neurosynth.models.output import Section
-from neurosynth.models.visual import VisualElement, FigurePlate, ImageType
+from neurosynth.models.visual import FigurePlate, ImageType, VisualElement
 
 
 def test_figure_plate_has_figures_attribute():
@@ -16,11 +17,13 @@ def test_figure_plate_has_figures_attribute():
     plate = FigurePlate(section_title="Test Plate")
 
     # Verify 'figures' exists
-    assert hasattr(plate, 'figures'), "FigurePlate should have 'figures' attribute"
+    assert hasattr(plate, "figures"), "FigurePlate should have 'figures' attribute"
     assert isinstance(plate.figures, list), "FigurePlate.figures should be a list"
 
     # Verify 'elements' does NOT exist
-    assert not hasattr(plate, 'elements'), "FigurePlate should NOT have 'elements' attribute"
+    assert not hasattr(
+        plate, "elements"
+    ), "FigurePlate should NOT have 'elements' attribute"
 
     print("✓ FigurePlate correctly uses 'figures' attribute")
 
@@ -82,8 +85,9 @@ def test_total_figures_with_plate():
 
     # Verify count is correct
     expected_total = 2 + 3  # 2 inline + 3 in plate
-    assert total == expected_total, \
-        f"Expected {expected_total} total figures (2 inline + 3 plate), got {total}"
+    assert (
+        total == expected_total
+    ), f"Expected {expected_total} total figures (2 inline + 3 plate), got {total}"
 
     print(f"✓ total_figures = {total} (2 inline + 3 plate)")
     print("✓ No AttributeError - bug is fixed!")
@@ -165,24 +169,30 @@ def test_figure_plate_methods_use_figures():
     plate = FigurePlate(section_title="Methods Test")
 
     # Test add_figure
-    plate.add_figure(VisualElement(
-        id="surgical1",
-        image_type=ImageType.SURGICAL_STEP,
-        caption="Surgical view",
-    ))
+    plate.add_figure(
+        VisualElement(
+            id="surgical1",
+            image_type=ImageType.SURGICAL_STEP,
+            caption="Surgical view",
+        )
+    )
     assert len(plate.figures) == 1, "add_figure should append to .figures"
 
     # Test get_figures_by_type
-    plate.add_figure(VisualElement(
-        id="anatomy1",
-        image_type=ImageType.ANATOMICAL,
-        caption="Anatomical diagram",
-    ))
-    plate.add_figure(VisualElement(
-        id="surgical2",
-        image_type=ImageType.SURGICAL_STEP,
-        caption="Another surgical view",
-    ))
+    plate.add_figure(
+        VisualElement(
+            id="anatomy1",
+            image_type=ImageType.ANATOMICAL,
+            caption="Anatomical diagram",
+        )
+    )
+    plate.add_figure(
+        VisualElement(
+            id="surgical2",
+            image_type=ImageType.SURGICAL_STEP,
+            caption="Another surgical view",
+        )
+    )
 
     surgical_figs = plate.get_figures_by_type(ImageType.SURGICAL_STEP)
     assert len(surgical_figs) == 2, "Should find 2 surgical figures"
@@ -197,9 +207,9 @@ def test_figure_plate_methods_use_figures():
 
 
 if __name__ == "__main__":
-    print("="*60)
+    print("=" * 60)
     print("TESTING FIX 1.1: FigurePlate.elements → .figures")
-    print("="*60)
+    print("=" * 60)
     print()
 
     test_figure_plate_has_figures_attribute()
@@ -217,6 +227,6 @@ if __name__ == "__main__":
     test_figure_plate_methods_use_figures()
 
     print()
-    print("="*60)
+    print("=" * 60)
     print("✅ ALL TESTS PASSED - FIX 1.1 VERIFIED")
-    print("="*60)
+    print("=" * 60)

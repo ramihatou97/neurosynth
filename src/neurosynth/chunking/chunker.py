@@ -85,7 +85,9 @@ class SemanticChunker:
             toc_positions = self._find_toc_positions(text, doc.toc)
 
             for i, (start, entry) in enumerate(toc_positions):
-                end = toc_positions[i + 1][0] if i + 1 < len(toc_positions) else len(text)
+                end = (
+                    toc_positions[i + 1][0] if i + 1 < len(toc_positions) else len(text)
+                )
                 content = text[start:end].strip()
 
                 if content:
@@ -196,7 +198,11 @@ class SemanticChunker:
 
         # Create chunks between headings
         for i, start in enumerate(heading_positions):
-            end = heading_positions[i + 1] if i + 1 < len(heading_positions) else len(text)
+            end = (
+                heading_positions[i + 1]
+                if i + 1 < len(heading_positions)
+                else len(text)
+            )
             content = text[start:end].strip()
 
             if content:

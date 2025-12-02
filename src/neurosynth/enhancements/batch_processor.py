@@ -12,14 +12,14 @@ Key features:
 Version: 1.0
 """
 
-import logging
 import hashlib
+import logging
 import time
 from dataclasses import dataclass, field
-from typing import Dict, Set, Tuple, Optional, List
 
 try:
     import fitz
+
     HAS_FITZ = True
 except ImportError:
     HAS_FITZ = False
@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 # DATA STRUCTURES
 # =============================================================================
 
+
 @dataclass
 class BatchProcessingResult:
     """
@@ -43,14 +44,17 @@ class BatchProcessingResult:
     - hash_cache: Duplicate detection via perceptual hash
     - position_cache: Spatial information for layout analysis
     """
+
     pages_processed: int = 0
     images_found: int = 0
     duplicates_skipped: int = 0
 
     # Caches
-    xref_cache: Dict[int, bytes] = field(default_factory=dict)       # xref -> image bytes
-    hash_cache: Dict[str, int] = field(default_factory=dict)         # hash -> xref
-    position_cache: Dict[int, Tuple] = field(default_factory=dict)   # xref -> (page, bbox)
+    xref_cache: dict[int, bytes] = field(default_factory=dict)  # xref -> image bytes
+    hash_cache: dict[str, int] = field(default_factory=dict)  # hash -> xref
+    position_cache: dict[int, tuple] = field(
+        default_factory=dict
+    )  # xref -> (page, bbox)
 
     # Performance
     processing_time: float = 0.0
@@ -58,24 +62,25 @@ class BatchProcessingResult:
     def to_dict(self) -> dict:
         """Convert to dictionary for logging/serialization."""
         return {
-            'pages_processed': self.pages_processed,
-            'images_found': self.images_found,
-            'duplicates_skipped': self.duplicates_skipped,
-            'deduplication_ratio': (
+            "pages_processed": self.pages_processed,
+            "images_found": self.images_found,
+            "duplicates_skipped": self.duplicates_skipped,
+            "deduplication_ratio": (
                 self.duplicates_skipped / max(1, self.images_found) * 100
             ),
-            'processing_time': round(self.processing_time, 3),
-            'cache_sizes': {
-                'xref_cache': len(self.xref_cache),
-                'hash_cache': len(self.hash_cache),
-                'position_cache': len(self.position_cache),
-            }
+            "processing_time": round(self.processing_time, 3),
+            "cache_sizes": {
+                "xref_cache": len(self.xref_cache),
+                "hash_cache": len(self.hash_cache),
+                "position_cache": len(self.position_cache),
+            },
         }
 
 
 # =============================================================================
 # BATCH PAGE PROCESSOR
 # =============================================================================
+
 
 class BatchPageProcessor:
     """
@@ -103,9 +108,9 @@ class BatchPageProcessor:
         self.perf_config = config.performance
 
         # Deduplication caches (persistent across process_pages calls)
-        self.xref_cache: Dict[int, bytes] = {}
-        self.hash_cache: Dict[str, int] = {}
-        self.position_cache: Dict[int, Tuple] = {}
+        self.xref_cache: dict[int, bytes] = {}
+        self.hash_cache: dict[str, int] = {}
+        self.position_cache: dict[int, tuple] = {}
 
         # Feature flags
         self.enable_xref_dedup = self.perf_config.enable_xref_dedup
@@ -118,9 +123,7 @@ class BatchPageProcessor:
         )
 
     def process_pages(
-        self,
-        doc: fitz.Document,
-        pages: Set[int]
+        self, doc: fitz.Document, pages: set[int]
     ) -> BatchProcessingResult:
         """
         Process pages in batch with deduplication.
@@ -182,10 +185,7 @@ class BatchPageProcessor:
         return result
 
     def _process_single_page(
-        self,
-        page: fitz.Page,
-        page_num: int,
-        result: BatchProcessingResult
+        self, page: fitz.Page, page_num: int, result: BatchProcessingResult
     ) -> None:
         """
         Process a single page, extracting and deduplicating images.
@@ -251,15 +251,11 @@ class BatchPageProcessor:
             except Exception as e:
                 logger.error(
                     f"Page {page_num}: Failed to process xref {xref}: {e}",
-                    exc_info=True
+                    exc_info=True,
                 )
                 continue
 
-    def _extract_image_bytes(
-        self,
-        doc: fitz.Document,
-        xref: int
-    ) -> Optional[bytes]:
+    def _extract_image_bytes(self, doc: fitz.Document, xref: int) -> bytes | None:
         """
         Extract raw image bytes from document by xref.
 
@@ -277,16 +273,13 @@ class BatchPageProcessor:
             if not base_image:
                 return None
 
-            return base_image.get('image', None)
+            return base_image.get("image", None)
 
         except Exception as e:
             logger.debug(f"Failed to extract xref {xref}: {e}")
             return None
 
-    def _compute_image_hash(
-        self,
-        image_bytes: bytes
-    ) -> str:
+    def _compute_image_hash(self, image_bytes: bytes) -> str:
         """
         Compute perceptual hash for duplicate detection.
 
@@ -303,10 +296,8 @@ class BatchPageProcessor:
         return hashlib.sha256(image_bytes).hexdigest()
 
     def _extract_image_bbox(
-        self,
-        page: fitz.Page,
-        xref: int
-    ) -> Tuple[float, float, float, float]:
+        self, page: fitz.Page, xref: int
+    ) -> tuple[float, float, float, float]:
         """
         Extract bounding box for an image on a page.
 
@@ -338,7 +329,7 @@ class BatchPageProcessor:
         image_bytes: bytes,
         image_hash: str,
         page_num: int,
-        bbox: Tuple[float, float, float, float]
+        bbox: tuple[float, float, float, float],
     ) -> None:
         """
         Cache image data for subsequent retrieval.
@@ -380,11 +371,11 @@ class BatchPageProcessor:
         total_bytes = sum(len(img) for img in self.xref_cache.values())
 
         return {
-            'xref_cache_size': len(self.xref_cache),
-            'hash_cache_size': len(self.hash_cache),
-            'position_cache_size': len(self.position_cache),
-            'total_cached_bytes': total_bytes,
-            'total_cached_mb': total_bytes / (1024 * 1024),
+            "xref_cache_size": len(self.xref_cache),
+            "hash_cache_size": len(self.hash_cache),
+            "position_cache_size": len(self.position_cache),
+            "total_cached_bytes": total_bytes,
+            "total_cached_mb": total_bytes / (1024 * 1024),
         }
 
 
@@ -393,6 +384,6 @@ class BatchPageProcessor:
 # =============================================================================
 
 __all__ = [
-    'BatchProcessingResult',
-    'BatchPageProcessor',
+    "BatchProcessingResult",
+    "BatchPageProcessor",
 ]

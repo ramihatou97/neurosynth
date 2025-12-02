@@ -25,6 +25,7 @@ console = Console()
 @dataclass
 class ImageFilterResult:
     """Result of medical image filtering."""
+
     is_valid: bool
     rejection_reason: str = ""
     confidence: float = 1.0
@@ -64,7 +65,7 @@ def _is_medical_image(
         return ImageFilterResult(
             is_valid=False,
             rejection_reason=f"Too small: {width}x{height}px (both dims < 150px)",
-            confidence=0.95
+            confidence=0.95,
         )
 
     # Rule 2: Reject extreme aspect ratios (separator bars, banners, lines)
@@ -73,13 +74,13 @@ def _is_medical_image(
         return ImageFilterResult(
             is_valid=False,
             rejection_reason=f"Horizontal bar: aspect ratio {aspect_ratio:.1f}:1 (> 6:1)",
-            confidence=0.90
+            confidence=0.90,
         )
     if aspect_ratio < (1 / 6):
         return ImageFilterResult(
             is_valid=False,
             rejection_reason=f"Vertical bar: aspect ratio 1:{1/aspect_ratio:.1f} (> 6:1)",
-            confidence=0.90
+            confidence=0.90,
         )
 
     # Rule 3: Reject very small total area (decorative elements)
@@ -88,7 +89,7 @@ def _is_medical_image(
         return ImageFilterResult(
             is_valid=False,
             rejection_reason=f"Small area: {width}x{height} = {area:,}px² (< 30,000)",
-            confidence=0.85
+            confidence=0.85,
         )
 
     # Rule 4: Reject suspiciously small file sizes (solid color blocks, simple shapes)
@@ -99,14 +100,20 @@ def _is_medical_image(
             return ImageFilterResult(
                 is_valid=False,
                 rejection_reason=f"Low complexity: {file_size_bytes:,} bytes for {area:,}px²",
-                confidence=0.80
+                confidence=0.80,
             )
 
     # Rule 5: Reject typical logo dimensions (common publisher logo sizes)
     # Many logos are exactly these dimensions or close to them
     logo_dimensions = [
-        (300, 100), (200, 50), (150, 50), (100, 30),  # Horizontal logos
-        (50, 50), (100, 100), (64, 64), (32, 32),     # Square icons
+        (300, 100),
+        (200, 50),
+        (150, 50),
+        (100, 30),  # Horizontal logos
+        (50, 50),
+        (100, 100),
+        (64, 64),
+        (32, 32),  # Square icons
     ]
     for logo_w, logo_h in logo_dimensions:
         if abs(width - logo_w) < 20 and abs(height - logo_h) < 20:
@@ -115,24 +122,16 @@ def _is_medical_image(
                 return ImageFilterResult(
                     is_valid=False,
                     rejection_reason=f"Logo-like dimensions: {width}x{height}px",
-                    confidence=0.70
+                    confidence=0.70,
                 )
 
     # Rule 6: Accept images classified as medical imaging with relaxed constraints
     # MRI/CT/X-ray images should pass even if they're borderline on other metrics
     if image_type in (ImageType.IMAGING, ImageType.SURGICAL_STEP, ImageType.ANATOMICAL):
-        return ImageFilterResult(
-            is_valid=True,
-            rejection_reason="",
-            confidence=0.95
-        )
+        return ImageFilterResult(is_valid=True, rejection_reason="", confidence=0.95)
 
     # Default: Accept the image
-    return ImageFilterResult(
-        is_valid=True,
-        rejection_reason="",
-        confidence=0.80
-    )
+    return ImageFilterResult(is_valid=True, rejection_reason="", confidence=0.80)
 
 
 @dataclass
@@ -362,8 +361,8 @@ class ImageExtractor:
                     continue
 
                 # Convert CMYK and other modes to RGB for compatibility
-                if pil_image.mode not in ('RGB', 'L'):
-                    pil_image = pil_image.convert('RGB')
+                if pil_image.mode not in ("RGB", "L"):
+                    pil_image = pil_image.convert("RGB")
                     buf = io.BytesIO()
                     pil_image.save(buf, format="PNG")
                     image_bytes = buf.getvalue()
@@ -419,9 +418,7 @@ class ImageExtractor:
                 # Handle filename collisions
                 counter = 1
                 while image_path.exists():
-                    image_filename = (
-                        f"{pdf_path.stem}_p{page_num + 1}_i{img_index + 1}_{counter}.{image_ext}"
-                    )
+                    image_filename = f"{pdf_path.stem}_p{page_num + 1}_i{img_index + 1}_{counter}.{image_ext}"
                     image_path = output_dir / image_filename
                     counter += 1
 
@@ -535,7 +532,9 @@ class ImageExtractor:
 
         # If no numbered captions, try proximity-based detection
         if not candidates and image_bbox:
-            proximity_caption = self._find_proximity_caption(page, image_bbox, text_blocks)
+            proximity_caption = self._find_proximity_caption(
+                page, image_bbox, text_blocks
+            )
             if proximity_caption:
                 candidates.append(proximity_caption)
 
@@ -872,7 +871,9 @@ class ImageExtractor:
 
                 counter = 1
                 while image_path.exists():
-                    image_filename = f"{pdf_path.stem}_fig{fig_num}_p{page_num + 1}_{counter}.png"
+                    image_filename = (
+                        f"{pdf_path.stem}_fig{fig_num}_p{page_num + 1}_{counter}.png"
+                    )
                     image_path = output_dir / image_filename
                     counter += 1
 
@@ -881,7 +882,9 @@ class ImageExtractor:
                 # Get context and classify
                 context_text = page_text[:500]
                 full_caption = f"Figure {fig_num}: {caption_text}".strip()
-                image_type, type_conf = self._classify_image_type(full_caption, context_text)
+                image_type, type_conf = self._classify_image_type(
+                    full_caption, context_text
+                )
 
                 element = VisualElement(
                     image_path=image_path,
@@ -890,7 +893,12 @@ class ImageExtractor:
                     height=height,
                     source_pdf=pdf_path,
                     page_number=page_num + 1,
-                    bbox=(caption_rect.x0, caption_rect.y0 - 400, caption_rect.x1, caption_rect.y0),
+                    bbox=(
+                        caption_rect.x0,
+                        caption_rect.y0 - 400,
+                        caption_rect.x1,
+                        caption_rect.y0,
+                    ),
                     caption=full_caption[:500],
                     caption_confidence=0.95,  # High confidence (found by pattern)
                     image_type=image_type,

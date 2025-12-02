@@ -1,8 +1,8 @@
 """Health check endpoints."""
 
+import redis.asyncio as redis
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-import redis.asyncio as redis
 
 from neurosynth.api.deps import get_redis
 

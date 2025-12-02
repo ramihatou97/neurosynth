@@ -58,15 +58,25 @@ class ChunkMetadataExtractor:
         "pathophysiology": ["pathophysiology", "pathology", "mechanism", "etiology"],
         "clinical": ["presentation", "symptoms", "signs", "clinical", "examination"],
         "diagnostic": ["diagnosis", "imaging", "MRI", "CT", "workup", "evaluation"],
-        "surgical_technique": ["technique", "procedure", "approach", "positioning", "incision"],
+        "surgical_technique": [
+            "technique",
+            "procedure",
+            "approach",
+            "positioning",
+            "incision",
+        ],
         "complications": ["complication", "risk", "adverse", "morbidity", "mortality"],
         "outcomes": ["outcome", "prognosis", "result", "follow-up", "survival"],
     }
 
     def __init__(self):
         self._compiled_anatomy = [re.compile(p, re.I) for p in self.ANATOMY_PATTERNS]
-        self._compiled_pathology = [re.compile(p, re.I) for p in self.PATHOLOGY_PATTERNS]
-        self._compiled_procedure = [re.compile(p, re.I) for p in self.PROCEDURE_PATTERNS]
+        self._compiled_pathology = [
+            re.compile(p, re.I) for p in self.PATHOLOGY_PATTERNS
+        ]
+        self._compiled_procedure = [
+            re.compile(p, re.I) for p in self.PROCEDURE_PATTERNS
+        ]
 
     def extract(self, chunk: ContentChunk) -> ChunkMetadata:
         """Extract metadata from a chunk."""
@@ -188,7 +198,7 @@ def batch_extract_metadata(
             return await asyncio.gather(*tasks)
 
         metadata_list = asyncio.run(extract_all())
-        for chunk, metadata in zip(chunks, metadata_list):
+        for chunk, metadata in zip(chunks, metadata_list, strict=False):
             results[chunk.id] = metadata
     else:
         for chunk in chunks:

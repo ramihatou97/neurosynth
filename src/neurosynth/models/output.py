@@ -53,7 +53,7 @@ class Section:
     @property
     def all_visuals(self) -> list["VisualElement"]:
         """All visual elements from this section's clusters."""
-        visuals: list["VisualElement"] = []
+        visuals: list[VisualElement] = []
         seen: set[str] = set()
         for cluster in self.clusters:
             for visual in cluster.visual_elements:
@@ -109,8 +109,12 @@ class Section:
         # 2. Any classified type with reasonable confidence (useful images)
         # 3. Unknown type but with some confidence (worth showing)
         self.inline_figures = [
-            v for v in sorted_visuals[:max_inline]
-            if (v.image_type in (ImageType.SURGICAL_STEP, ImageType.ANATOMICAL) and v.type_confidence >= 0.3)
+            v
+            for v in sorted_visuals[:max_inline]
+            if (
+                v.image_type in (ImageType.SURGICAL_STEP, ImageType.ANATOMICAL)
+                and v.type_confidence >= 0.3
+            )
             or (v.image_type not in (ImageType.UNKNOWN,) and v.type_confidence >= 0.2)
             or v.type_confidence >= 0.5  # High confidence for any type
         ]
@@ -198,7 +202,9 @@ class Chapter:
         """Recalculate all statistics."""
         self.total_words = sum(s.word_count for s in self.sections)
         self.total_sources = len(self.bibliography)
-        self.conflict_count = sum(len(c.conflicts) for s in self.sections for c in s.clusters)
+        self.conflict_count = sum(
+            len(c.conflicts) for s in self.sections for c in s.clusters
+        )
 
     def add_section(self, title: str, level: int = 1) -> Section:
         """Add a new section to the chapter."""
@@ -296,7 +302,7 @@ class Chapter:
     @property
     def all_visuals(self) -> list["VisualElement"]:
         """All visual elements across all sections."""
-        visuals: list["VisualElement"] = []
+        visuals: list[VisualElement] = []
         seen: set[str] = set()
         for section in self.sections:
             for visual in section.all_visuals:

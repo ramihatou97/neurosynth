@@ -13,7 +13,7 @@ from neurosynth.models.document import Source
 from neurosynth.models.output import Chapter, Section
 
 if TYPE_CHECKING:
-    from neurosynth.models.visual import FigurePlate, VisualElement
+    from neurosynth.models.visual import VisualElement
 
 console = Console()
 
@@ -24,7 +24,9 @@ class LaTeXGenerator:
     # Figure counter for unique labels
     _figure_counter: int = 0
 
-    def __init__(self, template_dir: Path | None = None, images_dir: Path | None = None):
+    def __init__(
+        self, template_dir: Path | None = None, images_dir: Path | None = None
+    ):
         """Initialize the LaTeX generator.
 
         Args:
@@ -73,12 +75,20 @@ class LaTeXGenerator:
         chapter.collect_all_visuals()
 
         # Debug: Log figure collection status
-        console.print(f"[dim]Figure collection: {chapter.total_figures} total figures[/dim]")
+        console.print(
+            f"[dim]Figure collection: {chapter.total_figures} total figures[/dim]"
+        )
         for section in chapter.sections:
             if section.inline_figures or section.figure_plate:
-                inline_count = len(section.inline_figures) if section.inline_figures else 0
-                plate_count = len(section.figure_plate.figures) if section.figure_plate else 0
-                console.print(f"[dim]  {section.title}: {inline_count} inline, {plate_count} in plate[/dim]")
+                inline_count = (
+                    len(section.inline_figures) if section.inline_figures else 0
+                )
+                plate_count = (
+                    len(section.figure_plate.figures) if section.figure_plate else 0
+                )
+                console.print(
+                    f"[dim]  {section.title}: {inline_count} inline, {plate_count} in plate[/dim]"
+                )
 
         # Prepare images directory for compilation
         if output_dir and self.images_dir is None:
@@ -294,7 +304,7 @@ class LaTeXGenerator:
             return result
 
         try:
-            with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+            with open(log_path, encoding="utf-8", errors="ignore") as f:
                 log_content = f.read()
 
             # Parse for errors
@@ -374,10 +384,12 @@ class LaTeXGenerator:
         figure metadata for the template.
         """
         if not visual.image_path:
-            console.print(f"[yellow]Warning: Visual has no image_path set[/yellow]")
+            console.print("[yellow]Warning: Visual has no image_path set[/yellow]")
             return None
         if not visual.image_path.exists():
-            console.print(f"[yellow]Warning: Image file missing: {visual.image_path}[/yellow]")
+            console.print(
+                f"[yellow]Warning: Image file missing: {visual.image_path}[/yellow]"
+            )
             return None
 
         # Generate unique figure number
@@ -414,7 +426,9 @@ class LaTeXGenerator:
             import logging
 
             logger = logging.getLogger(__name__)
-            logger.warning(f"No images_dir set, using absolute path: {visual.image_path}")
+            logger.warning(
+                f"No images_dir set, using absolute path: {visual.image_path}"
+            )
             latex_path = str(visual.image_path)
 
         # Generate caption (preserve original only, per user requirement)
@@ -659,7 +673,7 @@ DEFAULT_CHAPTER_TEMPLATE = r"""
 \section*{References}
 \begin{enumerate}
 {% for source in bibliography %}
-\item {{ source.authors }} ({{ source.year }}). \textit{ {{- source.title -}} }. 
+\item {{ source.authors }} ({{ source.year }}). \textit{ {{- source.title -}} }.
       {{ source.publisher }}
 {% endfor %}
 \end{enumerate}

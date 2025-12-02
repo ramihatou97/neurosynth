@@ -5,11 +5,11 @@ extracted from neurosurgical reference documents, including surgical
 step images, anatomical diagrams, and imaging studies.
 """
 
+import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
-import uuid
 
 import numpy as np
 
@@ -30,6 +30,7 @@ class ImageType(str, Enum):
     7. FLOWCHART - Algorithm diagrams, decision trees, workflows
     8. UNKNOWN - Unclassified images
     """
+
     SURGICAL_STEP = "surgical_step"
     ANATOMICAL = "anatomical"
     IMAGING = "imaging"
@@ -109,12 +110,14 @@ class VisualElement:
     keywords_matched: list[str] = field(default_factory=list)  # Matched keywords
 
     # Phase 3.6: Procedural Sequence Detection
-    sequence_id: str | None = None              # Sequence identifier (e.g., "seq_001")
-    sequence_position: int | None = None        # Position in sequence (1, 2, 3...)
-    sequence_type: str | None = None            # "numbered_steps", "subfigures", "lettered_panels", "staged_procedure", "implicit"
-    step_label: str | None = None               # Human-readable label: "Step 1", "(a)", "Stage 2"
-    is_procedural: bool = False                 # Whether part of procedural sequence
-    procedural_confidence: float = 0.0          # 0-1 confidence score
+    sequence_id: str | None = None  # Sequence identifier (e.g., "seq_001")
+    sequence_position: int | None = None  # Position in sequence (1, 2, 3...)
+    sequence_type: str | None = (
+        None  # "numbered_steps", "subfigures", "lettered_panels", "staged_procedure", "implicit"
+    )
+    step_label: str | None = None  # Human-readable label: "Step 1", "(a)", "Stage 2"
+    is_procedural: bool = False  # Whether part of procedural sequence
+    procedural_confidence: float = 0.0  # 0-1 confidence score
 
     def __post_init__(self):
         """Validate and normalize fields after initialization."""
@@ -151,10 +154,10 @@ class VisualElement:
         """Convert to LaTeX figure code."""
         if not self.image_path:
             return ""
-            
+
         # Escape caption for LaTeX
         safe_caption = self.caption.replace("_", "\\_").replace("%", "\\%")
-        
+
         return (
             "\\begin{figure}[h]\n"
             "\\centering\n"
@@ -298,7 +301,9 @@ class VisualIndex:
     elements: list[VisualElement] = field(default_factory=list)
     by_id: dict[str, VisualElement] = field(default_factory=dict, repr=False)
     by_source: dict[str, list[VisualElement]] = field(default_factory=dict, repr=False)
-    by_type: dict[ImageType, list[VisualElement]] = field(default_factory=dict, repr=False)
+    by_type: dict[ImageType, list[VisualElement]] = field(
+        default_factory=dict, repr=False
+    )
 
     def add(self, element: VisualElement) -> None:
         """Add an element to the index."""
@@ -355,7 +360,7 @@ class VisualIndex:
         elements_with_hash = [e for e in self.elements if e.visual_hash]
 
         for i, elem1 in enumerate(elements_with_hash):
-            for elem2 in elements_with_hash[i+1:]:
+            for elem2 in elements_with_hash[i + 1 :]:
                 if elem1.visual_hash == elem2.visual_hash:
                     duplicates.append((elem1.id, elem2.id, 1.0))
 

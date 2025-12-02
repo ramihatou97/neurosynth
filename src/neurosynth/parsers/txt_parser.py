@@ -52,13 +52,13 @@ class TXTParser(BaseParser):
 
             for encoding in encodings:
                 try:
-                    with open(path, "r", encoding=encoding) as f:
+                    with open(path, encoding=encoding) as f:
                         return f.read()
                 except UnicodeDecodeError:
                     continue
 
             # Last resort: read with errors ignored
-            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            with open(path, encoding="utf-8", errors="ignore") as f:
                 return f.read()
 
         return await loop.run_in_executor(None, extract)
@@ -69,7 +69,7 @@ class TXTParser(BaseParser):
         loop = asyncio.get_event_loop()
 
         def extract():
-            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            with open(path, encoding="utf-8", errors="ignore") as f:
                 first_lines = [f.readline() for _ in range(10)]
 
             title = ""
@@ -183,10 +183,7 @@ class TXTParser(BaseParser):
                     text[start:],
                     re.IGNORECASE,
                 )
-                if end_match:
-                    end = start + end_match.start()
-                else:
-                    end = len(text)
+                end = start + end_match.start() if end_match else len(text)
             else:
                 end = len(text)
 

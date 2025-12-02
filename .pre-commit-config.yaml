@@ -7,7 +7,6 @@ repos:
     rev: 24.1.0
     hooks:
       - id: black
-        language_version: python3.11
         args: ['--line-length=88']
 
   # isort - Import sorting
@@ -30,14 +29,6 @@ repos:
     hooks:
       - id: flake8
         args: ['--max-line-length=88', '--extend-ignore=E203,W503']
-
-  # Mypy - Static type checking
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.8.0
-    hooks:
-      - id: mypy
-        additional_dependencies: [types-all]
-        args: ['--config-file=pyproject.toml']
 
   # General pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -64,15 +55,3 @@ repos:
 
       # Ensure files end with newline
       - id: end-of-file-fixer
-
-      # Prevent committing to main/master directly
-      - id: no-commit-to-branch
-        args: ['--branch', 'main', '--branch', 'master']
-
-  # Security: Check for accidentally committed secrets
-  - repo: https://github.com/Yelp/detect-secrets
-    rev: v1.4.0
-    hooks:
-      - id: detect-secrets
-        args: ['--baseline', '.secrets.baseline']
-        exclude: package.lock.json

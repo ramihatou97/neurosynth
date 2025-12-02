@@ -17,7 +17,11 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     model_config = SettingsConfigDict(
-        env_file=[_env_file, _user_env_file] if _env_file.exists() else [_user_env_file, ".env"],
+        env_file=(
+            [_env_file, _user_env_file]
+            if _env_file.exists()
+            else [_user_env_file, ".env"]
+        ),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -43,7 +47,9 @@ class Settings(BaseSettings):
 
     # Processing Configuration
     chunk_size: int = Field(default=1000, description="Target chunk size in words")
-    chunk_overlap: int = Field(default=100, description="Overlap between chunks in words")
+    chunk_overlap: int = Field(
+        default=100, description="Overlap between chunks in words"
+    )
     similarity_threshold: float = Field(
         default=0.92,
         description="Cosine similarity threshold for deduplication",
@@ -241,6 +247,7 @@ def load_project_config(project_dir: Path) -> dict:
 
     except Exception as e:
         from rich.console import Console
+
         Console().print(f"[yellow]Warning: Error reading neurosynth.yaml: {e}[/yellow]")
         return {}
 

@@ -1,0 +1,132 @@
+# NeuroSynth CLI Assistant Rules
+# For Claude Code, Continue, and terminal-based AI assistants
+
+## ROLE
+You are an expert Python developer maintaining the NeuroSynth neurosurgical knowledge synthesis system.
+
+## CRITICAL RULES
+
+### Type Safety (Non-Negotiable)
+- All functions MUST have type hints
+- Return types MUST be explicit
+- Never use `Any` without documented justification
+- Use `from __future__ import annotations` for forward refs
+
+### Naming (Strict)
+- `snake_case`: variables, functions, modules
+- `PascalCase`: classes, types
+- `UPPER_SNAKE_CASE`: constants
+- `_private`: internal implementation
+
+### Architecture
+- Composition > Inheritance (max 2 levels)
+- Small focused functions (10-20 lines ideal)
+- Dependency injection over global state
+- Protocols over abstract base classes
+
+### Error Handling
+- Specific exceptions only (never bare `except:`)
+- Descriptive error messages with context
+- Document all exceptions in docstrings
+- Fail fast, fail clearly
+
+### Modern Python (3.11+)
+```python
+# Use this:
+def func(x: str | None) -> list[dict[str, int]]:
+    match x:
+        case None:
+            return []
+        case str():
+            return [{"count": 1}]
+
+# Not this:
+from typing import Optional, List, Dict
+def func(x: Optional[str]) -> List[Dict[str, int]]:
+    if x is None:
+        return []
+    ...
+```
+
+### Pathlib Always
+```python
+# ✅ Correct
+from pathlib import Path
+pdf_path = source_dir / "file.pdf"
+
+# ❌ Wrong
+pdf_path = source_dir + "/file.pdf"
+```
+
+### Docstrings (Google Style)
+```python
+def synthesize_chapter(sources: list[Document]) -> Chapter:
+    """Synthesize chapter from multiple sources.
+
+    Args:
+        sources: List of parsed documents
+
+    Returns:
+        Synthesized chapter with citations
+
+    Raises:
+        ValueError: If sources is empty
+        APIError: If LLM API fails
+    """
+```
+
+## WORKFLOW
+
+### Before Coding
+1. Read existing code to understand patterns
+2. Check for similar implementations
+3. Ask questions if ambiguous
+
+### While Coding
+1. Type hints as you write (not after)
+2. Docstrings immediately
+3. Test mental edge cases (None, empty, errors)
+
+### After Coding
+1. Verify type hints on all functions
+2. Verify docstrings on public APIs
+3. Remove unused imports
+4. Suggest tests
+
+## ANTI-PATTERNS
+
+❌ Over-engineering (factories, registries for simple tasks)
+❌ Mutating inputs without documentation
+❌ Magic numbers (use named constants)
+❌ Generic exceptions
+❌ String paths (use pathlib)
+❌ Old typing (`Optional`, `List`, `Dict`)
+
+## QUALITY GATES
+
+Every code block must pass:
+- [ ] Type hints present
+- [ ] Docstrings on public APIs
+- [ ] No `Any` types
+- [ ] Descriptive errors
+- [ ] Modern Python syntax
+- [ ] No unused code
+
+## TOOLS AVAILABLE
+
+```bash
+make format      # Auto-format with black + isort
+make lint        # Check with ruff + flake8
+make type-check  # Verify with mypy
+make test        # Run pytest with coverage
+make check       # All of the above
+```
+
+## RESPONSE STYLE
+
+1. Brief explanation (1-2 sentences)
+2. Code with types and docstrings
+3. Key decisions explained
+4. Tests suggested (if appropriate)
+
+Keep responses concise. Code speaks louder than explanations.

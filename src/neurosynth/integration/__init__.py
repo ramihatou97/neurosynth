@@ -1,26 +1,26 @@
 """Integration modules for Reference Library and external services."""
 
-from neurosynth.integration.promotion import (
-    PromotionPipeline,
-    PromotionImporter,
-    PromotedPaper,
-    PromotionManifest,
-    promote_from_cli,
-    import_from_cli,
-)
 from neurosynth.integration.doi_service import (
-    DOIService,
     BibliographicRecord,
     DOICache,
-    resolve_doi,
+    DOIService,
     generate_bibliography,
+    resolve_doi,
 )
 from neurosynth.integration.evidence import (
-    EvidenceDetector,
     EvidenceDetection,
+    EvidenceDetector,
     EvidenceLevel,
     detect_evidence_level,
     get_evidence_summary,
+)
+from neurosynth.integration.promotion import (
+    PromotedPaper,
+    PromotionImporter,
+    PromotionManifest,
+    PromotionPipeline,
+    import_from_cli,
+    promote_from_cli,
 )
 
 __all__ = [

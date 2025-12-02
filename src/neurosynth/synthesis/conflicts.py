@@ -33,14 +33,21 @@ class ConflictHandler:
                 "Reported values vary across the literature: {perspectives}."
             ),
             ConflictType.CONTRADICTORY: (
-                "There is disagreement in the literature regarding this point. " "{perspectives}"
+                "There is disagreement in the literature regarding this point. "
+                "{perspectives}"
             ),
             ConflictType.APPROACH: (
                 "Different surgical approaches have been advocated: {perspectives}."
             ),
-            ConflictType.TEMPORAL: ("Understanding has evolved over time. {perspectives}"),
-            ConflictType.TERMINOLOGY: ("Terminology varies across sources: {perspectives}."),
-            ConflictType.EMPHASIS: ("Authors differ in their emphasis: {perspectives}."),
+            ConflictType.TEMPORAL: (
+                "Understanding has evolved over time. {perspectives}"
+            ),
+            ConflictType.TERMINOLOGY: (
+                "Terminology varies across sources: {perspectives}."
+            ),
+            ConflictType.EMPHASIS: (
+                "Authors differ in their emphasis: {perspectives}."
+            ),
         }
 
     def generate_conflict_text(
@@ -61,7 +68,7 @@ class ConflictHandler:
         paragraphs = []
 
         # Generate text for each conflict type
-        for conflict_type, conflicts in by_type.items():
+        for _conflict_type, conflicts in by_type.items():
             for conflict in conflicts:
                 text = self._format_conflict(conflict)
                 if text:
@@ -232,7 +239,10 @@ class ConflictLaTeXFormatter:
             key=lambda p: p.source.year if p.source and p.source.year else 0,
         )
 
-        refs = [f"\\cite{{{p.source.citation_key}}}" if p.source else "" for p in sorted_persp]
+        refs = [
+            f"\\cite{{{p.source.citation_key}}}" if p.source else ""
+            for p in sorted_persp
+        ]
 
         claims = [p.claim for p in sorted_persp]
 

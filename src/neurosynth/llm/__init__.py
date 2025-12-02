@@ -8,6 +8,7 @@ from neurosynth.llm.voyage import VoyageClient
 try:
     import torch
     from colpali_engine.models import ColPali
+
     VISUAL_AVAILABLE = True
 except ImportError:
     VISUAL_AVAILABLE = False

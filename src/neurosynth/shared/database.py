@@ -5,9 +5,9 @@ to ensure concurrent access works correctly with WAL mode.
 """
 
 import sqlite3
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
 
 
 class SharedDatabase:
@@ -24,12 +24,12 @@ class SharedDatabase:
 
     # Consistent settings across both apps for optimal performance and reliability
     PRAGMAS = [
-        "PRAGMA journal_mode=WAL",      # Write-ahead logging for concurrency
-        "PRAGMA busy_timeout=5000",     # Wait up to 5 seconds for locks
-        "PRAGMA synchronous=NORMAL",    # Balance safety and speed
-        "PRAGMA temp_store=MEMORY",     # Store temp tables in memory
-        "PRAGMA foreign_keys=ON",       # Enforce foreign key constraints
-        "PRAGMA cache_size=-64000",     # 64MB cache for better performance
+        "PRAGMA journal_mode=WAL",  # Write-ahead logging for concurrency
+        "PRAGMA busy_timeout=5000",  # Wait up to 5 seconds for locks
+        "PRAGMA synchronous=NORMAL",  # Balance safety and speed
+        "PRAGMA temp_store=MEMORY",  # Store temp tables in memory
+        "PRAGMA foreign_keys=ON",  # Enforce foreign key constraints
+        "PRAGMA cache_size=-64000",  # 64MB cache for better performance
     ]
 
     def __init__(self, db_path: Path):
@@ -165,6 +165,8 @@ class SharedDatabase:
             cursor = conn.execute("PRAGMA foreign_keys")
             stats["foreign_keys"] = bool(cursor.fetchone()[0])
 
-            stats["db_size_mb"] = (stats["page_count"] * stats["page_size"]) / (1024 * 1024)
+            stats["db_size_mb"] = (stats["page_count"] * stats["page_size"]) / (
+                1024 * 1024
+            )
 
             return stats

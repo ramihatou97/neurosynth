@@ -1,10 +1,8 @@
 """Job executor - runs the NeuroSynth pipeline for a job."""
 
-import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import Callable, Optional
 
 from neurosynth.worker.queue import JobQueue
 
@@ -39,7 +37,7 @@ class JobExecutor:
         config = json.loads(job_data.get("config", "{}"))
         topic = config.get("topic", job_data.get("topic", "Untitled"))
         output_format = config.get("output_format", "latex")
-        chunk_size = config.get("chunk_size", 1000)
+        config.get("chunk_size", 1000)
         similarity_threshold = config.get("similarity_threshold", 0.92)
         use_cache = config.get("use_cache", True)
 
@@ -50,7 +48,7 @@ class JobExecutor:
             raise ValueError(f"Sources directory not found: {sources_dir}")
 
         # Create progress callback
-        def progress_callback(stage: str, message: str, percent: Optional[float] = None):
+        def progress_callback(stage: str, message: str, percent: float | None = None):
             self.queue.update_progress(job_id, stage, message, percent)
             logger.info(f"[{job_id}] {stage}: {message}")
 
@@ -62,7 +60,11 @@ class JobExecutor:
 
         # Import pipeline components
         from neurosynth.chunking import SemanticChunker
-        from neurosynth.dedup import ClusterMerger, EmbeddingGenerator, SemanticClusterer
+        from neurosynth.dedup import (
+            ClusterMerger,
+            EmbeddingGenerator,
+            SemanticClusterer,
+        )
         from neurosynth.dedup.embeddings import ExactDeduplicator
         from neurosynth.latex import LaTeXGenerator
         from neurosynth.parsers import ParserFactory
@@ -109,13 +111,17 @@ class JobExecutor:
 
             progress_callback("deduplication", "Deduplicating chunks", 35)
             all_chunks = ExactDeduplicator.deduplicate(all_chunks)
-            progress_callback("deduplication", f"After deduplication: {len(all_chunks)} chunks", 40)
+            progress_callback(
+                "deduplication", f"After deduplication: {len(all_chunks)} chunks", 40
+            )
 
             # Step 3: Generate embeddings
             if self.queue.is_cancelled(job_id):
                 raise ValueError("Job was cancelled")
 
-            progress_callback("embeddings", "Generating embeddings (this may take a while)", 45)
+            progress_callback(
+                "embeddings", "Generating embeddings (this may take a while)", 45
+            )
             generator = EmbeddingGenerator(use_cache=use_cache)
             await generator.generate_embeddings(all_chunks)
             progress_callback("embeddings", "Embeddings complete", 55)
@@ -127,7 +133,9 @@ class JobExecutor:
             progress_callback("clustering", "Clustering chunks", 60)
             clusterer = SemanticClusterer(similarity_threshold=similarity_threshold)
             result = await clusterer.cluster_chunks(all_chunks)
-            progress_callback("clustering", f"Created {result.num_clusters} clusters", 65)
+            progress_callback(
+                "clustering", f"Created {result.num_clusters} clusters", 65
+            )
 
             # Step 5: Merge clusters
             progress_callback("merging", "Merging clusters", 70)
@@ -137,7 +145,11 @@ class JobExecutor:
 
             # Save clusters to checkpoint (filter out any None clusters)
             valid_clusters = [c for c in (result.clusters or []) if c is not None]
-            clusters_data = [c.to_dict() for c in valid_clusters if c is not None and hasattr(c, 'to_dict')]
+            clusters_data = [
+                c.to_dict()
+                for c in valid_clusters
+                if c is not None and hasattr(c, "to_dict")
+            ]
             checkpoint.save_stage("clusters", clusters_data)
 
             # Step 6: Generate outline
@@ -147,16 +159,24 @@ class JobExecutor:
             progress_callback("outline", "Generating chapter outline", 78)
             outline_gen = OutlineGenerator()
             outline = await outline_gen.generate_outline(topic, valid_clusters)
-            outline = await outline_gen.assign_clusters_to_sections(outline, valid_clusters)
-            progress_callback("outline", f"Outline created with {len(outline)} sections", 80)
+            outline = await outline_gen.assign_clusters_to_sections(
+                outline, valid_clusters
+            )
+            progress_callback(
+                "outline", f"Outline created with {len(outline)} sections", 80
+            )
 
             # Step 7: Synthesize
             if self.queue.is_cancelled(job_id):
                 raise ValueError("Job was cancelled")
 
-            progress_callback("synthesis", "Synthesizing chapter (this may take 5-20 minutes)", 82)
+            progress_callback(
+                "synthesis", "Synthesizing chapter (this may take 5-20 minutes)", 82
+            )
             synthesizer = SectionSynthesizer()
-            chapter = await synthesizer.synthesize_chapter(topic, outline, checkpoint=checkpoint)
+            chapter = await synthesizer.synthesize_chapter(
+                topic, outline, checkpoint=checkpoint
+            )
             progress_callback("synthesis", "Chapter synthesis complete", 90)
 
             # Step 8: Generate output
@@ -185,7 +205,9 @@ class JobExecutor:
                         PDFValidationError,
                     )
 
-                    pdf_path = latex_gen.compile_to_pdf(tex_path, output_dir, validate=True)
+                    pdf_path = latex_gen.compile_to_pdf(
+                        tex_path, output_dir, validate=True
+                    )
                     checkpoint.copy_pdf(pdf_path)
                     output_path = str(pdf_path)
                     progress_callback("output", "PDF compiled successfully", 98)

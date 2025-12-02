@@ -6,7 +6,6 @@ boundaries to prevent the "Two-Brain" mixing problem.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional
 from enum import Enum
 
 from rich.console import Console
@@ -16,17 +15,21 @@ console = Console()
 
 class OutlineTemplate(Enum):
     """Available outline templates based on source composition."""
+
     COMPREHENSIVE_CHAPTER = "comprehensive"  # Balanced Surgical/Theoretical
-    PROCEDURAL = "procedural"               # Surgical/Anatomical dominant (User Architecture)
-    THEORETICAL = "theoretical"             # Theoretical dominant
+    PROCEDURAL = "procedural"  # Surgical/Anatomical dominant (User Architecture)
+    THEORETICAL = "theoretical"  # Theoretical dominant
 
 
 @dataclass
 class SectionBlueprint:
     """Blueprint for a section with category restrictions."""
+
     title: str
     description: str
-    allowed_groups: Optional[list[str]]  # None = allow all, ["Surgical/Anatomical"] = restrict
+    allowed_groups: (
+        list[str] | None
+    )  # None = allow all, ["Surgical/Anatomical"] = restrict
     keywords: list[str]
     tone_instruction: str  # "descriptive" or "imperative"
     required: bool = False
@@ -36,10 +39,11 @@ class SectionBlueprint:
 @dataclass
 class OutlineNode:
     """A node in the generated outline with assigned sources."""
+
     title: str
     level: int
     description: str
-    allowed_groups: Optional[list[str]]
+    allowed_groups: list[str] | None
     tone: str
     word_target: int
     assigned_sources: list[dict] = field(default_factory=list)
@@ -74,7 +78,7 @@ class CategoryAwareOutlineGenerator:
             List of OutlineNode objects with sources assigned
         """
         sources = manifest.get("sources", [])
-        topic = manifest.get("topic", "Chapter")
+        manifest.get("topic", "Chapter")
 
         # Step 1: Analyze density
         density = self._analyze_density(sources)
@@ -119,13 +123,15 @@ class CategoryAwareOutlineGenerator:
 
         return surgical / total
 
-    def _select_template(self, density: float, template_type: str = None) -> OutlineTemplate:
+    def _select_template(
+        self, density: float, template_type: str = None
+    ) -> OutlineTemplate:
         """Select the appropriate template based on type or density."""
         if template_type == "procedural":
             return OutlineTemplate.PROCEDURAL
         elif template_type == "theoretical":
             return OutlineTemplate.THEORETICAL
-        
+
         # Fallback to density-based selection
         if density >= 0.7:
             return OutlineTemplate.PROCEDURAL
@@ -135,9 +141,7 @@ class CategoryAwareOutlineGenerator:
             return OutlineTemplate.COMPREHENSIVE_CHAPTER
 
     def _assign_content_to_blueprint(
-        self,
-        sources: list[dict],
-        blueprint: list[SectionBlueprint]
+        self, sources: list[dict], blueprint: list[SectionBlueprint]
     ) -> list[OutlineNode]:
         """Assign sources to sections respecting category restrictions."""
         # Create outline nodes from blueprint
@@ -151,7 +155,7 @@ class CategoryAwareOutlineGenerator:
                 tone=bp.tone_instruction,
                 word_target=bp.word_target,
                 assigned_sources=[],
-                has_content=False
+                has_content=False,
             )
             nodes.append(node)
 
@@ -161,10 +165,12 @@ class CategoryAwareOutlineGenerator:
         # Pass 1: Assign by keywords and category restriction
         for source in sources:
             assigned = False
-            source_group = source.get("category_group")  # Keep None, don't default to ""
+            source_group = source.get(
+                "category_group"
+            )  # Keep None, don't default to ""
             source_excerpts = " ".join(source.get("context_excerpts", [])).lower()
             source_category = (source.get("category") or "").lower()
-            
+
             # Enhanced Search: Include matched sections and intent in keyword matching
             matched_sections = " ".join(source.get("matched_sections", [])).lower()
             intent = (source.get("intent") or "").lower()
@@ -179,7 +185,9 @@ class CategoryAwareOutlineGenerator:
                 # Check keyword match
                 for bp in blueprint:
                     if bp.title == node.title:
-                        if self._matches_keywords(combined_text, source_category, bp.keywords):
+                        if self._matches_keywords(
+                            combined_text, source_category, bp.keywords
+                        ):
                             node.assigned_sources.append(source)
                             node.has_content = True
                             assigned = True
@@ -190,7 +198,9 @@ class CategoryAwareOutlineGenerator:
 
         # Pass 2: Knowledge safety net - assign unassigned to most appropriate section
         for source in unassigned:
-            source_group = source.get("category_group")  # Keep None, don't default to ""
+            source_group = source.get(
+                "category_group"
+            )  # Keep None, don't default to ""
 
             # Find best matching section by category
             for node in nodes:
@@ -213,10 +223,7 @@ class CategoryAwareOutlineGenerator:
         return nodes
 
     def _matches_keywords(
-        self,
-        source_text: str,
-        source_category: str,
-        keywords: list[str]
+        self, source_text: str, source_category: str, keywords: list[str]
     ) -> bool:
         """Check if source matches section keywords."""
         for keyword in keywords:
@@ -238,9 +245,7 @@ class CategoryAwareOutlineGenerator:
             if node.has_content or node.title in required_titles:
                 filtered.append(node)
             else:
-                console.print(
-                    f"[yellow]Removing empty section: {node.title}[/yellow]"
-                )
+                console.print(f"[yellow]Removing empty section: {node.title}[/yellow]")
 
         return filtered
 
@@ -257,56 +262,93 @@ class CategoryAwareOutlineGenerator:
                 keywords=["introduction", "overview", "background", "importance"],
                 tone_instruction="descriptive",
                 required=True,
-                word_target=500
+                word_target=500,
             ),
             SectionBlueprint(
                 title="Epidemiology and Natural History",
                 description="Incidence, prevalence, demographics, and disease progression",
                 allowed_groups=["Theoretical"],
-                keywords=["epidemiology", "incidence", "prevalence", "demographics", "natural history"],
+                keywords=[
+                    "epidemiology",
+                    "incidence",
+                    "prevalence",
+                    "demographics",
+                    "natural history",
+                ],
                 tone_instruction="descriptive",
-                word_target=800
+                word_target=800,
             ),
             SectionBlueprint(
                 title="Pathophysiology",
                 description="Disease mechanisms and underlying biology",
                 allowed_groups=["Theoretical"],
-                keywords=["pathophysiology", "mechanism", "pathology", "etiology", "biology"],
+                keywords=[
+                    "pathophysiology",
+                    "mechanism",
+                    "pathology",
+                    "etiology",
+                    "biology",
+                ],
                 tone_instruction="descriptive",
-                word_target=1000
+                word_target=1000,
             ),
             SectionBlueprint(
                 title="Surgical Anatomy",
                 description="Anatomical structures relevant to surgical approach",
                 allowed_groups=["Surgical/Anatomical"],
-                keywords=["anatomy", "anatomical", "neuroanatomy", "structure", "surgical anatomy"],
+                keywords=[
+                    "anatomy",
+                    "anatomical",
+                    "neuroanatomy",
+                    "structure",
+                    "surgical anatomy",
+                ],
                 tone_instruction="descriptive",
-                word_target=1200
+                word_target=1200,
             ),
             SectionBlueprint(
                 title="Clinical Presentation and Diagnosis",
                 description="Signs, symptoms, examination findings, and diagnostic workup",
                 allowed_groups=None,  # Both allowed
-                keywords=["clinical", "presentation", "symptoms", "diagnosis", "imaging"],
+                keywords=[
+                    "clinical",
+                    "presentation",
+                    "symptoms",
+                    "diagnosis",
+                    "imaging",
+                ],
                 tone_instruction="descriptive",
-                word_target=1000
+                word_target=1000,
             ),
             SectionBlueprint(
                 title="Surgical Technique",
                 description="Step-by-step operative approach",
                 allowed_groups=["Surgical/Anatomical"],
-                keywords=["technique", "surgical", "operative", "approach", "procedure", "step"],
+                keywords=[
+                    "technique",
+                    "surgical",
+                    "operative",
+                    "approach",
+                    "procedure",
+                    "step",
+                ],
                 tone_instruction="imperative",  # "Position the patient...", "Make the incision..."
                 required=True,
-                word_target=2500
+                word_target=2500,
             ),
             SectionBlueprint(
                 title="Complications and Management",
                 description="Potential complications and how to prevent/manage them",
                 allowed_groups=["Surgical/Anatomical"],
-                keywords=["complication", "risk", "adverse", "management", "prevention"],
+                keywords=[
+                    "complication",
+                    "risk",
+                    "adverse",
+                    "management",
+                    "prevention",
+                ],
                 tone_instruction="imperative",
-                word_target=1000
+                word_target=1000,
             ),
             SectionBlueprint(
                 title="Outcomes and Prognosis",
@@ -314,7 +356,7 @@ class CategoryAwareOutlineGenerator:
                 allowed_groups=["Theoretical"],
                 keywords=["outcome", "prognosis", "result", "survival", "follow-up"],
                 tone_instruction="descriptive",
-                word_target=800
+                word_target=800,
             ),
             SectionBlueprint(
                 title="Conclusions",
@@ -323,7 +365,7 @@ class CategoryAwareOutlineGenerator:
                 keywords=["conclusion", "summary", "key points"],
                 tone_instruction="descriptive",
                 required=True,
-                word_target=300
+                word_target=300,
             ),
         ]
 
@@ -334,10 +376,16 @@ class CategoryAwareOutlineGenerator:
                 title="Clinical Context",
                 description="Indication hierarchy, patient selection, alternatives, and expected outcomes",
                 allowed_groups=["Surgical/Anatomical", "Theoretical"],
-                keywords=["indication", "selection", "criteria", "alternative", "outcome"],
+                keywords=[
+                    "indication",
+                    "selection",
+                    "criteria",
+                    "alternative",
+                    "outcome",
+                ],
                 tone_instruction="descriptive",
                 required=True,
-                word_target=800
+                word_target=800,
             ),
             SectionBlueprint(
                 title="Strategic Planning",
@@ -346,7 +394,7 @@ class CategoryAwareOutlineGenerator:
                 keywords=["imaging", "planning", "trajectory", "risk", "equipment"],
                 tone_instruction="imperative",
                 required=True,
-                word_target=1000
+                word_target=1000,
             ),
             # II. OPERATIVE EXECUTION
             SectionBlueprint(
@@ -356,7 +404,7 @@ class CategoryAwareOutlineGenerator:
                 keywords=["positioning", "fixation", "setup", "check"],
                 tone_instruction="imperative",
                 required=True,
-                word_target=800
+                word_target=800,
             ),
             SectionBlueprint(
                 title="Surface Anatomy and Incision",
@@ -365,7 +413,7 @@ class CategoryAwareOutlineGenerator:
                 keywords=["landmark", "incision", "surface", "anatomy", "danger"],
                 tone_instruction="imperative",
                 required=True,
-                word_target=800
+                word_target=800,
             ),
             SectionBlueprint(
                 title="Dissection and Approach",
@@ -374,7 +422,7 @@ class CategoryAwareOutlineGenerator:
                 keywords=["dissection", "approach", "layer", "plane", "instrument"],
                 tone_instruction="imperative",
                 required=True,
-                word_target=1500
+                word_target=1500,
             ),
             # III. CRITICAL PROCEDURE PHASE
             SectionBlueprint(
@@ -384,7 +432,7 @@ class CategoryAwareOutlineGenerator:
                 keywords=["action", "resection", "placement", "execution", "target"],
                 tone_instruction="imperative",
                 required=True,
-                word_target=2000
+                word_target=2000,
             ),
             # IV. CLOSURE & POST-OP
             SectionBlueprint(
@@ -394,7 +442,7 @@ class CategoryAwareOutlineGenerator:
                 keywords=["closure", "suture", "drain", "dressing", "post-op"],
                 tone_instruction="imperative",
                 required=True,
-                word_target=800
+                word_target=800,
             ),
         ]
 
@@ -407,7 +455,7 @@ class CategoryAwareOutlineGenerator:
                 keywords=["introduction", "overview", "history", "significance"],
                 tone_instruction="descriptive",
                 required=True,
-                word_target=600
+                word_target=600,
             ),
             SectionBlueprint(
                 title="Historical Perspective",
@@ -416,16 +464,21 @@ class CategoryAwareOutlineGenerator:
                 keywords=["history", "historical", "evolution", "discovery"],
                 tone_instruction="descriptive",
                 required=True,
-                word_target=600
+                word_target=600,
             ),
             SectionBlueprint(
                 title="Epidemiology and Natural History",
                 description="Incidence, demographics, and disease progression",
                 allowed_groups=["Theoretical"],
-                keywords=["epidemiology", "incidence", "demographics", "natural history"],
+                keywords=[
+                    "epidemiology",
+                    "incidence",
+                    "demographics",
+                    "natural history",
+                ],
                 tone_instruction="descriptive",
                 required=True,
-                word_target=800
+                word_target=800,
             ),
             SectionBlueprint(
                 title="Pathophysiology and Molecular Biology",
@@ -434,16 +487,22 @@ class CategoryAwareOutlineGenerator:
                 keywords=["pathophysiology", "mechanism", "molecular", "genetics"],
                 tone_instruction="descriptive",
                 required=True,
-                word_target=1200
+                word_target=1200,
             ),
             SectionBlueprint(
                 title="Clinical Presentation and Diagnosis",
                 description="Symptoms, signs, imaging, and diagnostic criteria",
                 allowed_groups=None,
-                keywords=["clinical", "presentation", "diagnosis", "imaging", "symptoms"],
+                keywords=[
+                    "clinical",
+                    "presentation",
+                    "diagnosis",
+                    "imaging",
+                    "symptoms",
+                ],
                 tone_instruction="descriptive",
                 required=True,
-                word_target=1000
+                word_target=1000,
             ),
             SectionBlueprint(
                 title="Management Strategies",
@@ -452,7 +511,7 @@ class CategoryAwareOutlineGenerator:
                 keywords=["management", "treatment", "indication", "strategy"],
                 tone_instruction="descriptive",
                 required=True,
-                word_target=1200
+                word_target=1200,
             ),
             SectionBlueprint(
                 title="Outcomes and Evidence",
@@ -461,7 +520,7 @@ class CategoryAwareOutlineGenerator:
                 keywords=["outcome", "evidence", "trial", "prognosis", "result"],
                 tone_instruction="descriptive",
                 required=True,
-                word_target=1000
+                word_target=1000,
             ),
             SectionBlueprint(
                 title="Future Directions",
@@ -470,7 +529,7 @@ class CategoryAwareOutlineGenerator:
                 keywords=["future", "emerging", "research", "novel"],
                 tone_instruction="descriptive",
                 required=True,
-                word_target=600
+                word_target=600,
             ),
             SectionBlueprint(
                 title="Conclusions",
@@ -479,7 +538,7 @@ class CategoryAwareOutlineGenerator:
                 keywords=["conclusion", "summary"],
                 tone_instruction="descriptive",
                 required=True,
-                word_target=400
+                word_target=400,
             ),
         ]
 

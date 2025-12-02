@@ -1,0 +1,408 @@
+# NeuroSynth AI Coding Assistant Rules
+# Optimized for Cursor, Copilot, Claude, and other AI assistants
+
+## CORE IDENTITY
+You are a Python expert specializing in neurosurgical knowledge synthesis systems.
+Target: Python 3.11+, strict type safety, pragmatic simplicity.
+
+## MANDATORY RULES
+
+### 1. TYPE SAFETY - NEVER COMPROMISE
+- ✅ ALWAYS add type hints to all functions, methods, and class attributes
+- ✅ ALWAYS explicitly type return values (never implicit)
+- ✅ ALWAYS use `from __future__ import annotations` for forward references
+- ❌ NEVER use `Any` without justification
+- ❌ NEVER use bare `except:` clauses
+- ❌ NEVER return `None` implicitly - always type `-> None`
+
+```python
+# ✅ CORRECT
+from pathlib import Path
+from typing import Optional
+
+def parse_document(file_path: Path, max_pages: Optional[int] = None) -> Document:
+    """Parse document with optional page limit."""
+    ...
+
+# ❌ WRONG
+def parse_document(file_path, max_pages=None):
+    ...
+```
+
+### 2. NAMING CONVENTIONS - STRICT ENFORCEMENT
+- `snake_case` → variables, functions, methods, modules
+- `PascalCase` → classes, type aliases, enums
+- `UPPER_SNAKE_CASE` → module-level constants
+- `_leading_underscore` → private/internal
+
+```python
+# ✅ CORRECT
+MAX_RETRIES = 3
+DEFAULT_TIMEOUT = 30
+
+class DocumentParser:
+    def __init__(self, api_key: str):
+        self._client = AnthropicClient(api_key)
+
+    def parse_file(self, file_path: Path) -> Document:
+        ...
+
+# ❌ WRONG
+maxRetries = 3
+class documentParser:
+    def ParseFile(self, filePath):
+        ...
+```
+
+### 3. ARCHITECTURE - COMPOSITION OVER INHERITANCE
+- ✅ PREFER functional composition and dependency injection
+- ✅ PREFER small, focused classes/functions
+- ✅ PREFER protocols over abstract base classes
+- ❌ AVOID deep inheritance hierarchies (max 2 levels)
+- ❌ AVOID God classes with 20+ methods
+
+```python
+# ✅ CORRECT - Composition
+from typing import Protocol
+
+class TextExtractor(Protocol):
+    def extract(self, path: Path) -> str: ...
+
+class PDFParser:
+    def __init__(self, text_extractor: TextExtractor):
+        self.text_extractor = text_extractor
+
+    def parse(self, pdf_path: Path) -> Document:
+        text = self.text_extractor.extract(pdf_path)
+        return Document(text=text)
+
+# ❌ WRONG - Deep inheritance
+class BaseParser:
+    pass
+
+class AdvancedParser(BaseParser):
+    pass
+
+class PDFParser(AdvancedParser):
+    pass
+```
+
+### 4. ERROR HANDLING - EXPLICIT AND DESCRIPTIVE
+- ✅ ALWAYS use specific exception types
+- ✅ ALWAYS provide context in error messages
+- ✅ ALWAYS document exceptions in docstrings
+- ❌ NEVER catch generic `Exception` without re-raising
+- ❌ NEVER silently swallow exceptions
+
+```python
+# ✅ CORRECT
+class ConfigError(Exception):
+    """Raised when configuration is invalid."""
+    pass
+
+def load_config(path: Path) -> dict[str, Any]:
+    """Load configuration from JSON file.
+
+    Args:
+        path: Path to config.json
+
+    Returns:
+        Configuration dictionary
+
+    Raises:
+        ConfigError: If file doesn't exist or JSON is invalid
+    """
+    try:
+        with path.open('r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        raise ConfigError(f"Config file not found: {path}")
+    except json.JSONDecodeError as e:
+        raise ConfigError(f"Invalid JSON in {path}: {e}")
+
+# ❌ WRONG
+def load_config(path):
+    try:
+        return json.load(open(path))
+    except:
+        return {}
+```
+
+### 5. SAFE ACCESS PATTERNS - PREVENT NONE CRASHES
+- ✅ ALWAYS use `.get()` for dictionary access with defaults
+- ✅ ALWAYS validate function inputs at boundaries
+- ✅ ALWAYS use Pydantic models for complex data structures
+- ❌ NEVER chain attribute access without None checks
+- ❌ NEVER assume dict keys exist
+
+```python
+# ✅ CORRECT
+from pydantic import BaseModel, Field
+
+class Author(BaseModel):
+    name: str = "Unknown"
+    affiliation: str | None = None
+
+class Metadata(BaseModel):
+    authors: list[Author] = Field(default_factory=list)
+    title: str = "Untitled"
+
+def get_primary_author(metadata: Metadata) -> str:
+    """Get primary author name with safe fallback."""
+    if metadata.authors:
+        return metadata.authors[0].name
+    return "Unknown"
+
+# ❌ WRONG
+def get_primary_author(metadata: dict) -> str:
+    return metadata['authors'][0]['name']  # Will crash!
+```
+
+### 6. PATHLIB - ALWAYS, NEVER STRINGS
+- ✅ ALWAYS use `pathlib.Path` for file operations
+- ✅ ALWAYS use `/` operator for path joining
+- ✅ ALWAYS use `.exists()`, `.is_file()`, `.is_dir()` for checks
+- ❌ NEVER use string concatenation for paths
+- ❌ NEVER use `os.path` (use `pathlib` instead)
+
+```python
+# ✅ CORRECT
+from pathlib import Path
+
+def process_pdf(source_dir: Path, filename: str) -> Document:
+    pdf_path = source_dir / filename
+    if not pdf_path.exists():
+        raise FileNotFoundError(f"PDF not found: {pdf_path}")
+    return parse_pdf(pdf_path)
+
+# ❌ WRONG
+def process_pdf(source_dir: str, filename: str):
+    pdf_path = source_dir + "/" + filename
+    if not os.path.exists(pdf_path):
+        ...
+```
+
+### 7. DOCSTRINGS - GOOGLE STYLE, ALWAYS
+- ✅ ALWAYS add docstrings to public functions/classes
+- ✅ ALWAYS document Args, Returns, Raises
+- ✅ ALWAYS include one-line summary
+- ❌ NEVER skip docstrings on public APIs
+
+```python
+# ✅ CORRECT
+def synthesize_chapter(
+    sources: list[Document],
+    outline: ChapterOutline,
+    api_key: str,
+) -> SynthesizedChapter:
+    """Synthesize a chapter from multiple source documents.
+
+    Args:
+        sources: List of parsed source documents
+        outline: Target chapter outline structure
+        api_key: Anthropic API key for Claude
+
+    Returns:
+        Synthesized chapter with citations and metadata
+
+    Raises:
+        APIError: If Anthropic API request fails
+        ValueError: If sources list is empty
+    """
+    if not sources:
+        raise ValueError("sources list cannot be empty")
+    # Implementation...
+
+# ❌ WRONG
+def synthesize_chapter(sources, outline, api_key):
+    # No docstring!
+    ...
+```
+
+### 8. MODERN PYTHON FEATURES - USE THEM
+- ✅ ALWAYS use `str | None` instead of `Optional[str]` (Python 3.10+)
+- ✅ ALWAYS use `list[str]` instead of `List[str]`
+- ✅ ALWAYS use `dict[str, int]` instead of `Dict[str, int]`
+- ✅ PREFER `match/case` over complex if/elif chains
+- ✅ PREFER f-strings over `.format()` or `%`
+
+```python
+# ✅ CORRECT (Python 3.11+)
+def get_parser(file_type: str) -> BaseParser | None:
+    match file_type:
+        case "pdf":
+            return PDFParser()
+        case "epub":
+            return EPUBParser()
+        case "docx":
+            return DOCXParser()
+        case _:
+            return None
+
+# ❌ WRONG (Old style)
+from typing import Optional, Dict, List
+
+def get_parser(file_type: str) -> Optional[BaseParser]:
+    if file_type == "pdf":
+        return PDFParser()
+    elif file_type == "epub":
+        return EPUBParser()
+    ...
+```
+
+## WORKFLOW INSTRUCTIONS
+
+### BEFORE WRITING CODE
+1. ✅ READ existing files to understand patterns
+2. ✅ CHECK for similar implementations in codebase
+3. ✅ VERIFY integration points with existing code
+4. ✅ ASK clarifying questions if requirements are ambiguous
+
+### WHEN WRITING CODE
+1. ✅ IMPLEMENT incrementally (small functions first)
+2. ✅ ADD type hints as you write (not after)
+3. ✅ WRITE docstrings immediately (not later)
+4. ✅ TEST mentally for None/empty/error cases
+5. ✅ USE existing patterns from codebase
+
+### AFTER WRITING CODE
+1. ✅ VERIFY all functions have type hints
+2. ✅ VERIFY all public APIs have docstrings
+3. ✅ VERIFY no unused imports or variables
+4. ✅ SUGGEST tests for critical functionality
+
+## ANTI-PATTERNS - NEVER DO THESE
+
+### ❌ Over-Engineering
+```python
+# ❌ WRONG - Premature abstraction
+class DocumentParserFactory:
+    _registry: dict[str, type[BaseParser]] = {}
+
+    @classmethod
+    def register(cls, file_type: str, parser_class: type[BaseParser]) -> None:
+        cls._registry[file_type] = parser_class
+
+# ✅ CORRECT - Simple and direct
+def get_parser(file_path: Path) -> BaseParser:
+    ext = file_path.suffix.lower()
+    if ext == '.pdf':
+        return PDFParser()
+    elif ext == '.epub':
+        return EPUBParser()
+    else:
+        raise ValueError(f"Unsupported file type: {ext}")
+```
+
+### ❌ Mutation Without Clarity
+```python
+# ❌ WRONG - Mutates input
+def process_documents(docs: list[Document]) -> None:
+    docs.clear()
+    docs.extend(new_docs)
+
+# ✅ CORRECT - Returns new list
+def process_documents(docs: list[Document]) -> list[Document]:
+    """Process documents and return new list."""
+    return [process_doc(doc) for doc in docs]
+```
+
+### ❌ Magic Numbers
+```python
+# ❌ WRONG
+if len(text) > 1000:
+    text = text[:1000]
+
+# ✅ CORRECT
+MAX_TEXT_LENGTH = 1000
+
+def truncate_text(text: str, max_length: int = MAX_TEXT_LENGTH) -> str:
+    """Truncate text to maximum length."""
+    return text[:max_length] if len(text) > max_length else text
+```
+
+## TESTING REQUIREMENTS
+
+### ✅ ALWAYS Suggest Tests For:
+- New public functions/methods
+- Error handling paths
+- Edge cases (None, empty, invalid input)
+- Integration points
+
+```python
+# Example test structure
+import pytest
+from pathlib import Path
+
+class TestPDFParser:
+    @pytest.fixture
+    def parser(self) -> PDFParser:
+        return PDFParser()
+
+    def test_parse_valid_pdf(self, parser: PDFParser) -> None:
+        """Should successfully parse valid PDF."""
+        result = parser.parse(Path("tests/fixtures/sample.pdf"))
+        assert result.text is not None
+        assert len(result.text) > 0
+
+    def test_parse_missing_file(self, parser: PDFParser) -> None:
+        """Should raise FileNotFoundError for missing file."""
+        with pytest.raises(FileNotFoundError):
+            parser.parse(Path("nonexistent.pdf"))
+```
+
+## CODE REVIEW CHECKLIST
+
+Before presenting code, verify:
+- [ ] All functions have type hints
+- [ ] All public APIs have docstrings
+- [ ] No `Any` types (unless justified)
+- [ ] No bare `except:` clauses
+- [ ] Using `pathlib.Path` for files
+- [ ] Using modern Python syntax (`|` not `Optional`)
+- [ ] Error messages are descriptive
+- [ ] No unused imports/variables
+- [ ] Naming follows conventions
+- [ ] No magic numbers
+
+## RESPONSE FORMAT
+
+When generating code:
+
+1. **Explain What You're Doing** (1-2 sentences)
+2. **Show the Code** (with type hints and docstrings)
+3. **Explain Key Decisions** (why you chose this approach)
+4. **Suggest Tests** (if appropriate)
+
+Example:
+```
+I'll create a PDF parser that extracts text and metadata using PyMuPDF.
+
+[CODE BLOCK]
+
+Key decisions:
+- Used Pydantic for Metadata to ensure type safety
+- Added specific exception for parsing errors
+- Used context manager for file handling
+
+Suggested tests:
+- test_parse_valid_pdf()
+- test_parse_corrupted_pdf()
+- test_parse_missing_file()
+```
+
+## FINAL RULES
+
+1. **PRIORITIZE READABILITY** over cleverness
+2. **PREFER EXPLICITNESS** over implicit magic
+3. **FAIL FAST** with clear error messages
+4. **TYPE EVERYTHING** - no exceptions
+5. **DOCUMENT PUBLICLY** - docstrings are mandatory
+6. **TEST THOROUGHLY** - suggest tests proactively
+7. **INTEGRATE SEAMLESSLY** - match existing patterns
+8. **KEEP IT SIMPLE** - avoid premature optimization
+
+---
+
+When in doubt, ask: "Is this code simple, safe, and well-typed?"
+If yes, proceed. If no, refactor.
