@@ -358,6 +358,8 @@ async def _synthesize_async(
         OutlineGenerator,
         SectionSynthesizer,
     )
+    from neurosynth.synthesis.category_outline import OutlineNode
+    from neurosynth.synthesis.outline import OutlineEntry
 
     processed_dir = project / "processed"
     output_dir = project / "output"
@@ -405,6 +407,7 @@ async def _synthesize_async(
     progress_log(f"Synthesizing chapter: {topic}")
 
     # Check for manifest-driven synthesis (Category Aware)
+    outline: list[OutlineNode] | list[OutlineEntry]
     if manifest and (manifest.get("template_type") or manifest.get("category_summary")):
         progress_log("Using Category-Aware Synthesis...")
 
