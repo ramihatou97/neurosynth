@@ -292,7 +292,7 @@ class LaTeXGenerator:
 
         logger = logging.getLogger(__name__)
 
-        result = {
+        result: dict[str, Any] = {
             "has_errors": False,
             "errors": [],
             "missing_files": [],

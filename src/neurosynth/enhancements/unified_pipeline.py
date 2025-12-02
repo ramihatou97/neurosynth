@@ -139,7 +139,7 @@ class ExtractionResult:
                 "time": f"{self.total_time:.2f}s",
             },
             "images": [img.to_dict() for img in self.images],
-            "vectors": [v.to_dict() for v in self.vector_graphics],
+            "vectors": [v.to_dict() for v in self.vector_graphics],  # type: ignore[attr-defined]
             "sequences": [s.to_dict() for s in self.sequences],
             "errors": self.errors,
             "warnings": self.warnings,

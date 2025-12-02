@@ -7,7 +7,7 @@ like surgical diagrams, anatomical illustrations, and imaging studies.
 
 import asyncio
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 from PIL import Image
@@ -251,8 +251,8 @@ class ColPaliClient:
         # Get image paths (filter None to satisfy mypy)
         image_paths = [e.image_path for e in to_embed if e.image_path is not None]
 
-        # Generate embeddings
-        embeddings = await self.embed_images(image_paths)
+        # Generate embeddings (cast due to list invariance - all paths are Path type)
+        embeddings = await self.embed_images(cast(list[Image.Image | Path], image_paths))
 
         # Assign embeddings to elements
         for element, embedding in zip(to_embed, embeddings, strict=False):

@@ -412,9 +412,9 @@ class EnhancedLaTeXFigureGenerator:
         # Generate code
         page_breaks = 0
         if spec.layout == FigureLayout.PROCEDURAL:
-            latex_code, page_breaks = builder.build(spec)
+            latex_code, page_breaks = builder.build(spec)  # type: ignore[attr-defined]
         else:
-            latex_code = builder.build(spec)
+            latex_code = builder.build(spec)  # type: ignore[attr-defined]
 
         # Validate if requested
         is_valid = True
@@ -423,7 +423,7 @@ class EnhancedLaTeXFigureGenerator:
         if validate and latex_code:
             result = self.validator.validate_figure_code(latex_code)
             is_valid = result.is_valid
-            errors = [issue.message for issue in result.errors]
+            errors = [issue.message for issue in result.errors]  # type: ignore[attr-defined]
 
         return GeneratedFigure(
             latex_code=latex_code,

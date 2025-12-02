@@ -404,7 +404,7 @@ class ContextAnalyzer:
         # Check for demonstrative patterns
         for pattern in self.demonstrative_patterns:
             if pattern.search(text):
-                details["demonstratives"].append(pattern.pattern)
+                details["demonstratives"].append(pattern.pattern)  # type: ignore[attr-defined]
                 score += 0.1
 
         return min(score, 1.0), details
@@ -733,7 +733,7 @@ class ClusterBuilder:
 
                 if category_counts:
                     cluster.primary_topic = max(
-                        category_counts, key=category_counts.get
+                        category_counts, key=category_counts.get  # type: ignore[arg-type]
                     )
 
             cluster.page_span = (image.page_number, image.page_number)

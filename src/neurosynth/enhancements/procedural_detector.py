@@ -527,7 +527,7 @@ class ProceduralSequenceDetector:
             for elem in candidate:
                 type_counts[elem.sequence_type] += 1
 
-            primary_type = max(type_counts, key=type_counts.get)
+            primary_type = max(type_counts, key=type_counts.get)  # type: ignore[arg-type]
 
             # Calculate confidence
             confidence = sum(e.confidence for e in candidate) / len(candidate)
