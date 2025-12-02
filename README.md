@@ -21,7 +21,7 @@ NeuroSynth is a CLI tool that processes neurosurgical reference documents (PDF, 
 - **API Keys** (required):
   - [Anthropic Claude](https://console.anthropic.com/) - for synthesis
   - [Google Gemini](https://makersuite.google.com/app/apikey) - for extraction
-  - [Voyage AI](https://www.voyageai.com/) - for embeddings
+  - [Voyage AI](https://www.voyageai.com/) - for semantic embeddings (deduplication/clustering). See [Voyage AI Integration docs](docs/VOYAGE_AI_INTEGRATION.md) for details and alternatives.
 
 ## Installation
 
