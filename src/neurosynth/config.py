@@ -145,6 +145,20 @@ class Settings(BaseSettings):
         description="Enable post-synthesis verification with Gemini",
     )
 
+    # Enhancement Features (Phase 3.5+ - Experimental)
+    enable_enhancements: bool = Field(
+        default=False,
+        description="Enable experimental enhancement features",
+    )
+    enable_keyword_scoring: bool = Field(
+        default=False,
+        description="Enable neurosurgical keyword scoring",
+    )
+    enable_procedural_detection: bool = Field(
+        default=False,
+        description="Enable procedural sequence detection",
+    )
+
     # Paths
     data_dir: Path = Field(default=Path("data"), description="Base data directory")
 

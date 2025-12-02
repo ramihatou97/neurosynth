@@ -640,6 +640,7 @@ class Pipeline:
         # Choose clustering backend
         use_faiss = self.config.use_faiss_clustering and FAISS_AVAILABLE
 
+        clusterer: FAISSClusterer | SemanticClusterer
         if use_faiss:
             console.print("  Using FAISS IndexFlatIP for clustering", style="dim")
             clusterer = FAISSClusterer(

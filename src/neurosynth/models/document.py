@@ -129,7 +129,9 @@ class ContentChunk:
     source: Source
 
     # Location in source
-    page_number: int | None = None
+    page_number: int | None = None  # Single page (legacy, kept for compatibility)
+    page_start: int | None = None  # Start page of multi-page chunk
+    page_end: int | None = None  # End page of multi-page chunk
     section_title: str | None = None
     chapter_title: str | None = None
 

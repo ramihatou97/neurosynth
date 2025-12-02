@@ -387,7 +387,7 @@ class SurgicalColorDetector:
         if not pixels:
             return 0.0
 
-        surgical_matches = 0
+        surgical_matches = 0.0
 
         for r, g, b in pixels:
             # Blood/tissue colors (red spectrum)
@@ -538,7 +538,7 @@ class EnhancedMedicalClassifier:
         Returns:
             FilterResult with classification
         """
-        features: dict[str, float] = {}
+        features: dict[str, float | dict | bool] = {}
 
         # Quick rejection checks
         rejection = self._quick_rejection_check(image_bytes, width, height)
