@@ -383,7 +383,7 @@ class EnhancedLaTeXFigureGenerator:
     def __init__(self, config: NeuroSynthEnhancedConfig = None):
         cfg = config or NeuroSynthEnhancedConfig()
         self.config = cfg.latex
-        self.validator = LaTeXValidator(cfg)
+        self.validator = LaTeXValidator(cfg.latex.enable_compilation_check)
 
         # Initialize builders
         self._builders = {

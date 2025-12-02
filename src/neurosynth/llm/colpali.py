@@ -248,8 +248,8 @@ class ColPaliClient:
             f"[blue]Generating ColPali embeddings for {len(to_embed)} images...[/blue]"
         )
 
-        # Get image paths
-        image_paths = [e.image_path for e in to_embed]
+        # Get image paths (filter None to satisfy mypy)
+        image_paths = [e.image_path for e in to_embed if e.image_path is not None]
 
         # Generate embeddings
         embeddings = await self.embed_images(image_paths)

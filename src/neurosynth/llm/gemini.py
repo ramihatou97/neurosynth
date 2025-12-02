@@ -228,7 +228,7 @@ Return ONLY valid JSON."""
     async def synthesize_section(
         self,
         section_title: str,
-        clusters: list[dict[str, str]],
+        clusters: list[dict[str, object]],
         word_target: int = 1500,
         use_xml_citations: bool = True,
     ) -> str:

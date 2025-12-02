@@ -108,10 +108,16 @@ class ChunkMetadataExtractor:
         gemini = GeminiClient()
         result = await gemini.identify_chunk_topic(chunk.content)
 
+        # Ensure key_concepts is always a list
+        key_concepts_raw = result.get("key_concepts", [])
+        key_concepts = (
+            [key_concepts_raw] if isinstance(key_concepts_raw, str) else key_concepts_raw
+        )
+
         metadata = ChunkMetadata(
             topic=result.get("topic", ""),
             subtopic=result.get("subtopic", ""),
-            key_concepts=result.get("key_concepts", []),
+            key_concepts=key_concepts,
             section_type=result.get("section_suggestion", ""),
         )
 

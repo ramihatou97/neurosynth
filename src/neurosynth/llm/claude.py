@@ -3,7 +3,7 @@
 from typing import Any
 
 import anthropic
-from anthropic.types import TextBlock
+from anthropic.types import MessageParam, TextBlock
 from rich.console import Console
 from tenacity import (
     retry,
@@ -76,7 +76,7 @@ class ClaudeClient:
         max_tokens: int = 8192,
     ) -> str:
         """Generate text completion with robust retry handling."""
-        messages = [{"role": "user", "content": prompt}]
+        messages: list[MessageParam] = [{"role": "user", "content": prompt}]
 
         logger.debug(
             f"Generating response (prompt length: {len(prompt)}, max_tokens: {max_tokens})"
@@ -293,7 +293,7 @@ Return ONLY valid JSON array."""
     async def synthesize_section(
         self,
         section_title: str,
-        clusters: list[dict[str, str]],
+        clusters: list[dict[str, object]],
         word_target: int = 1500,
         use_xml_citations: bool = True,
     ) -> str:
