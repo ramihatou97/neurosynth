@@ -38,6 +38,12 @@ build/
 .coverage
 htmlcov/
 
+# Type checking
+.mypy_cache/
+.ruff_cache/
+.dmypy.json
+dmypy.json
+
 # Logs
 logs/
 *.log
@@ -45,3 +51,22 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+# Obsolete/Archive
+obsolete/
+
+# Validation outputs
+validation_output*.txt
+
+# Temporary/debug files
+Untitled*
+*untitled*
+reproduce_*.py
+inspect_*.py
+*_manual.py
+additional*.ini
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3

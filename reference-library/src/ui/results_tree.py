@@ -360,10 +360,6 @@ class ResultsTree(ctk.CTkFrame):
 
     # ==================== Smart Selection Methods ====================
 
-    def get_selected_coverage(self) -> dict[str, int]:
-        """Get count of selected results per category group (stub for compatibility)."""
-        return {"Surgical/Anatomical": 0, "Theoretical": 0}
-
     def smart_select_balanced(self, target_per_group: int = 6) -> list[str]:
         """
         Auto-select first N results from each book series for balanced coverage.

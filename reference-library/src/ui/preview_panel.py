@@ -68,45 +68,15 @@ class PreviewPanel(ctk.CTkFrame):
         )
         self.page_label.pack(fill="x")
 
-        # Category badge frame
-        cat_frame = ctk.CTkFrame(self.metadata_frame, fg_color="transparent")
-        cat_frame.pack(fill="x", pady=PADDING["small"])
-
-        ctk.CTkLabel(
-            cat_frame,
-            text="Category:",
-            font=FONTS["body"]
-        ).pack(side="left")
-
-        self.category_badge = ctk.CTkLabel(
-            cat_frame,
-            text="-",
-            font=FONTS["body"],
-            fg_color="#95a5a6",
-            corner_radius=4,
-            padx=8,
-            pady=2
-        )
-        self.category_badge.pack(side="left", padx=PADDING["small"])
-
-        self.confidence_label = ctk.CTkLabel(
-            cat_frame,
-            text="",
-            font=FONTS["small"],
-            text_color="gray"
-        )
-        self.confidence_label.pack(side="left")
-
-        # Reasoning
-        self.reasoning_label = ctk.CTkLabel(
+        # Match location info (where in document the match was found)
+        self.location_label = ctk.CTkLabel(
             self.metadata_frame,
             text="",
-            font=FONTS["small"],
-            text_color="gray",
+            font=FONTS["body"],
             anchor="w",
-            wraplength=350
+            text_color="#6c5ce7"
         )
-        self.reasoning_label.pack(fill="x", pady=(PADDING["small"], 0))
+        self.location_label.pack(fill="x")
 
         # Separator
         ctk.CTkFrame(self, height=2, fg_color="gray").pack(
@@ -189,28 +159,14 @@ class PreviewPanel(ctk.CTkFrame):
         self.chapter_label.configure(text=f"Chapter: {result.display_name}")
         self.page_label.configure(text=f"Page: {result.page_number}")
 
-        # Update category badge
-        if result.category:
-            color = config.CATEGORY_COLORS.get(result.category, "#95a5a6")
-            self.category_badge.configure(
-                text=result.category,
-                fg_color=color
-            )
-            if result.category_confidence:
-                self.confidence_label.configure(
-                    text=f"({result.category_confidence:.0%} confidence)"
-                )
-            else:
-                self.confidence_label.configure(text="")
-
-            if result.category_reasoning:
-                self.reasoning_label.configure(text=f"AI: {result.category_reasoning}")
-            else:
-                self.reasoning_label.configure(text="")
+        # Update match location info
+        match_count = getattr(result, 'match_count', 1)
+        location_icon = getattr(result, 'location_icon', '📄')
+        match_summary = getattr(result, 'match_summary', '')
+        if match_summary:
+            self.location_label.configure(text=f"{location_icon} {match_summary}")
         else:
-            self.category_badge.configure(text="Categorizing...", fg_color="#95a5a6")
-            self.confidence_label.configure(text="")
-            self.reasoning_label.configure(text="")
+            self.location_label.configure(text="")
 
         # Update context text
         self.context_text.configure(state="normal")
@@ -374,9 +330,7 @@ class PreviewPanel(ctk.CTkFrame):
         self.book_label.configure(text="Book: -")
         self.chapter_label.configure(text="Chapter: -")
         self.page_label.configure(text="Page: -")
-        self.category_badge.configure(text="-", fg_color="#95a5a6")
-        self.confidence_label.configure(text="")
-        self.reasoning_label.configure(text="")
+        self.location_label.configure(text="")
         self.context_text.configure(state="normal")
         self.context_text.delete("1.0", "end")
         self.context_text.configure(state="disabled")

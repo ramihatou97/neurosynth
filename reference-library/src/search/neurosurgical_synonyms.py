@@ -2,10 +2,32 @@
 
 This module provides comprehensive synonym mappings for neurosurgical terms
 to improve search recall by expanding queries with related terminology.
+
+Enhanced with extracted dictionaries from the Neurosurgical Procedural Framework.
 """
 
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Optional
 
+# Import extracted dictionaries
+from .extracted_dictionaries import (
+    INSTRUMENT_SYNONYMS,
+    POSITIONING_TERMS,
+    NEUROMONITORING_TERMS,
+    HEMOSTATIC_AGENTS,
+    COMPLICATION_TERMS,
+    TISSUE_DESCRIPTORS,
+    IMAGING_INTRAOP,
+    SURGICAL_PHASES,
+    ORTHOGRAPHIC_VARIATIONS,
+    get_orthographic_variants,
+    expand_with_monitoring_context,
+    expand_with_complication_context,
+)
+
+
+# =============================================================================
+# ORIGINAL SYNONYM DICTIONARIES (Enhanced)
+# =============================================================================
 
 # Tumor/Pathology Synonyms
 TUMOR_SYNONYMS: Dict[str, List[str]] = {
@@ -111,8 +133,12 @@ IMAGING_SYNONYMS: Dict[str, List[str]] = {
     "MRA": ["MR angiography", "magnetic resonance angiography"],
 }
 
-# Combine all synonym dictionaries
-ALL_SYNONYMS: Dict[str, List[str]] = {
+# =============================================================================
+# COMBINED SYNONYM DICTIONARIES
+# =============================================================================
+
+# Original domain-specific synonyms
+DOMAIN_SYNONYMS: Dict[str, List[str]] = {
     **TUMOR_SYNONYMS,
     **VASCULAR_SYNONYMS,
     **SPINAL_SYNONYMS,
@@ -123,10 +149,103 @@ ALL_SYNONYMS: Dict[str, List[str]] = {
     **IMAGING_SYNONYMS,
 }
 
+# Extracted procedural/technical synonyms
+PROCEDURAL_SYNONYMS: Dict[str, List[str]] = {
+    **INSTRUMENT_SYNONYMS,
+    **POSITIONING_TERMS,
+    **HEMOSTATIC_AGENTS,
+    **TISSUE_DESCRIPTORS,
+    **IMAGING_INTRAOP,
+    **SURGICAL_PHASES,
+}
 
-def expand_query(query: str, max_expansions: int = 3) -> List[str]:
+# Combine all synonym dictionaries (for backward compatibility)
+ALL_SYNONYMS: Dict[str, List[str]] = {
+    **DOMAIN_SYNONYMS,
+    **PROCEDURAL_SYNONYMS,
+}
+
+
+# =============================================================================
+# ENHANCED QUERY EXPANSION FUNCTIONS
+# =============================================================================
+
+def expand_query(
+    query: str,
+    max_expansions: int = 5,
+    include_orthographic: bool = True,
+    include_monitoring: bool = True,
+    include_complications: bool = True,
+) -> List[str]:
     """
-    Expand a query with neurosurgical synonyms.
+    Expand a query with neurosurgical synonyms (enhanced version).
+
+    This enhanced function includes:
+    - Standard synonym expansion
+    - Orthographic variations (British/American spellings)
+    - Neuromonitoring term expansion with context
+    - Complication term expansion with types and context
+
+    Args:
+        query: Original search query
+        max_expansions: Maximum number of synonym expansions to add
+        include_orthographic: Include British/American spelling variants
+        include_monitoring: Expand neuromonitoring acronyms with context
+        include_complications: Expand complication terms with context
+
+    Returns:
+        List of query variations including original
+    """
+    query_lower = query.lower()
+    expanded = [query]  # Always include original
+    seen_lower = {query_lower}
+
+    def add_expansion(exp: str) -> None:
+        """Helper to add unique expansions."""
+        exp_lower = exp.lower()
+        if exp_lower not in seen_lower and exp.strip():
+            expanded.append(exp)
+            seen_lower.add(exp_lower)
+
+    # 1. Apply orthographic variations first (disc/disk, tumour/tumor, etc.)
+    if include_orthographic:
+        for word in query_lower.split():
+            variants = get_orthographic_variants(word)
+            for variant in variants:
+                if variant.lower() != word:
+                    orthographic_query = query_lower.replace(word, variant.lower())
+                    add_expansion(orthographic_query)
+
+    # 2. Expand neuromonitoring terms (BAER, SSEP, MEP, EMG)
+    if include_monitoring:
+        for word in query.upper().split():
+            if word in NEUROMONITORING_TERMS:
+                monitoring_expansions = expand_with_monitoring_context(word)
+                for exp in monitoring_expansions[1:]:  # Skip original
+                    # Replace the acronym with full name or context term
+                    monitoring_query = query_lower.replace(word.lower(), exp.lower())
+                    add_expansion(monitoring_query)
+
+    # 3. Expand complication terms
+    if include_complications:
+        complication_expansions = expand_with_complication_context(query)
+        for exp in complication_expansions[1:]:  # Skip original
+            if exp.lower() != query_lower:
+                add_expansion(exp)
+
+    # 4. Standard synonym expansion
+    for term, synonyms in ALL_SYNONYMS.items():
+        if term.lower() in query_lower:
+            for synonym in synonyms[:max_expansions]:
+                synonym_query = query_lower.replace(term.lower(), synonym.lower())
+                add_expansion(synonym_query)
+
+    return expanded[:max_expansions + 1]  # Limit total expansions
+
+
+def expand_query_simple(query: str, max_expansions: int = 3) -> List[str]:
+    """
+    Simple query expansion (original behavior for backward compatibility).
 
     Args:
         query: Original search query
@@ -136,22 +255,19 @@ def expand_query(query: str, max_expansions: int = 3) -> List[str]:
         List of query variations including original
     """
     query_lower = query.lower()
-    expanded = [query]  # Always include original
+    expanded = [query]
 
-    # Find matching terms and add their synonyms
     for term, synonyms in ALL_SYNONYMS.items():
         if term.lower() in query_lower:
-            # Add up to max_expansions synonyms
             for synonym in synonyms[:max_expansions]:
-                # Replace the term with synonym in the query
                 expanded_query = query_lower.replace(term.lower(), synonym.lower())
                 if expanded_query not in [e.lower() for e in expanded]:
                     expanded.append(expanded_query)
 
-    return expanded[:max_expansions + 1]  # Limit total expansions
+    return expanded[:max_expansions + 1]
 
 
-def get_all_terms_for_query(query: str) -> Set[str]:
+def get_all_terms_for_query(query: str, include_orthographic: bool = True) -> Set[str]:
     """
     Get all related terms (original + all synonyms) for a query.
 
@@ -159,6 +275,7 @@ def get_all_terms_for_query(query: str) -> Set[str]:
 
     Args:
         query: Search query
+        include_orthographic: Include spelling variants
 
     Returns:
         Set of all related terms
@@ -166,11 +283,24 @@ def get_all_terms_for_query(query: str) -> Set[str]:
     query_lower = query.lower()
     terms = {query_lower}
 
+    # Add orthographic variants
+    if include_orthographic:
+        for word in query_lower.split():
+            terms.update(v.lower() for v in get_orthographic_variants(word))
+
     # Find all matching terms and their synonyms
     for term, synonyms in ALL_SYNONYMS.items():
         if term.lower() in query_lower:
             terms.add(term.lower())
             terms.update(s.lower() for s in synonyms)
+
+    # Add neuromonitoring expansions
+    for word in query.upper().split():
+        if word in NEUROMONITORING_TERMS:
+            terms.update(e.lower() for e in expand_with_monitoring_context(word))
+
+    # Add complication expansions
+    terms.update(e.lower() for e in expand_with_complication_context(query))
 
     return terms
 
@@ -196,5 +326,64 @@ def is_neurosurgical_term(term: str) -> bool:
         if term_lower in [s.lower() for s in synonyms]:
             return True
 
+    # Check neuromonitoring terms
+    if term.upper() in NEUROMONITORING_TERMS:
+        return True
+
+    # Check complication terms
+    if term_lower in [k.lower() for k in COMPLICATION_TERMS.keys()]:
+        return True
+
     return False
+
+
+def get_orthographic_expansion(query: str) -> List[str]:
+    """
+    Get only orthographic (spelling) variations of a query.
+
+    Handles British/American spelling differences like:
+    - disc/disk
+    - tumour/tumor
+    - haematoma/hematoma
+
+    Args:
+        query: Original search query
+
+    Returns:
+        List of spelling variations including original
+    """
+    query_lower = query.lower()
+    expansions = [query]
+    seen = {query_lower}
+
+    for word in query_lower.split():
+        variants = get_orthographic_variants(word)
+        for variant in variants:
+            if variant.lower() != word:
+                new_query = query_lower.replace(word, variant.lower())
+                if new_query not in seen:
+                    expansions.append(new_query)
+                    seen.add(new_query)
+
+    return expansions
+
+
+def get_instrument_synonyms(instrument: str) -> List[str]:
+    """Get synonyms for a surgical instrument."""
+    instrument_lower = instrument.lower()
+    if instrument_lower in INSTRUMENT_SYNONYMS:
+        return [instrument] + INSTRUMENT_SYNONYMS[instrument_lower]
+    return [instrument]
+
+
+def get_monitoring_expansion(acronym: str) -> Dict:
+    """
+    Get full expansion for a neuromonitoring acronym.
+
+    Returns dict with 'full', 'synonyms', and 'context' keys.
+    """
+    acronym_upper = acronym.upper()
+    if acronym_upper in NEUROMONITORING_TERMS:
+        return {"term": acronym, **NEUROMONITORING_TERMS[acronym_upper]}
+    return {"term": acronym, "full": None, "synonyms": [], "context": []}
 

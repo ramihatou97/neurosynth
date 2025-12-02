@@ -164,6 +164,11 @@ class CategoryAwareOutlineGenerator:
             source_group = source.get("category_group")  # Keep None, don't default to ""
             source_excerpts = " ".join(source.get("context_excerpts", [])).lower()
             source_category = (source.get("category") or "").lower()
+            
+            # Enhanced Search: Include matched sections and intent in keyword matching
+            matched_sections = " ".join(source.get("matched_sections", [])).lower()
+            intent = (source.get("intent") or "").lower()
+            combined_text = f"{source_excerpts} {matched_sections} {intent}"
 
             for node in nodes:
                 # Check category restriction (only if source HAS a category)
@@ -174,7 +179,7 @@ class CategoryAwareOutlineGenerator:
                 # Check keyword match
                 for bp in blueprint:
                     if bp.title == node.title:
-                        if self._matches_keywords(source_excerpts, source_category, bp.keywords):
+                        if self._matches_keywords(combined_text, source_category, bp.keywords):
                             node.assigned_sources.append(source)
                             node.has_content = True
                             assigned = True

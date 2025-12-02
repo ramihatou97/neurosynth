@@ -7,6 +7,11 @@ from typing import Any, Optional
 from datetime import datetime
 import json
 
+from ..logger import get_logger
+
+# Module logger
+logger = get_logger("export.page_extractor")
+
 
 @dataclass
 class ExtractedSource:
@@ -25,6 +30,11 @@ class ExtractedSource:
     # Visual content fields
     figures: list[dict[str, Any]] = field(default_factory=list)  # Figures on extracted pages
     figure_count: int = 0
+    # Enhanced Search Fields
+    authority_score: int = 0
+    index_source: str = ""
+    matched_sections: list[str] = field(default_factory=list)
+    intent: str = ""
 
 
 def extract_relevant_pages(
@@ -69,7 +79,7 @@ def extract_relevant_pages(
             if source:
                 extracted_sources.append(source)
         except Exception as e:
-            print(f"Error extracting from {pdf_path}: {e}")
+            logger.warning("Error extracting from %s: %s", pdf_path, e)
             continue
 
     return extracted_sources
@@ -96,15 +106,27 @@ def _extract_pages_from_pdf(
         doc = fitz.open(pdf_path)
         total_pages = len(doc)
 
-        # Collect all relevant page numbers with context
+        # Collect all relevant page numbers
         page_set: set[int] = set()
-        for result in results:
-            page_num = result.page_number
-            # Add context pages before and after
-            for offset in range(-context_pages, context_pages + 1):
-                p = page_num + offset
-                if 1 <= p <= total_pages:
-                    page_set.add(p)
+        
+        # Check if we have ChapterResult objects (enhanced search)
+        is_enhanced = hasattr(results[0], 'matched_pages') and hasattr(results[0], 'matched_sections')
+        
+        if is_enhanced:
+            # Use pre-calculated matched pages from ChapterResult (includes Zero Data Loss window)
+            for result in results:
+                if hasattr(result, 'matched_pages'):
+                    for p in result.matched_pages:
+                        if 1 <= p <= total_pages:
+                            page_set.add(p)
+        else:
+            # Legacy SearchResult: Add context pages around matches
+            for result in results:
+                page_num = result.page_number
+                for offset in range(-context_pages, context_pages + 1):
+                    p = page_num + offset
+                    if 1 <= p <= total_pages:
+                        page_set.add(p)
 
         pages = sorted(page_set)
 
@@ -121,7 +143,7 @@ def _extract_pages_from_pdf(
                 new_doc.insert_pdf(doc, from_page=page_num - 1, to_page=page_num - 1)
                 successfully_inserted_pages.append(page_num)
             except Exception as e:
-                print(f"Warning: Could not insert page {page_num} from {pdf_path.name}: {e}")
+                logger.warning("Could not insert page %d from %s: %s", page_num, pdf_path.name, e)
                 continue  # Skip problematic page, continue with others
 
             # Extract text from the original page
@@ -131,11 +153,11 @@ def _extract_pages_from_pdf(
                 if text.strip():
                     full_text_parts.append(f"--- Page {page_num} ---\n{text}")
             except Exception as e:
-                print(f"Warning: Could not extract text from page {page_num}: {e}")
+                logger.warning("Could not extract text from page %d: %s", page_num, e)
 
         # Check if we successfully inserted any pages
         if not successfully_inserted_pages:
-            print(f"Warning: No pages could be extracted from {pdf_path.name}")
+            logger.warning("No pages could be extracted from %s", pdf_path.name)
             return None
 
         full_text = "\n\n".join(full_text_parts)
@@ -169,14 +191,21 @@ def _extract_pages_from_pdf(
         best_reasoning = None
 
         for r in results:
-            if r.category and (r.category_confidence or 0) >= best_confidence:
-                best_category = r.category
+            cat = getattr(r, 'category', None)
+            conf = getattr(r, 'category_confidence', 0) or 0
+            if cat and conf >= best_confidence:
+                best_category = cat
                 best_group = getattr(r, 'category_group', None)
-                best_confidence = r.category_confidence or 0
+                best_confidence = conf
                 best_reasoning = getattr(r, 'category_reasoning', None)
 
         # Collect context excerpts
-        excerpts = [r.context for r in results if r.context][:5]  # Limit to 5
+        excerpts = []
+        for r in results:
+            ctx = getattr(r, 'context', getattr(r, 'preview_context', None))
+            if ctx:
+                excerpts.append(ctx)
+        excerpts = excerpts[:5]  # Limit to 5
 
         # Collect figures for extracted pages (use successfully_inserted_pages)
         figures = []
@@ -194,7 +223,7 @@ def _extract_pages_from_pdf(
                             "caption_confidence": fig.get("caption_confidence"),
                         })
             except Exception as e:
-                print(f"Warning: Could not load figures for {pdf_path.name}: {e}")
+                logger.warning("Could not load figures for %s: %s", pdf_path.name, e)
 
         return ExtractedSource(
             extracted_path=output_path,
@@ -208,11 +237,16 @@ def _extract_pages_from_pdf(
             context_excerpts=excerpts,
             full_text=full_text,
             figures=figures,
-            figure_count=len(figures)
+            figure_count=len(figures),
+            # Enhanced fields
+            authority_score=getattr(first_result, 'authority_score', 0),
+            index_source=getattr(first_result, 'index_source', ""),
+            matched_sections=[s.title for s in getattr(first_result, 'matched_sections', [])],
+            intent=getattr(first_result, 'match_type', "").name if hasattr(first_result, 'match_type') else ""
         )
 
     except Exception as e:
-        print(f"Error extracting from {pdf_path.name}: {e}")
+        logger.error("Error extracting from %s: %s", pdf_path.name, e)
         return None
 
     finally:
@@ -292,13 +326,45 @@ def _compute_figure_summary(sources: list[ExtractedSource]) -> dict:
     }
 
 
+def _compute_authority_summary(sources: list[ExtractedSource]) -> dict:
+    """Compute authority statistics across all sources.
+
+    Returns summary of authority scores and index sources for NeuroSynth
+    to use in prioritizing content during synthesis.
+    """
+    if not sources:
+        return {"avg_authority": 0, "max_authority": 0, "sources_by_tier": {}}
+
+    scores = [s.authority_score for s in sources if s.authority_score > 0]
+
+    # Tier classification
+    tier_1 = sum(1 for s in scores if s >= 90)   # Specialized texts
+    tier_2 = sum(1 for s in scores if 80 <= s < 90)  # Major references
+    tier_3 = sum(1 for s in scores if s < 80)    # Standard texts
+
+    # Unique index sources
+    index_sources = list(set(s.index_source for s in sources if s.index_source))
+
+    return {
+        "avg_authority": round(sum(scores) / len(scores), 1) if scores else 0,
+        "max_authority": max(scores) if scores else 0,
+        "sources_by_tier": {
+            "tier_1_specialized": tier_1,
+            "tier_2_major": tier_2,
+            "tier_3_standard": tier_3,
+        },
+        "index_sources": index_sources[:5],  # Top 5 unique sources
+    }
+
+
 def generate_manifest(
     topic: str,
     sources: list[ExtractedSource],
     output_path: Path,
     search_query: str = "",
     search_mode: str = "keyword",
-    template_type: Optional[str] = None  # Override auto-detection
+    template_type: Optional[str] = None,  # Override auto-detection
+    query_intent: Optional[str] = None,  # Detected intent (TECHNIQUE, COMPLICATION, etc.)
 ) -> Path:
     """
     Generate an enhanced manifest.json file for NeuroSynth import.
@@ -310,6 +376,7 @@ def generate_manifest(
         search_query: Original search query from Reference Library
         search_mode: Search mode used (keyword/semantic/hybrid)
         template_type: Override template type (procedural/theoretical/mixed)
+        query_intent: Detected query intent (TECHNIQUE, COMPLICATION, ANATOMY, etc.)
 
     Returns:
         Path to the generated manifest file
@@ -321,15 +388,20 @@ def generate_manifest(
     detected_template = _determine_template_type(sources)
     final_template = template_type or detected_template
 
+    # Compute authority summary from sources
+    authority_summary = _compute_authority_summary(sources)
+
     manifest = {
         "topic": topic,
         "search_query": search_query,
         "search_mode": search_mode,
+        "query_intent": query_intent,  # NEW: Top-level intent for NeuroSynth
         "generated_at": datetime.now().isoformat(),
         "template_type": final_template,
         "template_type_auto_detected": template_type is None,
         "category_summary": category_summary,
         "figure_summary": figure_summary,
+        "authority_summary": authority_summary,  # NEW: Authority stats
         "sources": [
             {
                 "pdf_path": str(source.extracted_path.name),
@@ -340,6 +412,11 @@ def generate_manifest(
                 "category": source.category,
                 "confidence": source.confidence,
                 "reasoning": source.reasoning,
+                # Enhanced Search Metadata
+                "authority_score": source.authority_score,
+                "index_source": source.index_source,
+                "matched_sections": source.matched_sections,
+                "intent": source.intent,
                 "context_excerpts": source.context_excerpts,
                 "full_text": source.full_text,
                 "figure_count": source.figure_count,

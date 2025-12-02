@@ -282,9 +282,7 @@ async def _process_async(project: Path, use_cache: bool):
     import json
     from neurosynth.utils.serialization import NumpyEncoder
 
-    # Filter out any None clusters before serialization
-    valid_clusters = [c for c in result.clusters if c is not None]
-    clusters_data = [c.to_dict() for c in valid_clusters]
+    clusters_data = [c.to_dict() for c in result.clusters]
     with open(processed_dir / "clusters.json", "w", encoding="utf-8") as f:
         json.dump(clusters_data, f, cls=NumpyEncoder, indent=2)
 

@@ -5,14 +5,28 @@ Verifies that the reference library bridge now uses the same sophisticated
 
 Changes verified:
 - neurosynth_bridge.py: Removed duplicate _is_medical_image() function
-- neurosynth_bridge.py: Added import of filter_image_bytes from main
+- neurosynth_bridge.py: Added import of _is_medical_image from main
 - neurosynth_bridge.py:424: Updated to use unified filter
 """
 import pytest
 import io
 import random
 from PIL import Image
-from neurosynth.parsers.image_extractor import filter_image_bytes
+from neurosynth.parsers.image_extractor import _is_medical_image
+
+
+def filter_image_bytes(image_bytes: bytes) -> tuple[bool, str]:
+    """Wrapper to test _is_medical_image with raw bytes.
+
+    Decodes image bytes to get dimensions and calls the actual filter.
+    """
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        width, height = img.size
+        result = _is_medical_image(width, height, len(image_bytes))
+        return result.is_valid, result.rejection_reason or "Accepted"
+    except Exception as e:
+        return False, f"Failed to decode image: {e}"
 
 
 def create_simple_image(width: int, height: int, color: str = "red") -> bytes:
@@ -177,10 +191,10 @@ class TestBridgeIntegration:
     """Test that bridge can import and use unified filter."""
 
     def test_bridge_import_works(self):
-        """Verify bridge can import filter_image_bytes from main."""
+        """Verify bridge can import _is_medical_image from main."""
         try:
-            from neurosynth.parsers.image_extractor import filter_image_bytes as bridge_filter
-            print("✓ Bridge can import filter_image_bytes from main")
+            from neurosynth.parsers.image_extractor import _is_medical_image as bridge_filter
+            print("✓ Bridge can import _is_medical_image from main")
         except ImportError as e:
             pytest.fail(f"Bridge import failed: {e}")
 

@@ -6,18 +6,9 @@ import shutil
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional, Callable, TYPE_CHECKING, cast
+from typing import Optional, Callable, TYPE_CHECKING
 from dataclasses import dataclass, field
-import fitz  # type: ignore[import-untyped]  # PyMuPDF
-import traceback
 
-# Set up path to neurosynth modules (same as neurosynth_imports.py)
-_neurosynth_src = Path(__file__).parent.parent.parent.parent / "src"
-if str(_neurosynth_src) not in sys.path:
-    sys.path.insert(0, str(_neurosynth_src))
-
-# Import main filter for consistency (replaces duplicate 3KB filter)
-from neurosynth.parsers.image_extractor import filter_image_bytes
 
 @dataclass
 class ProjectDirectory:
@@ -57,10 +48,10 @@ class ProjectDirectory:
         topic: str,
         search_query: str = "",
         search_mode: str = "keyword",
-        template_type: Optional[str] = None
+        template_type: str = None
     ):
         """Save project metadata."""
-        meta: dict[str, str | None] = {
+        meta = {
             "topic": topic,
             "created_at": datetime.now().isoformat(),
             "search_query": search_query,
@@ -98,7 +89,7 @@ def _create_project_directory(topic: str, base_dir: Optional[Path] = None) -> Pr
     return ProjectDirectory(root=project_dir).create()
 
 
-def _get_subprocess_kwargs() -> dict[str, Any]:
+def _get_subprocess_kwargs() -> dict:
     """Get platform-specific subprocess kwargs to prevent terminal windows."""
     kwargs = {"stdin": subprocess.DEVNULL}
     if sys.platform == "win32":
@@ -138,10 +129,11 @@ def _sanitize_topic(topic: str) -> str:
     return topic.strip()[:200]
 
 from ..export.page_extractor import extract_relevant_pages, generate_manifest, ExtractedSource
+from ..search.pdf_searcher import PDFSearcher
+from ..search.master_index import get_master_index
 
 if TYPE_CHECKING:
     from ..cache.database import Database
-    from ..search.result_model import SearchResult
 
 
 @dataclass
@@ -160,7 +152,8 @@ class NeuroSynthBridge:
         self,
         neurosynth_path: Optional[Path] = None,
         neurosynth_venv: Optional[Path] = None,
-        database: Optional["Database"] = None
+        database: Optional["Database"] = None,
+        pdf_searcher: Optional["PDFSearcher"] = None
     ):
         """
         Initialize the bridge.
@@ -169,21 +162,24 @@ class NeuroSynthBridge:
             neurosynth_path: Path to neurosynth installation (optional, uses PATH if not set)
             neurosynth_venv: Path to neurosynth virtualenv (optional)
             database: Database instance for logging synthesis history (optional)
+            pdf_searcher: PDFSearcher instance for performing searches (optional)
         """
         self.neurosynth_path = neurosynth_path
         self.neurosynth_venv = neurosynth_venv
         self.database = database
+        self.pdf_searcher = pdf_searcher
 
     def synthesize(
         self,
         topic: str,
-        results: "list[SearchResult]",
+        results: list,  # list[SearchResult]
         output_dir: Optional[Path] = None,
         on_progress: Optional[Callable[[str], None]] = None,
         context_pages: int = 1,
         search_query: str = "",
         search_mode: str = "keyword",
-        template_type: Optional[str] = None
+        template_type: str = None,
+        query_intent: Optional[str] = None  # NEW: Detected query intent
     ) -> SynthesisResult:
         """
         Synthesize a chapter from selected search results.
@@ -197,15 +193,36 @@ class NeuroSynthBridge:
             search_query: Original search query from Reference Library
             search_mode: Search mode used (keyword/semantic/hybrid)
             template_type: Type of chapter template (procedural/theoretical)
+            query_intent: Detected query intent (TECHNIQUE, COMPLICATION, etc.)
 
         Returns:
             SynthesisResult with output path or error
         """
         if not results:
-            return SynthesisResult(
-                success=False,
-                error="No results selected for synthesis"
-            )
+            # If no results provided, try to search using PDFSearcher
+            if self.pdf_searcher and search_query:
+                if on_progress:
+                    on_progress(f"Searching library for: '{search_query}'...")
+                
+                # Perform search
+                search_results = self.pdf_searcher.search_library_chapters(
+                    query=search_query,
+                    mode=search_mode
+                )
+                
+                # Convert generator to list
+                results = list(search_results)
+                
+                if not results:
+                    return SynthesisResult(
+                        success=False,
+                        error=f"No results found for query: '{search_query}'"
+                    )
+            else:
+                return SynthesisResult(
+                    success=False,
+                    error="No results selected for synthesis"
+                )
 
         # Sanitize topic to prevent command injection
         try:
@@ -254,32 +271,24 @@ class NeuroSynthBridge:
                 error="No pages could be extracted from selected results"
             )
 
-        # 3. Extract Images (Targeted)
-        # This extracts images ONLY from the specific pages of the selected PDFs
-        # independent of the pre-indexed library images.
-        if on_progress:
-            on_progress("Extracting anatomical figures from selection...")
-        
-        try:
-            image_count = self._extract_images_from_sources(
-                extracted_sources=extracted,
-                output_dir=project.images_dir
-            )
-            if on_progress and image_count > 0:
-                on_progress(f"Persisted {image_count} high-quality figures")
-        except Exception as e:
-            print(f"Non-fatal error during image extraction: {e}")
-            traceback.print_exc()
-            # Continue with synthesis even if image extraction fails partially
-
         # Copy medical images from extracted sources to project images directory
-        # (Legacy/Fallback: copies images that were already extracted during page extraction if any)
         if on_progress:
             on_progress("Collecting medical images...")
 
-        legacy_image_count = self._collect_project_images(extracted, project.images_dir)
-        if on_progress and legacy_image_count > 0:
-            on_progress(f"Collected {legacy_image_count} cached medical images")
+        image_count = self._collect_project_images(extracted, project.images_dir)
+        if on_progress and image_count > 0:
+            on_progress(f"Collected {image_count} medical images")
+
+        # Extract query_intent from results if not provided
+        detected_intent = query_intent
+        if not detected_intent and results:
+            # Try to get intent from first result's match_type or matched_sections
+            first_result = results[0]
+            if hasattr(first_result, 'matched_sections') and first_result.matched_sections:
+                # Get section type from first matched section
+                first_section = first_result.matched_sections[0]
+                if hasattr(first_section, 'section_type'):
+                    detected_intent = first_section.section_type.upper()
 
         # Generate enhanced manifest with search context
         generate_manifest(
@@ -288,7 +297,8 @@ class NeuroSynthBridge:
             output_path=project.manifest_path,
             search_query=search_query,
             search_mode=search_mode,
-            template_type=template_type
+            template_type=template_type,
+            query_intent=detected_intent
         )
 
         if on_progress:
@@ -384,66 +394,6 @@ class NeuroSynthBridge:
 
         return collected
 
-    def _extract_images_from_sources(self, extracted_sources: list[ExtractedSource], output_dir: Path) -> int:
-        """Extract images using NeuroSynth's advanced ImageExtractor (Phase 4).
-        
-        This uses the unified pipeline to extract:
-        1. Medical images (filtered)
-        2. Vector graphics (flowcharts)
-        3. Procedural sequences
-        4. Captions with high confidence
-        """
-        import asyncio
-        from neurosynth.parsers.image_extractor import ImageExtractor
-        
-        count = 0
-        extractor = ImageExtractor()
-        
-        for source in extracted_sources:
-            if not source.extracted_path.exists():
-                print(f"Skipping missing source PDF: {source.extracted_path}")
-                continue
-
-            try:
-                # Run extraction on the mini-PDF (contains only relevant pages)
-                # We use asyncio.run because this method is synchronous
-                visuals = asyncio.run(extractor.extract_images(
-                    pdf_path=source.extracted_path,
-                    output_dir=output_dir
-                ))
-                
-                # Update source figures with rich metadata
-                # This ensures the manifest contains Phase 4 data
-                source.figures = [] 
-                
-                for v in visuals:
-                    # Map mini-PDF page number back to original source page number
-                    # v.page_number is 1-based index in mini-PDF
-                    original_page = v.page_number
-                    if 0 <= v.page_number - 1 < len(source.pages):
-                        original_page = source.pages[v.page_number - 1]
-                    
-                    # Convert to dictionary for manifest
-                    fig_data = {
-                        "id": v.id,
-                        "page_number": original_page,
-                        "image_type": v.image_type.value if hasattr(v.image_type, 'value') else str(v.image_type),
-                        "caption": v.caption,
-                        "image_path": str(v.image_path),
-                        "caption_confidence": v.caption_confidence,
-                        "keywords": v.keywords_matched,
-                        "is_procedural": v.is_procedural,
-                        "sequence_id": v.sequence_id
-                    }
-                    source.figures.append(fig_data)
-                    count += 1
-                    
-            except Exception as e:
-                print(f"Error extracting images from {source.extracted_path.name}: {e}")
-                traceback.print_exc()
-                
-        return count
-
     def _run_neurosynth(
         self,
         topic: str,
@@ -470,9 +420,7 @@ class NeuroSynthBridge:
         if self.neurosynth_venv:
             import os
             env = os.environ.copy()
-            # Include MacTeX path for pdflatex
-            tex_path = "/Library/TeX/texbin"
-            env["PATH"] = str(self.neurosynth_venv / "bin") + ":" + tex_path + ":" + env["PATH"]
+            env["PATH"] = str(self.neurosynth_venv / "bin") + ":" + env["PATH"]
             env["VIRTUAL_ENV"] = str(self.neurosynth_venv)
 
         try:
@@ -483,10 +431,6 @@ class NeuroSynthBridge:
             import os as _os
             if env is None:
                 env = _os.environ.copy()
-                # Include MacTeX path for pdflatex
-                tex_path = "/Library/TeX/texbin"
-                if tex_path not in env.get("PATH", ""):
-                    env["PATH"] = tex_path + ":" + env.get("PATH", "")
 
             # Force unbuffered Python output for real-time streaming
             env["PYTHONUNBUFFERED"] = "1"
@@ -505,12 +449,10 @@ class NeuroSynthBridge:
                 **_get_subprocess_kwargs()
             )
 
-            log_lines: list[str] = []
+            log_lines = []
 
             # Stream output line by line
             try:
-                if process.stdout is None:
-                    raise RuntimeError("Failed to capture pip process output")
                 for line in iter(process.stdout.readline, ''):
                     line = line.rstrip()
                     if line:
@@ -638,7 +580,7 @@ class NeuroSynthBridge:
                     manifest_json = f.read()
 
             # Convert extracted sources to dict format
-            sources: list[dict[str, object]] = [
+            sources = [
                 {
                     "original_source": s.original_source,
                     "original_path": str(s.original_path),

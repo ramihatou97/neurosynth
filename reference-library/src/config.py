@@ -40,17 +40,63 @@ def _save_user_config(config: dict) -> None:
         pass
 
 
+def get_locked_library_path() -> Path | None:
+    """Get the locked library path if set.
+
+    Returns the locked path or None if not locked.
+    """
+    config = _load_user_config()
+    if config.get("library_locked", False) and "library_path" in config:
+        path_str = str(config["library_path"]).strip()
+        if path_str:
+            return Path(path_str).expanduser()
+    return None
+
+
+def lock_library_path(path: Path) -> None:
+    """Lock the library path so it persists across restarts.
+
+    Args:
+        path: The library path to lock
+    """
+    config = _load_user_config()
+    config["library_path"] = str(path)
+    config["library_locked"] = True
+    _save_user_config(config)
+    print(f"Library locked to: {path}")
+
+
+def unlock_library_path() -> None:
+    """Unlock the library path, allowing selection on next restart."""
+    config = _load_user_config()
+    config["library_locked"] = False
+    _save_user_config(config)
+    print("Library unlocked")
+
+
+def is_library_locked() -> bool:
+    """Check if the library path is locked."""
+    config = _load_user_config()
+    return config.get("library_locked", False)
+
+
 def _get_library_path() -> Path:
     """Get the library path from config or environment.
 
     Priority:
-    1. User config file (user_config.json)
-    2. Environment variable NEUROSURGERY_LIBRARY_PATH
-    3. Default path (will prompt if doesn't exist)
+    1. Locked library path (persists across restarts)
+    2. User config file (user_config.json)
+    3. Environment variable NEUROSURGERY_LIBRARY_PATH
+    4. Default path (will prompt if doesn't exist)
     """
+    # Check for locked library path first
+    locked_path = get_locked_library_path()
+    if locked_path and locked_path.exists():
+        return locked_path
+
     config = _load_user_config()
 
-    # Try user config first
+    # Try user config (even if not locked)
     if "library_path" in config:
         # Strip whitespace to prevent path resolution issues
         path_str = str(config["library_path"]).strip()
@@ -71,8 +117,11 @@ def _get_library_path() -> Path:
     return default_path
 
 
-def prompt_for_library_path() -> Path | None:
+def prompt_for_library_path(lock: bool = True) -> Path | None:
     """Show folder picker dialog for library path selection.
+
+    Args:
+        lock: If True, lock the selected path to persist across restarts
 
     Returns the selected path or None if cancelled.
     """
@@ -88,7 +137,14 @@ def prompt_for_library_path() -> Path | None:
         messagebox.showinfo(
             "Neurosurgery Reference Library",
             "Please select the folder containing your neurosurgery reference PDFs.\n\n"
-            "This is typically a folder with PDF textbooks and reference materials."
+            "Expected structure:\n"
+            "  📁 Your Library Folder\n"
+            "    📁 Book chapters/\n"
+            "      📁 Series Name/\n"
+            "        📄 Chapter PDFs...\n"
+            "    📁 Entire books/\n"
+            "      📄 Full book PDFs...\n\n"
+            "The selected path will be saved and locked for future sessions."
         )
 
         # Show folder picker
@@ -101,10 +157,13 @@ def prompt_for_library_path() -> Path | None:
 
         if selected_path:
             path = Path(selected_path)
-            # Save to user config
-            config = _load_user_config()
-            config["library_path"] = str(path)
-            _save_user_config(config)
+            # Save and optionally lock
+            if lock:
+                lock_library_path(path)
+            else:
+                config = _load_user_config()
+                config["library_path"] = str(path)
+                _save_user_config(config)
             return path
 
         return None
@@ -276,6 +335,10 @@ KNOWN_SERIES = {
 WINDOW_WIDTH = 1400
 WINDOW_HEIGHT = 900
 APPEARANCE_MODE = "dark"  # "dark", "light", or "system"
+
+# Rich Results Tree - Enable inline thumbnails and expandable context
+# Set to False to use the compact tree view (faster on low-end systems)
+USE_RICH_RESULTS_TREE = os.environ.get("NEUROSYNTH_RICH_TREE", "true").lower() in ("1", "true", "yes")
 
 # Visual Processing Configuration
 VISUAL_EXTRACTION_ENABLED = True

@@ -7,36 +7,19 @@ anatomical diagrams, imaging studies, etc.).
 
 import asyncio
 import io
-import logging
 import math
 import re
 from dataclasses import dataclass
 from pathlib import Path
 
 import fitz  # PyMuPDF
-
-logger = logging.getLogger(__name__)
-from PIL import Image, ImageChops
+from PIL import Image
 from rich.console import Console
 
 from neurosynth.config import get_settings
 from neurosynth.models.visual import ImageType, VisualElement
 
 console = Console()
-
-# Phase 4: Unified pipeline support (conditional import)
-try:
-    from neurosynth.enhancements.unified_pipeline import (
-        UnifiedExtractionPipeline,
-        ExtractionResult as UnifiedResult,
-        ExtractedImage as UnifiedImage,
-    )
-    from neurosynth.enhancements.enhanced_caption_detector import DetectedCaption as UnifiedDetectedCaption
-    from neurosynth.enhancements.resilient_filter import FilterResult as UnifiedFilterResult
-    UNIFIED_PIPELINE_AVAILABLE = True
-except ImportError:
-    UNIFIED_PIPELINE_AVAILABLE = False
-    logger.info("Unified pipeline not available")
 
 
 @dataclass
@@ -152,70 +135,6 @@ def _is_medical_image(
     )
 
 
-def filter_image_bytes(
-    image_bytes: bytes,
-    context_text: str = "",
-) -> tuple[bool, str]:
-    """
-    Bridge-friendly wrapper for _is_medical_image().
-
-    Automatically extracts dimensions from image_bytes and applies
-    the full 6-rule filtering logic.
-
-    This is a convenience function for code that only has access to
-    raw image bytes (e.g., reference library bridge) without pre-computed
-    dimensions.
-
-    Args:
-        image_bytes: Raw image data
-        context_text: Optional surrounding text for classification hints
-
-    Returns:
-        (is_valid, rejection_reason) tuple
-        - is_valid: True if image should be extracted
-        - rejection_reason: Explanation if rejected (empty if accepted)
-
-    Example:
-        >>> is_valid, reason = filter_image_bytes(img_bytes)
-        >>> if not is_valid:
-        ...     print(f"Filtered: {reason}")
-    """
-    import logging
-    logger = logging.getLogger(__name__)
-
-    # Extract dimensions from image bytes
-    width, height = 0, 0
-    try:
-        from PIL import Image
-        import io
-        img = Image.open(io.BytesIO(image_bytes))
-        width, height = img.size
-    except Exception as e:
-        # Fallback: estimate dimensions from file size
-        # Rough estimate assuming RGB image (3 bytes per pixel)
-        estimated_pixels = len(image_bytes) / 3
-        width = height = int(estimated_pixels ** 0.5)
-        logger.debug(
-            f"Could not read image dimensions with PIL: {e}. "
-            f"Using estimate: {width}x{height}px"
-        )
-
-    # Calculate file size
-    file_size_bytes = len(image_bytes)
-
-    # Use main filter with UNKNOWN type (no classification bias)
-    # If context_text provided, could enhance by classifying first,
-    # but for simplicity use UNKNOWN to apply strict filtering
-    filter_result = _is_medical_image(
-        width=width,
-        height=height,
-        file_size_bytes=file_size_bytes,
-        image_type=ImageType.UNKNOWN,
-    )
-
-    return filter_result.is_valid, filter_result.rejection_reason
-
-
 @dataclass
 class CaptionCandidate:
     """A potential caption found near an image."""
@@ -311,20 +230,6 @@ class ImageExtractor:
             r"grading\s+scale",
             r"staging\s+system",
         ],
-        ImageType.FLOWCHART: [
-            r"flowchart",
-            r"flow\s*chart",
-            r"flow\s*diagram",
-            r"algorithm",
-            r"workflow",
-            r"decision\s*tree",
-            r"process\s*diagram",
-            r"protocol",
-            r"pathway",
-            r"management\s*algorithm",
-            r"decision\s*algorithm",
-            r"treatment\s*algorithm",
-        ],
         ImageType.ILLUSTRATION: [
             r"illustration",
             r"diagram",
@@ -356,206 +261,12 @@ class ImageExtractor:
         self.min_size = self.settings.min_image_size
         self.max_size = self.settings.max_image_size
 
-        # Initialize resilient filter if enhancements enabled
-        self.resilient_filter = None
-        self.filter_stats = {
-            'total_filtered': 0,
-            'enhanced_used': 0,
-            'basic_fallback': 0,
-            'permissive_fallback': 0,
-            'legacy_used': 0,
-            'accepted': 0,
-            'rejected': 0,
-        }
-
-        if self.settings.enhancements_enabled and self.settings.enable_enhanced_filtering:
-            try:
-                from neurosynth.enhancements.resilient_filter import ResilientImageFilter
-                from neurosynth.enhancements.config import FilterFallbackLevel
-
-                enh_config = self.settings.enhancement_config
-                if enh_config:
-                    self.resilient_filter = ResilientImageFilter(config=enh_config)
-                    self.FilterFallbackLevel = FilterFallbackLevel
-                    logger.info("✓ Resilient 3-tier image filter initialized")
-            except Exception as e:
-                logger.warning(f"Could not initialize resilient filter: {e}")
-                self.resilient_filter = None
-
-        if not self.resilient_filter:
-            logger.info("Using legacy 6-rule image filter")
-
-        # Initialize enhanced caption detector if enhancements enabled
-        self.caption_detector = None
-        self.caption_detector_stats = {
-            'enhanced_used': 0,
-            'legacy_used': 0,
-            'multi_directional_matches': 0,
-        }
-
-        if self.settings.enhancements_enabled and self.settings.enable_enhanced_captions:
-            try:
-                from neurosynth.enhancements.enhanced_caption_detector import EnhancedCaptionDetector
-                from neurosynth.enhancements.config import NeuroSynthEnhancedConfig
-
-                enh_config = NeuroSynthEnhancedConfig()
-                self.caption_detector = EnhancedCaptionDetector(config=enh_config)
-                logger.info("✓ EnhancedCaptionDetector initialized")
-            except Exception as e:
-                logger.warning(f"Could not initialize EnhancedCaptionDetector: {e}")
-                self.caption_detector = None
-
-        if not self.caption_detector:
-            logger.info("Using legacy caption detection")
-
-        # Phase 4: Initialize unified pipeline if enabled
-        self.unified_pipeline = None
-        self.extraction_mode = self.settings.unified_pipeline_mode
-
-        if self.settings.enable_unified_pipeline and UNIFIED_PIPELINE_AVAILABLE:
-            try:
-                from neurosynth.enhancements.config import NeuroSynthEnhancedConfig
-
-                enh_config = NeuroSynthEnhancedConfig()
-                self.unified_pipeline = UnifiedExtractionPipeline(config=enh_config)
-                logger.info("✓ UnifiedExtractionPipeline initialized")
-
-                # Auto mode: choose based on capabilities
-                if self.extraction_mode == "auto":
-                    if (self.settings.enable_vector_extraction or
-                        self.settings.enable_latex_generation):
-                        self.extraction_mode = "unified"
-                        logger.info("Auto mode: selected unified (advanced features enabled)")
-                    else:
-                        self.extraction_mode = "incremental"
-                        logger.info("Auto mode: selected incremental (basic extraction)")
-
-            except Exception as e:
-                logger.warning(f"Could not initialize unified pipeline: {e}")
-                self.unified_pipeline = None
-                self.extraction_mode = "incremental"
-        else:
-            logger.info(f"Extraction mode: {self.extraction_mode}")
-
-    def filter_image(
-        self,
-        image_bytes: bytes,
-        width: int,
-        height: int,
-        file_size_bytes: int,
-        image_type: ImageType,
-        context_text: str = "",
-    ) -> ImageFilterResult:
-        """
-        Filter image using best available method.
-
-        Tries resilient 3-tier filter first, falls back to legacy if:
-        - Enhancements disabled
-        - Resilient filter unavailable
-        - Enhanced filter fails
-
-        Args:
-            image_bytes: Raw image data
-            width: Image width in pixels
-            height: Image height in pixels
-            file_size_bytes: Size of image data
-            image_type: Classified image type
-            context_text: Surrounding text for analysis
-
-        Returns:
-            ImageFilterResult with is_valid, rejection_reason, confidence
-        """
-        self.filter_stats['total_filtered'] += 1
-
-        # Try resilient filter if available
-        if self.resilient_filter:
-            try:
-                should_extract, filter_result = self.resilient_filter.should_extract(
-                    image_bytes=image_bytes,
-                    width=width,
-                    height=height,
-                    doc=None,  # Not available here
-                    xref=0,    # Not available here
-                    context_text=context_text,
-                )
-
-                # Track fallback level
-                fallback_level = filter_result.fallback_level
-                if fallback_level == self.FilterFallbackLevel.ENHANCED:
-                    self.filter_stats['enhanced_used'] += 1
-                elif fallback_level == self.FilterFallbackLevel.BASIC:
-                    self.filter_stats['basic_fallback'] += 1
-                elif fallback_level == self.FilterFallbackLevel.PERMISSIVE:
-                    self.filter_stats['permissive_fallback'] += 1
-
-                # Convert FilterResult to ImageFilterResult
-                result = ImageFilterResult(
-                    is_valid=should_extract,
-                    rejection_reason=filter_result.rejection_reason or "",
-                    confidence=filter_result.confidence,
-                )
-
-                if result.is_valid:
-                    self.filter_stats['accepted'] += 1
-                else:
-                    self.filter_stats['rejected'] += 1
-
-                return result
-
-            except Exception as e:
-                logger.warning(f"Resilient filter failed: {e}, using legacy")
-                # Fall through to legacy filter
-
-        # Use legacy 6-rule filter
-        self.filter_stats['legacy_used'] += 1
-        result = _is_medical_image(
-            width=width,
-            height=height,
-            file_size_bytes=file_size_bytes,
-            image_type=image_type,
-        )
-
-        if result.is_valid:
-            self.filter_stats['accepted'] += 1
-        else:
-            self.filter_stats['rejected'] += 1
-
-        return result
-
-    def print_filter_stats(self) -> None:
-        """Print filter statistics for monitoring."""
-        stats = self.filter_stats
-        total = stats['total_filtered']
-
-        if total == 0:
-            print("No images filtered yet")
-            return
-
-        print("\n" + "="*70)
-        print("IMAGE FILTER STATISTICS")
-        print("="*70)
-        print(f"Total Processed:  {total}")
-        print(f"  Accepted:       {stats['accepted']} ({100*stats['accepted']/total:.1f}%)")
-        print(f"  Rejected:       {stats['rejected']} ({100*stats['rejected']/total:.1f}%)")
-
-        print(f"\nFilter Method Used:")
-        print(f"  Enhanced (Tier 1):  {stats['enhanced_used']} ({100*stats['enhanced_used']/total:.1f}%)")
-        print(f"  Basic (Tier 2):     {stats['basic_fallback']} ({100*stats['basic_fallback']/total:.1f}%)")
-        print(f"  Permissive (Tier 3):{stats['permissive_fallback']} ({100*stats['permissive_fallback']/total:.1f}%)")
-        print(f"  Legacy (6-rule):    {stats['legacy_used']} ({100*stats['legacy_used']/total:.1f}%)")
-        print("="*70)
-
     async def extract_images(
         self,
         pdf_path: Path,
         output_dir: Path | None = None,
     ) -> list[VisualElement]:
         """Extract all suitable images from a PDF.
-
-        Mode Selection:
-        - incremental: Phase 3 pipeline with enhancements (faster)
-        - unified: Phase 4 UnifiedExtractionPipeline (advanced features)
-        - auto: Choose automatically based on enabled features
 
         Args:
             pdf_path: Path to the PDF file
@@ -564,153 +275,10 @@ class ImageExtractor:
         Returns:
             List of VisualElement objects with extracted images
         """
-        if output_dir is None:
-            output_dir = pdf_path.parent / f"{pdf_path.stem}_images"
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        # Dispatch based on mode
-        if self.extraction_mode == "unified" and self.unified_pipeline:
-            logger.info(f"Using unified extraction mode for {pdf_path.name}")
-            return await self._extract_unified(pdf_path, output_dir)
-        else:
-            logger.info(f"Using incremental extraction mode for {pdf_path.name}")
-            return await self._extract_incremental(pdf_path, output_dir)
-
-    async def _extract_incremental(
-        self,
-        pdf_path: Path,
-        output_dir: Path
-    ) -> list[VisualElement]:
-        """Incremental extraction (Phase 3) - unchanged behavior.
-
-        Uses ImageExtractor._extract_images_sync() with all Phase 3 enhancements:
-        - ResilientImageFilter (3.3)
-        - EnhancedCaptionDetector (3.4)
-        """
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(
             None, lambda: self._extract_images_sync(pdf_path, output_dir)
         )
-
-    async def _extract_unified(
-        self,
-        pdf_path: Path,
-        output_dir: Path
-    ) -> list[VisualElement]:
-        """Unified extraction (Phase 4) - converts output to VisualElement format.
-
-        Uses UnifiedExtractionPipeline with 7-stage processing:
-        1. Batch page processing with caching
-        2. Resilient image filtering
-        3. Caption detection
-        4. Visual-text association
-        5. Procedural sequence detection
-        6. Vector graphics extraction
-        7. LaTeX generation
-
-        Converts ExtractedImage → VisualElement for pipeline compatibility.
-        """
-        try:
-            loop = asyncio.get_event_loop()
-
-            # Run unified extraction
-            result: UnifiedResult = await loop.run_in_executor(
-                None,
-                lambda: self.unified_pipeline.extract_from_pdf(
-                    pdf_path=str(pdf_path),
-                    pages=None,  # All pages
-                    output_dir=str(output_dir)
-                )
-            )
-
-            # Convert ExtractedImage → VisualElement
-            visual_elements = []
-
-            for unified_img in result.images:
-                # Map fields
-                element = VisualElement(
-                    # Identity
-                    id=unified_img.image_id,
-
-                    # Image data
-                    image_path=Path(unified_img.save_path) if unified_img.save_path else None,
-                    format=unified_img.extension,
-                    width=unified_img.width,
-                    height=unified_img.height,
-
-                    # Source location
-                    source_pdf=pdf_path,
-                    page_number=unified_img.page_number + 1,  # unified uses 0-indexed
-                    bbox=unified_img.bbox,
-
-                    # Caption (from DetectedCaption)
-                    caption=unified_img.caption.text if unified_img.caption else "",
-                    caption_confidence=unified_img.caption.confidence if unified_img.caption else 0.0,
-
-                    # Classification (from FilterResult -> ImageType mapping)
-                    image_type=self._map_category_to_imagetype(
-                        unified_img.category if hasattr(unified_img, 'category') else None
-                    ),
-                    type_confidence=unified_img.filter_confidence if hasattr(unified_img, 'filter_confidence') else 0.0,
-
-                    # Context
-                    context_text=" ".join(unified_img.associated_text) if hasattr(unified_img, 'associated_text') else "",
-
-                    # Phase 3.5: Keyword scoring (from keywords set)
-                    keyword_score=0.0,  # Unified pipeline doesn't expose this directly
-                    keywords_matched=list(unified_img.keywords) if hasattr(unified_img, 'keywords') else [],
-
-                    # Phase 3.6: Procedural sequences
-                    sequence_id=unified_img.sequence_id if hasattr(unified_img, 'sequence_id') else None,
-                    sequence_position=unified_img.sequence_position if hasattr(unified_img, 'sequence_position') else None,
-                    sequence_type=None,  # Unified pipeline stores differently
-                    step_label=None,  # Would need to extract from sequence
-                    is_procedural=unified_img.sequence_id is not None if hasattr(unified_img, 'sequence_id') else False,
-                    procedural_confidence=0.0,  # Not directly exposed
-                )
-
-                visual_elements.append(element)
-
-            logger.info(
-                f"Unified extraction: {len(visual_elements)} images, "
-                f"{result.vectors_extracted} vector graphics, "
-                f"{len(result.sequences)} sequences"
-            )
-
-            return visual_elements
-
-        except Exception as e:
-            logger.error(f"Unified extraction failed: {e}", exc_info=True)
-            console.print(f"[yellow]Unified extraction failed, falling back to incremental[/yellow]")
-            return await self._extract_incremental(pdf_path, output_dir)
-
-    def _map_category_to_imagetype(self, category) -> ImageType:
-        """Map ImageCategory from unified pipeline to ImageType."""
-        if category is None:
-            return ImageType.UNKNOWN
-
-        # Import ImageCategory from enhancements
-        try:
-            from neurosynth.enhancements.config import ImageCategory
-
-            mapping = {
-                ImageCategory.ANATOMICAL_DIAGRAM: ImageType.ANATOMICAL,
-                ImageCategory.INTRAOPERATIVE: ImageType.SURGICAL_STEP,
-                ImageCategory.RADIOLOGICAL: ImageType.IMAGING,
-                ImageCategory.PROCEDURAL_STEP: ImageType.SURGICAL_STEP,
-                ImageCategory.FLOWCHART: ImageType.FLOWCHART,
-                ImageCategory.INSTRUMENT: ImageType.PHOTOGRAPH,
-                ImageCategory.HISTOLOGICAL: ImageType.IMAGING,
-                ImageCategory.THREE_D_RECONSTRUCTION: ImageType.IMAGING,
-                ImageCategory.CADAVERIC: ImageType.ANATOMICAL,
-                ImageCategory.COMPARISON: ImageType.ILLUSTRATION,
-                ImageCategory.UNKNOWN: ImageType.UNKNOWN,
-            }
-
-            return mapping.get(category, ImageType.UNKNOWN)
-
-        except Exception:
-            return ImageType.UNKNOWN
 
     def _extract_images_sync(
         self,
@@ -826,14 +394,11 @@ class ImageExtractor:
 
                 # Apply medical image filter BEFORE saving
                 # This filters out logos, separator bars, and decorative elements
-                # Uses resilient 3-tier filter if available, otherwise legacy 6-rule filter
-                filter_result = self.filter_image(
-                    image_bytes=image_bytes,
+                filter_result = _is_medical_image(
                     width=width,
                     height=height,
                     file_size_bytes=len(image_bytes),
                     image_type=image_type,
-                    context_text=context_text,
                 )
                 if not filter_result.is_valid:
                     console.print(
@@ -926,42 +491,7 @@ class ImageExtractor:
         page_text: str,
         text_blocks: list,
     ) -> tuple[str, float]:
-        """Find caption for image using enhanced or legacy detector.
-
-        Returns:
-            Tuple of (caption_text, confidence)
-        """
-        # Try enhanced detector if available
-        if self.caption_detector and image_bbox:
-            try:
-                from neurosynth.enhancements.config import CaptionPosition
-
-                detected = self.caption_detector.find_caption_for_image(
-                    page=page,
-                    image_bbox=image_bbox
-                )
-
-                if detected and detected.confidence >= self.settings.caption_confidence_threshold:
-                    self.caption_detector_stats['enhanced_used'] += 1
-                    if detected.position != CaptionPosition.BELOW:
-                        self.caption_detector_stats['multi_directional_matches'] += 1
-                    return detected.text, detected.confidence
-
-            except Exception as e:
-                logger.warning(f"Enhanced caption detection failed: {e}, falling back to legacy")
-
-        # Fall back to legacy detection
-        self.caption_detector_stats['legacy_used'] += 1
-        return self._find_caption_legacy(page, image_bbox, page_text, text_blocks)
-
-    def _find_caption_legacy(
-        self,
-        page: fitz.Page,
-        image_bbox: tuple | None,
-        page_text: str,
-        text_blocks: list,
-    ) -> tuple[str, float]:
-        """Legacy caption detection: Find caption for image, prioritizing numbered figures.
+        """Find caption for image, prioritizing numbered figures.
 
         Strategy:
         1. First look for "Figure X:" patterns in the page text
@@ -1167,19 +697,6 @@ class ImageExtractor:
         except Exception:
             return ""
 
-    def _crop_borders(self, pil_image: Image.Image) -> Image.Image:
-        """Crop white borders from an image."""
-        try:
-            bg = Image.new(pil_image.mode, pil_image.size, (255, 255, 255))
-            diff = ImageChops.difference(pil_image, bg)
-            diff = ImageChops.add(diff, diff, 2.0, -100)
-            bbox = diff.getbbox()
-            if bbox:
-                return pil_image.crop(bbox)
-            return pil_image
-        except Exception:
-            return pil_image
-
     def extract_figure_as_snapshot(
         self,
         page: fitz.Page,
@@ -1223,16 +740,8 @@ class ImageExtractor:
             if pix.width < 100 or pix.height < 50:
                 return None
 
-            # Convert to PIL Image for cropping
-            pil_image = Image.open(io.BytesIO(pix.tobytes("png")))
-            
-            # Crop white borders
-            cropped_image = self._crop_borders(pil_image)
-            
-            # Save to bytes
-            buf = io.BytesIO()
-            cropped_image.save(buf, format="PNG")
-            return buf.getvalue()
+            # Convert to PNG bytes
+            return pix.tobytes("png")
 
         except Exception as e:
             console.print(f"    [yellow]Snapshot extraction failed: {e}[/yellow]")
@@ -1290,37 +799,12 @@ class ImageExtractor:
                     for elem in raw_images:
                         if elem.visual_hash:
                             seen_hashes.add(elem.visual_hash)
-                    # visual_elements.extend(raw_images)  <-- Moved to after deduplication
+                    visual_elements.extend(raw_images)
 
                     # 2. Snapshot extraction for figure captions
                     snapshot_images = self._extract_page_snapshots(
                         page, page_num, pdf_path, output_dir, seen_hashes
                     )
-                    
-                    # SPATIAL DEDUPLICATION:
-                    # Remove raw images that are covered by snapshots
-                    # Snapshots are preferred because they capture labels/arrows
-                    
-                    final_raw_images = []
-                    for raw in raw_images:
-                        is_covered = False
-                        if raw.bbox:
-                            raw_rect = fitz.Rect(raw.bbox)
-                            raw_area = raw_rect.get_area()
-                            
-                            for snap in snapshot_images:
-                                if snap.bbox:
-                                    snap_rect = fitz.Rect(snap.bbox)
-                                    # Calculate intersection
-                                    intersect = raw_rect & snap_rect
-                                    if intersect.get_area() > (raw_area * 0.5):
-                                        is_covered = True
-                                        break
-                        
-                        if not is_covered:
-                            final_raw_images.append(raw)
-                            
-                    visual_elements.extend(final_raw_images)
                     visual_elements.extend(snapshot_images)
 
         except Exception as e:

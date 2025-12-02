@@ -2,24 +2,25 @@
 import customtkinter as ctk
 from pathlib import Path
 import threading
-import time
 from typing import Optional
 import asyncio
 
 from src import config
 from ..cache.database import Database
 from ..search.pdf_searcher import PDFSearcher
-from ..search.result_model import SearchResult, SearchProgress
+from ..search.result_model import SearchResult, SearchProgress, ChapterResult
+from ..search.master_index import get_master_index
+
 from ..utils.library_scanner import LibraryScanner
 from ..utils.file_watcher import FileWatcher
 from ..integration.neurosynth_bridge import NeuroSynthBridge
 from .search_panel import SearchPanel
 from .results_tree import ResultsTree
+from .rich_results_tree import RichResultsTree
 from .preview_panel import PreviewPanel
 from .new_files_panel import NewFilesPanel
 from .synthesis_dialog import SynthesisDialog
 from .analytics_dialog import AnalyticsDialog
-from .project_browser_dialog import ProjectBrowserDialog
 from .styles import FONTS, PADDING
 
 
@@ -41,6 +42,7 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         self.database = Database(config.DATABASE_PATH)
         self.searcher = PDFSearcher(config.LIBRARY_PATH, self.database)
         self.semantic_searcher = self.searcher.semantic  # Reference to SemanticSearcher for indexing
+
         self.scanner = LibraryScanner(config.LIBRARY_PATH, self.database)
         self.file_watcher: Optional[FileWatcher] = None
         self.neurosynth = NeuroSynthBridge(
@@ -53,13 +55,13 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         self.current_query = ""
         self.search_thread: Optional[threading.Thread] = None
         self.extraction_thread: Optional[threading.Thread] = None
+
         self.pending_results: list[SearchResult] = []
-        self.selected_results: list[SearchResult] = []
-        self._search_id = 0  # Counter to track active search, prevents stale callbacks
+        self.selected_results: list[SearchResult | ChapterResult] = []
 
         # Batch and throttle settings
         self.RESULT_BATCH_SIZE = 50
-        self._last_progress_update = 0  # Track last progress update time for throttling
+
 
         # Set up UI
         self._setup_ui()
@@ -97,15 +99,28 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         self.new_files_panel.pack(side="left", fill="y", padx=(0, PADDING["small"]))
         self.new_files_panel.configure(width=280)
 
-        # Results tree (center)
-        self.results_tree = ResultsTree(
-            content_frame,
-            on_select=self._on_result_select,
-            on_selection_change=self._on_selection_change,
-            on_extract_images=self._extract_images_from_result,
-            on_index_text=self._index_text_from_result,
-            database=self.database
-        )
+        # Results tree (center) - Use RichResultsTree for inline thumbnails and expandable context
+        # Set use_rich_tree=True to enable rich preview mode
+        use_rich_tree = config.USE_RICH_RESULTS_TREE if hasattr(config, 'USE_RICH_RESULTS_TREE') else True
+
+        if use_rich_tree:
+            self.results_tree = RichResultsTree(
+                content_frame,
+                on_select=self._on_result_select,
+                on_selection_change=self._on_selection_change,
+                on_extract_images=self._extract_images_from_result,
+                on_index_text=self._index_text_from_result,
+                database=self.database
+            )
+        else:
+            self.results_tree = ResultsTree(
+                content_frame,
+                on_select=self._on_result_select,
+                on_selection_change=self._on_selection_change,
+                on_extract_images=self._extract_images_from_result,
+                on_index_text=self._index_text_from_result,
+                database=self.database
+            )
         self.results_tree.pack(side="left", fill="both", expand=True, padx=(0, PADDING["small"]))
 
         # Preview panel (right)
@@ -167,6 +182,8 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         )
         self.synthesize_btn.pack(side="right", padx=PADDING["small"])
 
+
+
         # Smart selection dropdown
         self.smart_select_var = ctk.StringVar(value="Smart Select")
         self.smart_select_menu = ctk.CTkOptionMenu(
@@ -223,24 +240,102 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         )
         self.analytics_btn.pack(side="right", padx=PADDING["small"])
 
-        # Load Previous Project button
-        self.load_project_btn = ctk.CTkButton(
+        # Library Settings button (⚙️)
+        self.settings_btn = ctk.CTkButton(
             self.status_frame,
-            text="📂 Projects",
-            command=self._show_project_browser,
-            width=90,
+            text="⚙️ Library",
+            command=self._show_library_info,
+            width=80,
             height=24,
             font=FONTS["small"],
-            fg_color="#8e44ad",
-            hover_color="#732d91"
+            fg_color="#34495e",
+            hover_color="#2c3e50"
         )
-        self.load_project_btn.pack(side="right", padx=PADDING["small"])
+        self.settings_btn.pack(side="right", padx=PADDING["small"])
 
     def _setup_menu(self):
         """Set up the application menu."""
-        # Note: CustomTkinter doesn't have native menu support
-        # For macOS, we could use tkinter's native menu
-        pass
+        import tkinter as tk
+
+        # Create native macOS menu
+        menubar = tk.Menu(self)
+
+        # File menu
+        file_menu = tk.Menu(menubar, tearoff=0)
+        file_menu.add_command(label="Change Library...", command=self._change_library)
+        file_menu.add_command(label="Show Library Info", command=self._show_library_info)
+        file_menu.add_separator()
+        file_menu.add_command(label="Lock Library Path", command=self._lock_library)
+        file_menu.add_command(label="Unlock Library Path", command=self._unlock_library)
+        file_menu.add_separator()
+        file_menu.add_command(label="Refresh Library", command=self._sync_library)
+        menubar.add_cascade(label="File", menu=file_menu)
+
+        # View menu
+        view_menu = tk.Menu(menubar, tearoff=0)
+        view_menu.add_command(label="Show New Files Panel", command=lambda: self.new_files_panel.pack(side="left", fill="y", padx=(0, 5)))
+        menubar.add_cascade(label="View", menu=view_menu)
+
+        self.config(menu=menubar)
+
+    def _change_library(self):
+        """Change the library path."""
+        from tkinter import messagebox
+
+        # Confirm if locked
+        if config.is_library_locked():
+            if not messagebox.askyesno(
+                "Library Locked",
+                f"Current library is locked to:\n{config.LIBRARY_PATH}\n\n"
+                "Do you want to change it anyway?"
+            ):
+                return
+
+        # Prompt for new path
+        new_path = config.prompt_for_library_path(lock=True)
+        if new_path:
+            # Restart required
+            messagebox.showinfo(
+                "Library Changed",
+                f"Library changed to:\n{new_path}\n\n"
+                "Please restart the application for changes to take effect."
+            )
+
+    def _show_library_info(self):
+        """Show information about the current library."""
+        from tkinter import messagebox
+
+        # Count PDFs
+        pdfs = self.scanner.get_all_pdfs()
+        pdf_count = len(pdfs)
+
+        # Check if locked
+        locked_status = "🔒 Locked" if config.is_library_locked() else "🔓 Unlocked"
+
+        # Get tracked/indexed counts from database
+        tracked = len(self.database.get_all_tracked_paths())
+
+        messagebox.showinfo(
+            "Library Information",
+            f"📁 Library Path:\n{config.LIBRARY_PATH}\n\n"
+            f"📊 Status: {locked_status}\n\n"
+            f"📚 PDFs in folder: {pdf_count}\n"
+            f"📑 PDFs indexed: {tracked}\n\n"
+            f"Expected folder structure:\n"
+            f"  📁 Book chapters/\n"
+            f"    📁 Series folders...\n"
+            f"  📁 Entire books/"
+        )
+
+    def _lock_library(self):
+        """Lock the current library path."""
+        config.lock_library_path(config.LIBRARY_PATH)
+        self._show_status(f"Library locked to: {config.LIBRARY_PATH}", "success")
+
+    def _unlock_library(self):
+        """Unlock the library path."""
+        config.unlock_library_path()
+        self._show_status("Library unlocked - will prompt on next restart", "info")
 
     def _verify_library(self):
         """Verify the reference library exists."""
@@ -257,20 +352,13 @@ class NeurosurgeryLibraryApp(ctk.CTk):
             else:
                 self._show_status("Library found. Indexing...")
 
-    def _start_search(self, query: str, mode: str = "keyword"):
+    def _start_search(self, query: str):
         """Start a search for the given query."""
         if not query:
             return
 
         # Cancel any existing search
         self._cancel_search()
-
-        # Increment search_id to invalidate stale callbacks from previous search
-        self._search_id += 1
-        current_search_id = self._search_id
-
-        # Reset cancelled flag AFTER incrementing search_id, BEFORE starting thread
-        self.searcher._cancelled = False
 
         self.current_query = query
         self.pending_results = []
@@ -279,118 +367,132 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         self.results_tree.clear()
         self.preview_panel.clear()
 
+        # Get strategy from search panel
+        strategy = self.search_panel.get_strategy()
+
         # Update UI state
         self.search_panel.set_searching(True)
-        mode_display = mode.capitalize()
-        self._show_status(f"Searching for '{query}' ({mode_display})...")
+        strategy_display = strategy.capitalize()
+        self._show_status(f"Searching for '{query}' ({strategy_display})...")
         self.export_btn.configure(state="disabled")
 
-        # Start search in background thread with search_id
+        # Hide any previous related terms
+        self.search_panel.hide_related_terms()
+
+        # Start search in background thread
         self.search_thread = threading.Thread(
             target=self._search_thread,
-            args=(query, mode, current_search_id),
+            args=(query, strategy),
             daemon=True
         )
         self.search_thread.start()
 
-    def _search_thread(self, query: str, mode: str = "keyword", search_id: int = 0):
-        """Background thread for searching."""
-        print(f"[DEBUG] _search_thread started: query='{query}', mode={mode}, search_id={search_id}")
-        result_count = 0
+    def _search_thread(self, query: str, strategy: str = "standard"):
+        """Background thread for searching - uses chapter-level knowledge retrieval."""
         try:
             batch = []
 
-            # Get category filter from search panel intent
-            category_filter = self.search_panel.get_category_filter()
-
-            for result in self.searcher.search_library(
+            # Use chapter-level search for knowledge retrieval
+            for chapter_result in self.searcher.search_library_chapters(
                 query,
-                mode=mode,
-                progress_callback=self._on_search_progress,
-                category_filter=category_filter
+                strategy=strategy,
+                progress_callback=self._on_search_progress
             ):
-                result_count += 1
-                # Check if this search is still active
-                if search_id != self._search_id:
-                    print(f"[DEBUG] Search aborted - new search started (had {result_count} results)")
-                    return  # Abort - a new search has started
+                batch.append(chapter_result)
+                self.pending_results.append(chapter_result)
 
-                batch.append(result)
-                self.pending_results.append(result)
-
-                # Send batch to UI when full, include search_id for validation
+                # Send batch to UI when full
                 if len(batch) >= self.RESULT_BATCH_SIZE:
-                    self.after(0, self._add_results_batch, batch.copy(), search_id)
+                    self.after(0, self._add_chapter_results_batch, batch.copy())
                     batch.clear()
 
-            print(f"[DEBUG] Search generator exhausted. Total results: {result_count}")
-
-            # Send remaining results with search_id
-            if batch and search_id == self._search_id:
-                self.after(0, self._add_results_batch, batch, search_id)
+            # Send remaining results
+            if batch:
+                self.after(0, self._add_chapter_results_batch, batch)
 
             # Search complete
-            if search_id == self._search_id:
-                print(f"[DEBUG] Search complete, calling _on_search_complete")
-                self.after(0, self._on_search_complete)
+            self.after(0, self._on_search_complete)
 
         except Exception as e:
-            print(f"[DEBUG] Search thread exception: {type(e).__name__}: {e}")
-            import traceback
-            traceback.print_exc()
-            if search_id == self._search_id:
-                self.after(0, lambda: self._show_status(f"Search error: {e}", "error"))
-                self.after(0, self._on_search_complete)
+            self.after(0, lambda: self._show_status(f"Search error: {e}", "error"))
+            self.after(0, self._on_search_complete)
 
     def _on_search_progress(self, progress: SearchProgress):
-        """Update progress display with throttling to avoid UI overload."""
-        # Throttle updates to max 10 per second (every 100ms)
-        current_time = time.time()
-        is_final = progress.searched_pdfs >= progress.total_pdfs
+        """Update progress display with on-demand extraction awareness.
 
-        if not is_final and (current_time - self._last_progress_update) < 0.1:
-            return  # Skip this update, too soon
-
-        self._last_progress_update = current_time
-
+        Shows two-phase progress:
+        - Scanning: Quick metadata check of all PDFs
+        - Candidates: PDFs that passed filter and are being processed
+        """
         # Capture values by value to avoid threading race condition
         searched = progress.searched_pdfs
         total = progress.total_pdfs
+        candidates = progress.candidates_processed
         matches = progress.total_matches
-        self.after(0, lambda s=searched, t=total, m=matches: self.progress_label.configure(
-            text=f"{s}/{t} PDFs | {m} matches"
-        ))
+        phase = progress.phase
 
-    def _add_results_batch(self, results: list, search_id: int = 0):
-        """Add a batch of results to the tree (called from main thread).
+        if phase == "scanning":
+            if candidates > 0:
+                # Show candidates being processed
+                text = f"Scanning {searched}/{total} | {candidates} candidates | {matches} matches"
+            else:
+                # Still in initial scan phase
+                text = f"Scanning {searched}/{total} PDFs..."
+        else:
+            # Search complete
+            text = f"Processed {candidates} of {total} PDFs | {matches} matches"
 
-        Args:
-            results: List of SearchResult objects
-            search_id: ID of the search that produced these results
-        """
-        # Discard stale results from cancelled/old searches
-        if search_id != self._search_id:
-            return
+        self.after(0, lambda t=text: self.progress_label.configure(text=t))
 
+    def _add_results_batch(self, results: list):
+        """Add a batch of page-level results to the tree (called from main thread)."""
         for result in results:
             self.results_tree.add_result(result)
+
+    def _add_chapter_results_batch(self, results: list):
+        """Add a batch of chapter-level results to the tree (called from main thread)."""
+        for chapter_result in results:
+            self.results_tree.add_chapter_result(chapter_result)
 
     def _on_search_complete(self):
         """Handle search completion."""
         self.search_panel.set_searching(False)
 
-        result_count = len(self.results_tree.results)
-        self._show_status(f"Search complete: {result_count} matches found")
+        # Count both page-level and chapter-level results
+        page_count = len(self.results_tree.results)
+        chapter_count = len(self.results_tree.chapter_results)
+        result_count = page_count + chapter_count
+
+        # Show appropriate message based on result type
+        if chapter_count > 0:
+            dedicated = sum(1 for c in self.results_tree.chapter_results.values()
+                          if c.match_type.name == "DEDICATED_CHAPTER")
+            if dedicated > 0:
+                self._show_status(f"Found {chapter_count} chapters ({dedicated} dedicated to topic)")
+            else:
+                self._show_status(f"Found {chapter_count} chapters with references")
+        else:
+            self._show_status(f"Search complete: {result_count} matches found")
 
         if result_count > 0:
             self.export_btn.configure(state="normal")
 
+        # Show related terms suggestions (especially useful when few results)
+        if result_count < 10 and self.current_query:
+            try:
+                master_index = get_master_index()
+                related_terms = master_index.get_related_terms(self.current_query, max_terms=5)
+                if related_terms:
+                    self.search_panel.show_related_terms(related_terms)
+            except Exception:
+                pass  # Don't fail if related terms lookup fails
+
         # Save to search history
-        search_mode = self.search_panel.get_mode()
+        search_strategy = self.search_panel.get_strategy()
         self.database.save_search_history(
             self.current_query,
             result_count,
-            search_mode=search_mode
+            search_mode=search_strategy  # Use strategy name instead of removed mode
         )
 
     def _cancel_search(self):
@@ -497,7 +599,7 @@ class NeurosurgeryLibraryApp(ctk.CTk):
                     ))
 
                 result = self.scanner.sync_library(
-                    max_workers=4,  # Reduced to prevent file descriptor exhaustion
+                    max_workers=8,
                     progress_callback=on_progress
                 )
                 self.after(0, lambda: self._on_sync_complete(result))
@@ -758,7 +860,32 @@ class NeurosurgeryLibraryApp(ctk.CTk):
 
     # NeuroSynth Integration Methods
 
-    def _on_selection_change(self, selected_results: list[SearchResult]):
+    def _convert_to_search_results(self, items: list[SearchResult | ChapterResult]) -> list[SearchResult]:
+        """Convert mixed results to SearchResult list for synthesis compatibility."""
+        search_results = []
+        for item in items:
+            if isinstance(item, SearchResult):
+                search_results.append(item)
+            elif isinstance(item, ChapterResult):
+                # Convert ChapterResult to SearchResult
+                first_page = item.matched_pages[0] if item.matched_pages else 1
+                search_result = SearchResult(
+                    pdf_path=item.pdf_path,
+                    book_series=item.book_series,
+                    book_title=item.book_title,
+                    chapter_number=item.chapter_number,
+                    chapter_title=item.chapter_title,
+                    page_number=first_page,
+                    match_text=f"[{item.match_type.display_name}]",  # Use display_name
+                    context=item.preview_context or "",
+                    match_count=item.total_occurrences,
+                    is_title_match=item.is_dedicated,
+                    relevance_score=item.relevance_score
+                )
+                search_results.append(search_result)
+        return search_results
+
+    def _on_selection_change(self, selected_results: list[SearchResult | ChapterResult]):
         """Handle selection change in results tree."""
         self.selected_results = selected_results
 
@@ -768,14 +895,15 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         else:
             self.synthesize_btn.configure(state="disabled")
 
+
     def _on_smart_select(self, choice: str):
         """Handle smart selection dropdown choice."""
         if choice == "Balanced":
             self.results_tree.smart_select_balanced(target_per_group=6)
-            self._show_status("Auto-selected balanced coverage (6 per series)", "success")
+            self._show_status("Auto-selected balanced results (6 per book)", "success")
         elif choice == "High Confidence":
             self.results_tree.smart_select_high_confidence(threshold=0.8)
-            self._show_status("Selected first 20 results", "success")
+            self._show_status("Selected high-confidence results (>=80%)", "success")
         elif choice == "Diverse":
             self.results_tree.smart_select_diverse(max_per_source=3)
             self._show_status("Selected diverse sources (max 3 per book)", "success")
@@ -798,14 +926,15 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         # Use current query as default topic
         topic = self.current_query if self.current_query else "Neurosurgical Chapter"
 
-        # Get selected results for template recommendation
+        # Get selected results (mixed SearchResult and ChapterResult)
+        # Pass original objects to preserve matched_pages for ChapterResult
         selected_results = self.results_tree.get_selected_results()
 
-        # Get options from dialog with selected results for smart recommendation
+        # Get options from dialog (works with any list type)
         dialog = SynthesisDialog(
             self,
             initial_topic=topic,
-            selected_results=selected_results
+            selected_results=selected_results  # Pass original mixed results
         )
         result = dialog.get_input()
 
@@ -821,13 +950,13 @@ class NeurosurgeryLibraryApp(ctk.CTk):
 
         # Get search context
         search_query = self.current_query
-        search_mode = self.search_panel.get_mode()
+        search_mode = self.search_panel.get_strategy()
 
-        # Run synthesis in background
+        # Run synthesis in background - page_extractor handles both result types
         def _do_synthesis():
             result = self.neurosynth.synthesize(
                 topic=topic,
-                results=self.selected_results,
+                results=selected_results,  # Pass original (extractor handles ChapterResult)
                 on_progress=lambda msg: self.after(0, lambda: self._show_status(msg)),
                 search_query=search_query,
                 search_mode=search_mode,
@@ -867,13 +996,6 @@ class NeurosurgeryLibraryApp(ctk.CTk):
     def _show_analytics(self):
         """Show search analytics dialog."""
         AnalyticsDialog(self, self.database)
-
-    def _show_project_browser(self):
-        """Show the project browser dialog to load previous projects."""
-        dialog = ProjectBrowserDialog(self)
-        selected = dialog.get_selected_project()
-        if selected:
-            self._show_status(f"Opened project: {selected.name}", "success")
 
 
 def run_app():

@@ -1,6 +1,6 @@
 """Search panel component with input and filters."""
 import customtkinter as ctk
-from typing import Callable, Optional
+from typing import Callable
 
 from src import config
 from .styles import FONTS, PADDING
@@ -12,7 +12,7 @@ class SearchPanel(ctk.CTkFrame):
     def __init__(
         self,
         parent,
-        on_search: Callable[[str, str], None],  # (query, mode)
+        on_search: Callable[[str], None],  # (query)
         on_cancel: Callable[[], None],
         database=None,
         **kwargs
@@ -31,42 +31,6 @@ class SearchPanel(ctk.CTkFrame):
 
     def _setup_ui(self):
         """Set up the search panel UI."""
-        # Intent selector row
-        intent_frame = ctk.CTkFrame(self, fg_color="transparent")
-        intent_frame.pack(fill="x", padx=PADDING["medium"], pady=(PADDING["medium"], PADDING["small"]))
-
-        ctk.CTkLabel(
-            intent_frame,
-            text="I'm looking for:",
-            font=FONTS["body"]
-        ).pack(side="left", padx=(0, PADDING["small"]))
-
-        self.intent_var = ctk.StringVar(value="both")
-
-        ctk.CTkRadioButton(
-            intent_frame,
-            text="🔴 Surgical Technique",
-            variable=self.intent_var,
-            value="surgical",
-            font=FONTS["small"]
-        ).pack(side="left", padx=PADDING["small"])
-
-        ctk.CTkRadioButton(
-            intent_frame,
-            text="🔵 Clinical Knowledge",
-            variable=self.intent_var,
-            value="clinical",
-            font=FONTS["small"]
-        ).pack(side="left", padx=PADDING["small"])
-
-        ctk.CTkRadioButton(
-            intent_frame,
-            text="Both",
-            variable=self.intent_var,
-            value="both",
-            font=FONTS["small"]
-        ).pack(side="left", padx=PADDING["small"])
-
         # Search row
         search_frame = ctk.CTkFrame(self, fg_color="transparent")
         search_frame.pack(fill="x", padx=PADDING["medium"], pady=(0, PADDING["medium"]))
@@ -103,15 +67,19 @@ class SearchPanel(ctk.CTkFrame):
         )
         self.history_btn.pack(side="left", padx=(0, PADDING["small"]))
 
-        # Search Mode Toggle
-        self.mode_var = ctk.StringVar(value="keyword")
-        self.mode_selector = ctk.CTkSegmentedButton(
+        # Strategy Selector (STRICT/STANDARD/BROAD)
+        self.strategy_var = ctk.StringVar(value="standard")
+        self.strategy_selector = ctk.CTkOptionMenu(
             search_frame,
-            values=["keyword", "semantic", "hybrid"],
-            variable=self.mode_var,
-            font=FONTS["small"]
+            values=["🎯 Strict", "⚖️ Standard", "🌐 Broad"],
+            variable=self.strategy_var,
+            width=110,
+            font=FONTS["small"],
+            command=self._on_strategy_change
         )
-        self.mode_selector.pack(side="left", padx=PADDING["small"])
+        self.strategy_selector.pack(side="left", padx=(0, PADDING["small"]))
+        # Set default display
+        self.strategy_var.set("⚖️ Standard")
 
         # Search button
         self.search_btn = ctk.CTkButton(
@@ -135,10 +103,26 @@ class SearchPanel(ctk.CTkFrame):
         )
         # Don't pack yet - will show when searching
 
-        # Don't pack yet - will show when searching
+        # Related Terms Suggestion Row (hidden by default)
+        self.related_frame = ctk.CTkFrame(self, fg_color="transparent")
+        # Don't pack initially - shown when related terms found
+
+        self.related_label = ctk.CTkLabel(
+            self.related_frame,
+            text="Also try:",
+            font=FONTS["small"],
+            text_color="gray"
+        )
+        self.related_label.pack(side="left", padx=(PADDING["medium"], PADDING["small"]))
+
+        # Frame to hold clickable term buttons
+        self.related_terms_frame = ctk.CTkFrame(self.related_frame, fg_color="transparent")
+        self.related_terms_frame.pack(side="left", fill="x")
+
+        self._related_term_buttons = []
 
     def _do_search(self):
-        """Trigger search callback with mode."""
+        """Trigger search callback."""
         # If autocomplete is open and a suggestion is selected, use it
         if (self._autocomplete_popup and
             hasattr(self, '_suggestion_buttons') and
@@ -149,28 +133,58 @@ class SearchPanel(ctk.CTkFrame):
             self.set_query(suggestion)
 
         query = self.search_entry.get().strip()
-        mode = self.mode_var.get()
         if query:
             self._hide_autocomplete()
-            self.on_search(query, mode)
+            self.on_search(query)
 
-    def get_mode(self) -> str:
-        """Get current search mode."""
-        return self.mode_var.get()
+    def get_strategy(self) -> str:
+        """Get current search strategy name.
 
-    def get_intent(self) -> str:
-        """Get current search intent."""
-        return self.intent_var.get()
+        Returns:
+            Strategy name: 'strict', 'standard', or 'broad'
+        """
+        display = self.strategy_var.get()
+        # Map display name to strategy name
+        if "Strict" in display:
+            return "strict"
+        elif "Broad" in display:
+            return "broad"
+        return "standard"
 
-    def get_category_filter(self) -> Optional[str]:
-        """Get category filter based on intent selection."""
-        intent = self.intent_var.get()
-        if intent == "surgical":
-            return "Surgical/Anatomical"
-        elif intent == "clinical":
-            return "Theoretical"
-        else:  # both
-            return None
+    def _on_strategy_change(self, value: str):
+        """Handle strategy change - show brief description."""
+        descriptions = {
+            "🎯 Strict": "Exact matches only, high authority sources",
+            "⚖️ Standard": "Balanced search with query expansion",
+            "🌐 Broad": "Maximum coverage, all sources included"
+        }
+        desc = descriptions.get(value, "")
+        if desc:
+            self._show_strategy_hint(desc)
+
+    def _show_strategy_hint(self, text: str):
+        """Show a temporary hint below the search bar."""
+        # Create hint label if not exists
+        if not hasattr(self, '_strategy_hint'):
+            self._strategy_hint = ctk.CTkLabel(
+                self,
+                text="",
+                font=FONTS["small"],
+                text_color="#3498db"
+            )
+
+        self._strategy_hint.configure(text=text)
+        self._strategy_hint.pack(fill="x", padx=PADDING["medium"], pady=(0, 4))
+
+        # Auto-hide after 2 seconds
+        if hasattr(self, '_hint_after_id') and self._hint_after_id:
+            self.after_cancel(self._hint_after_id)
+        self._hint_after_id = self.after(2000, self._hide_strategy_hint)
+
+    def _hide_strategy_hint(self):
+        """Hide the strategy hint."""
+        if hasattr(self, '_strategy_hint'):
+            self._strategy_hint.pack_forget()
 
     def set_searching(self, is_searching: bool):
         """Update UI for searching state."""
@@ -191,6 +205,53 @@ class SearchPanel(ctk.CTkFrame):
         """Set search query programmatically."""
         self.search_entry.delete(0, "end")
         self.search_entry.insert(0, query)
+
+    # ==================== Related Terms Methods ====================
+
+    def show_related_terms(self, terms: list[str]):
+        """Show related term suggestions below search bar.
+
+        Args:
+            terms: List of related term strings to display
+        """
+        # Clear existing buttons
+        self.hide_related_terms()
+
+        if not terms:
+            return
+
+        # Create clickable buttons for each term
+        for term in terms[:5]:  # Limit to 5 terms
+            btn = ctk.CTkButton(
+                self.related_terms_frame,
+                text=term,
+                font=FONTS["small"],
+                fg_color="transparent",
+                text_color="#3498db",
+                hover_color="#2c3e50",
+                height=24,
+                command=lambda t=term: self._on_related_term_click(t)
+            )
+            btn.pack(side="left", padx=2)
+            self._related_term_buttons.append(btn)
+
+        # Show the related terms frame
+        self.related_frame.pack(fill="x", pady=(0, PADDING["small"]))
+
+    def hide_related_terms(self):
+        """Hide related terms suggestions."""
+        # Destroy existing buttons
+        for btn in self._related_term_buttons:
+            btn.destroy()
+        self._related_term_buttons = []
+
+        # Hide the frame
+        self.related_frame.pack_forget()
+
+    def _on_related_term_click(self, term: str):
+        """Handle click on a related term - search for it."""
+        self.set_query(term)
+        self._do_search()
 
     # ==================== Search History Methods ====================
 
@@ -276,12 +337,10 @@ class SearchPanel(ctk.CTkFrame):
             self._hide_autocomplete()
             return
 
-        # Get suggestions filtered by intent
-        category_filter = self.get_category_filter()
+        # Get suggestions
         suggestions = self.database.get_search_suggestions(
             query,
-            limit=7,
-            category_filter=category_filter
+            limit=7
         )
         if not suggestions:
             self._hide_autocomplete()

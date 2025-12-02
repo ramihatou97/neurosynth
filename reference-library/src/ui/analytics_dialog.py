@@ -47,65 +47,46 @@ class AnalyticsDialog(ctk.CTkToplevel):
         # Cache Statistics Section
         self._add_section(scroll_frame, "📦 Cache Statistics")
         self._add_stat(scroll_frame, "Cached Pages", cache_stats.get("cached_pages", 0))
-        self._add_stat(scroll_frame, "Cached Categorizations", cache_stats.get("cached_categorizations", 0))
-        self._add_stat(scroll_frame, "Cached Query Intents", cache_stats.get("cached_query_intents", 0))
         self._add_stat(scroll_frame, "Total Searches", cache_stats.get("total_searches", 0))
         self._add_stat(scroll_frame, "Indexed PDFs", cache_stats.get("indexed_pdfs", 0))
 
         # Search Pattern Analysis
         if recent_searches:
             self._add_section(scroll_frame, "🔍 Search Patterns (Last 50 Searches)")
-            
+
             # Calculate statistics
             total_searches = len(recent_searches)
             total_results = sum(s.get("result_count", 0) for s in recent_searches)
             avg_results = total_results / total_searches if total_searches > 0 else 0
-            
-            # Category distribution
-            surgical_searches = sum(s.get("surgical_count", 0) for s in recent_searches)
-            theoretical_searches = sum(s.get("theoretical_count", 0) for s in recent_searches)
-            total_categorized = surgical_searches + theoretical_searches
-            
+
             self._add_stat(scroll_frame, "Average Results per Search", f"{avg_results:.1f}")
             self._add_stat(scroll_frame, "Total Results Found", total_results)
-            
-            if total_categorized > 0:
-                surgical_pct = (surgical_searches / total_categorized) * 100
-                theoretical_pct = (theoretical_searches / total_categorized) * 100
-                
-                self._add_section(scroll_frame, "📈 Category Distribution")
-                self._add_stat(scroll_frame, "🔴 Surgical/Anatomical", f"{surgical_searches} ({surgical_pct:.1f}%)")
-                self._add_stat(scroll_frame, "🔵 Clinical/Theoretical", f"{theoretical_searches} ({theoretical_pct:.1f}%)")
-            
+
             # Search mode distribution
             mode_counts = {}
             for search in recent_searches:
                 mode = search.get("search_mode", "unknown")
                 mode_counts[mode] = mode_counts.get(mode, 0) + 1
-            
+
             if mode_counts:
                 self._add_section(scroll_frame, "🎯 Search Mode Usage")
                 for mode, count in sorted(mode_counts.items(), key=lambda x: x[1], reverse=True):
                     pct = (count / total_searches) * 100
                     self._add_stat(scroll_frame, mode.capitalize(), f"{count} ({pct:.1f}%)")
-            
+
             # Top searches
             self._add_section(scroll_frame, "🔥 Recent Searches")
             for i, search in enumerate(recent_searches[:10], 1):
                 query = search.get("query", "Unknown")
                 result_count = search.get("result_count", 0)
-                dominant = search.get("dominant_category", "Mixed")
-                
+
                 # Truncate long queries
                 if len(query) > 40:
                     query = query[:37] + "..."
-                
-                # Category badge
-                badge = "🔴" if dominant == "Surgical/Anatomical" else "🔵" if dominant == "Theoretical" else "⚪"
-                
+
                 ctk.CTkLabel(
                     scroll_frame,
-                    text=f"{i}. {badge} {query} ({result_count} results)",
+                    text=f"{i}. {query} ({result_count} results)",
                     font=FONTS["small"],
                     anchor="w"
                 ).pack(fill="x", padx=PADDING["medium"], pady=2)
