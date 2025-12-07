@@ -105,7 +105,7 @@ neurosynth/                          # Root
 
 ## Your Reference Library
 
-**Location**: `/Users/ramihatoum/Desktop/NeuroLi copy`
+**Location**: `/Users/ramihatoum/Desktop/NeuroLi/reference library`
 
 **Contents**:
 - 62 Complete Textbooks
