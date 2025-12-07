@@ -1,0 +1,84 @@
+{
+  "queries": [
+    {
+      "query": "Metformin vs insulin for managing type 2 diabetes in elderly patients with kidney dysfunction",
+      "ground_truth": "For elderly patients with type 2 diabetes and kidney dysfunction, metformin requires dose adjustment or discontinuation when eGFR <30 mL/min/1.73m\u00b2 due to lactic acidosis risk. Insulin remains safe and effective across all stages of kidney disease, though doses may need adjustment due to reduced clearance. Insulin is generally preferred in advanced kidney disease.",
+      "query_type": "comparative",
+      "difficulty": "medium",
+      "safety_critical": true,
+      "reasoning": "Comparison of medication options for vulnerable population with comorbidity"
+    },
+    {
+      "query": "Mechanical ventilation vs CPAP for acute respiratory failure in COVID-19 patients",
+      "ground_truth": "CPAP is preferred initially for conscious COVID-19 patients with acute respiratory failure (P/F ratio 100-200) as it's less invasive, preserves patient comfort, and reduces ventilator-associated complications. Mechanical ventilation is reserved for severe cases with P/F ratio <100, hemodynamic instability, or inability to protect airway. CPAP reduces intubation rates by 30-50% when appropriate.",
+      "query_type": "comparative",
+      "difficulty": "medium",
+      "safety_critical": true,
+      "reasoning": "Comparison of critical care interventions with significant morbidity implications"
+    },
+    {
+      "query": "Warfarin vs direct oral anticoagulants (DOACs) for stroke prevention in atrial fibrillation with mechanical heart valves",
+      "ground_truth": "Warfarin remains the only recommended anticoagulant for patients with mechanical heart valves and atrial fibrillation. DOACs are contraindicated due to increased risk of thromboembolic events and bleeding demonstrated in clinical trials. Target INR should be 2.5-3.5 for mechanical valves. DOACs have not been proven safe or effective in this population.",
+      "query_type": "comparative",
+      "difficulty": "medium",
+      "safety_critical": true,
+      "reasoning": "Comparison of anticoagulation strategies for high-risk cardiac condition"
+    },
+    {
+      "query": "Open surgery vs laparoscopic approach for perforated appendicitis in pediatric patients",
+      "ground_truth": "Laparoscopic appendectomy is preferred for perforated appendicitis in children when expertise is available. It offers reduced wound infections, shorter hospital stays, and better cosmetic outcomes. Open surgery may be necessary for hemodynamically unstable patients, extensive adhesions, or when laparoscopic expertise is unavailable. Both approaches have similar rates of intra-abdominal abscess formation.",
+      "query_type": "comparative",
+      "difficulty": "medium",
+      "safety_critical": true,
+      "reasoning": "Comparison of surgical approaches in pediatric emergency condition"
+    },
+    {
+      "query": "Aspirin vs clopidogrel for secondary stroke prevention in patients with active peptic ulcer disease",
+      "ground_truth": "For patients with recent stroke and active peptic ulcer disease, clopidogrel is preferred over aspirin due to lower GI bleeding risk. However, proton pump inhibitor therapy should be added regardless of antiplatelet choice. If clopidogrel is contraindicated, low-dose aspirin with PPI is acceptable. Dual antiplatelet therapy should be avoided unless absolutely necessary.",
+      "query_type": "comparative",
+      "difficulty": "medium",
+      "safety_critical": true,
+      "reasoning": "Comparison of antiplatelet agents with bleeding risk considerations"
+    },
+    {
+      "query": "Epinephrine vs norepinephrine for septic shock in patients with severe heart failure",
+      "ground_truth": "Norepinephrine is first-line for septic shock even in heart failure patients, providing adequate vasoconstriction with less chronotropic effect than epinephrine. Epinephrine may be considered if norepinephrine fails, but increases myocardial oxygen demand and arrhythmia risk in heart failure. Dobutamine can be added to norepinephrine if inotropic support is needed.",
+      "query_type": "comparative",
+      "difficulty": "medium",
+      "safety_critical": true,
+      "reasoning": "Comparison of vasopressor agents in critical care with cardiac comorbidity"
+    },
+    {
+      "query": "Immediate surgery vs conservative management for small bowel obstruction in elderly patients with multiple comorbidities",
+      "ground_truth": "Conservative management with nasogastric decompression, IV fluids, and monitoring is preferred initially for partial small bowel obstruction in elderly patients with high surgical risk. Surgery should be considered if complete obstruction, signs of strangulation, or failure to improve within 48-72 hours. Operative mortality can exceed 20% in elderly patients with multiple comorbidities.",
+      "query_type": "comparative",
+      "difficulty": "medium",
+      "safety_critical": true,
+      "reasoning": "Comparison of treatment strategies in high-risk elderly population"
+    },
+    {
+      "query": "Crystalloids vs colloids for fluid resuscitation in burn patients with >30% TBSA",
+      "ground_truth": "Crystalloids (Lactated Ringer's) are preferred for initial resuscitation in major burns. The Parkland formula (4 mL/kg/% burn) guides initial therapy. Colloids may be added after 12-24 hours if large volumes of crystalloids are required, but early colloid use increases mortality risk. Albumin can be considered for burns >30% TBSA after the initial resuscitation phase.",
+      "query_type": "comparative",
+      "difficulty": "medium",
+      "safety_critical": true,
+      "reasoning": "Comparison of resuscitation fluids in severe burn injury"
+    },
+    {
+      "query": "Immediate cardioversion vs rate control for new-onset atrial fibrillation in hemodynamically stable patients",
+      "ground_truth": "For hemodynamically stable patients with new-onset atrial fibrillation <48 hours duration, both rhythm and rate control are acceptable initial strategies. Cardioversion may be preferred in younger patients, those with symptoms, or first episode. Rate control with beta-blockers or calcium channel blockers is often chosen in elderly patients or those with structural heart disease. Anticoagulation must be considered regardless of strategy.",
+      "query_type": "comparative",
+      "difficulty": "medium",
+      "safety_critical": true,
+      "reasoning": "Comparison of acute management strategies for cardiac arrhythmia"
+    },
+    {
+      "query": "Immediate intubation vs high-flow nasal cannula for acute respiratory distress in immunocompromised patients",
+      "ground_truth": "High-flow nasal cannula can be trialed in conscious, cooperative immunocompromised patients with mild-moderate ARDS (P/F ratio 100-200) and no hemodynamic instability. However, these patients require extremely close monitoring as clinical deterioration can be rapid. Immediate intubation is preferred for severe ARDS, altered mental status, or hemodynamic instability. Delay in intubation increases mortality in immunocompromised patients.",
+      "query_type": "comparative",
+      "difficulty": "medium",
+      "safety_critical": true,
+      "reasoning": "Comparison of respiratory support strategies in high-risk immunocompromised population"
+    }
+  ]
+}

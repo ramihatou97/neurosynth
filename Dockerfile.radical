@@ -1,0 +1,29 @@
+
+FROM python:3.10-slim
+
+# 1. Install System Deps
+RUN apt-get update && apt-get install -y \
+    git \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# 2. Upgrade pip to handle modern wheels
+RUN pip install --no-cache-dir --upgrade pip
+
+# 3. THE GOLDEN STACK
+# We install these BEFORE ragatouille to force it to use our working versions.
+# These versions are from the "Stable 0.1.x" era of LangChain which works with ColBERT.
+RUN pip install --no-cache-dir \
+    "langchain==0.1.20" \
+    "langchain-community==0.0.38" \
+    "langchain-core==0.1.52" \
+    "langsmith==0.1.57" \
+    "psutil" \
+    "ragatouille"
+
+# 4. Setup App
+WORKDIR /app
+COPY verify_colbert.py /app/verify_colbert.py
+
+# 5. Run Verification
+CMD ["python", "verify_colbert.py"]

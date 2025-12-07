@@ -1,0 +1,37 @@
+{
+  "version": "1.0.0",
+  "metadata": {
+    "created_date": "2024-12-06",
+    "last_updated": "2024-12-06",
+    "total_queries": 1,
+    "curator": "USER",
+    "notes": "Deep-Dx evaluation dataset. Please expand to 100 queries."
+  },
+  "queries": [
+    {
+      "id": "Q001",
+      "query": "What is the typical position of the facial nerve in a 3cm vestibular schwannoma?",
+      "ground_truth": "In vestibular schwannomas measuring 3cm, the facial nerve is typically displaced anteriorly and stretched over the anterior surface of the tumor. The nerve becomes attenuated, may be splayed across the tumor capsule, and can appear translucent, making identification challenging. In approximately 85-90% of cases >2.5cm, the nerve is displaced anteriorly rather than posteriorly.",
+      "query_type": "spatial",
+      "difficulty": "medium",
+      "safety_critical": true,
+      "required_sources": [
+        "Samii_Vestibular_Schwannoma.pdf",
+        "Rhoton_Cranial_Anatomy.pdf"
+      ],
+      "expected_chunks": [],
+      "negation_query": false,
+      "spatial_query": true,
+      "adversarial": false,
+      "tags": [
+        "vestibular_schwannoma",
+        "facial_nerve",
+        "CN_VII",
+        "anatomy"
+      ],
+      "added_date": "2024-12-06",
+      "added_from_failure": false,
+      "notes": "Critical for surgical planning"
+    }
+  ]
+}

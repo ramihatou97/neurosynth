@@ -2,8 +2,11 @@
 import os
 import re
 from pathlib import Path
-from typing import Generator, Optional, Callable, Dict, List, Tuple
+from typing import Generator, Optional, Callable, Dict, List, Tuple, TYPE_CHECKING
 import fitz  # PyMuPDF
+
+if TYPE_CHECKING:
+    from src.search.study_package.report import StudyModeReport
 
 from .result_model import (
     SearchResult, PageMatch, SearchProgress, ChapterMetadata,
@@ -57,17 +60,48 @@ class PDFSearcher:
         self.library_path = library_path.resolve()
         self.database = database
         self.scanner = LibraryScanner(library_path, database)
-        self.semantic = SemanticSearcher(database)
+        self._semantic: Optional[SemanticSearcher] = None  # Lazy-loaded
         self.enable_query_expansion = enable_query_expansion
         self._cancelled = False
 
-        # Enhanced Search Components
-        self.master_index = get_master_index()
-        self.intent_detector = get_intent_detector()
-        self.section_detector = get_section_detector()
+        # Enhanced Search Components (lazy-loaded for fast startup)
+        self._master_index = None
+        self._intent_detector = None
+        self._section_detector = None
 
         # Active search strategy (set per-search for strategy-aware behavior)
         self._active_strategy: Optional[SearchStrategy] = None
+
+        # Study Mode report (populated after BROAD mode search)
+        self._last_study_report: Optional['StudyModeReport'] = None
+
+    @property
+    def semantic(self) -> SemanticSearcher:
+        """Lazy-load semantic searcher (heavy - loads embedding model)."""
+        if self._semantic is None:
+            self._semantic = SemanticSearcher(self.database)
+        return self._semantic
+
+    @property
+    def master_index(self):
+        """Lazy-load master index."""
+        if self._master_index is None:
+            self._master_index = get_master_index()
+        return self._master_index
+
+    @property
+    def intent_detector(self):
+        """Lazy-load intent detector."""
+        if self._intent_detector is None:
+            self._intent_detector = get_intent_detector()
+        return self._intent_detector
+
+    @property
+    def section_detector(self):
+        """Lazy-load section detector."""
+        if self._section_detector is None:
+            self._section_detector = get_section_detector()
+        return self._section_detector
 
     def _should_expand_query(self) -> bool:
         """
@@ -280,6 +314,7 @@ class PDFSearcher:
         query: str,
         strategy: str = "standard",
         progress_callback: Optional[Callable[[SearchProgress], None]] = None,
+        skip_study_mode: bool = False,
     ) -> Generator[ChapterResult, None, None]:
         """
         Knowledge retrieval search - returns chapter-level results.
@@ -289,11 +324,13 @@ class PDFSearcher:
         2. Master Index Lookup (Authority Boosting)
         3. Robust Section Detection (Zero Data Loss)
         4. Search Strategy (STRICT/STANDARD/BROAD)
+        5. Study Mode (BROAD only) - adds foundational knowledge
 
         Args:
             query: Search query string
             strategy: Search strategy ('strict', 'standard', 'broad')
             progress_callback: Optional callback for progress updates
+            skip_study_mode: If True, skip Study Mode enhancement (used internally)
         """
         self.reset()
         logger.info("Starting search for: '%s' with strategy: %s", query, strategy)
@@ -345,6 +382,11 @@ class PDFSearcher:
         total_pdfs = len(all_pdfs)
         progress = SearchProgress(total_pdfs=total_pdfs)
 
+        # FAST MODE: Check if text cache exists FOR THIS LIBRARY - if not, use title-only search
+        has_text_cache = self.database.has_page_cache_for_library(self.library_path)
+        if not has_text_cache:
+            logger.info("FAST MODE: No text cache for current library - using title-only search")
+
         logger.debug("Knowledge search across %d PDFs for: '%s'", total_pdfs, query)
 
         for idx, pdf_path in enumerate(all_pdfs):
@@ -358,7 +400,8 @@ class PDFSearcher:
                 progress_callback(progress)
 
             try:
-                metadata = self.scanner.get_pdf_metadata(pdf_path)
+                # FAST: Skip page count lookup during search loop
+                metadata = self.scanner.get_pdf_metadata(pdf_path, fast=True)
 
                 # Get Authority Boost (from master index, no extraction needed)
                 authority_boost = self.master_index.get_authority_boost(pdf_path)
@@ -370,34 +413,45 @@ class PDFSearcher:
                     for term in search_terms
                 )
 
-                # ON-DEMAND EXTRACTION: Only process PDFs that are likely relevant
-                # Skip extraction for PDFs that don't match title AND aren't from primary sources
+                # FAST MODE: Only return title matches when no text cache
+                if not has_text_cache:
+                    if is_dedicated:
+                        chapter_result = ChapterResult(
+                            pdf_path=pdf_path,
+                            book_series=metadata.book_series,
+                            book_title=metadata.book_title,
+                            chapter_number=metadata.chapter_number,
+                            chapter_title=metadata.chapter_title,
+                            match_type=MatchType.DEDICATED_CHAPTER,
+                            page_count=0,  # Unknown without extraction
+                            matched_pages=[],
+                            preview_context="",
+                            total_occurrences=0,
+                            matched_sections=[],
+                            authority_score=authority_boost,
+                            index_source="Title Match (Fast)",
+                            authority_weight=strat.authority_boost_weight,
+                            section_weight=strat.section_boost_weight
+                        )
+                        chapter_results[str(pdf_path)] = chapter_result
+                        progress.total_matches += 1
+                    continue  # Skip text extraction in fast mode
+
+                # FULL MODE: Has text cache, do complete search
                 is_primary_source = metadata.book_series in primary_sources
 
-                # FIX 0.10: REMOVED AUTHORITY-BASED FILTERING
-                # All neurosurgical references are equally important and should be treated equally.
-                # Authority is no longer used for filtering - only title matching determines relevance.
-                #
-                # Previous filtering logic removed:
-                # - authority_threshold filtering (was excluding valuable PDFs)
-                # - STRICT mode authority filter (was causing 0 results)
-                #
-                # Now: All PDFs are candidates if they match title or are from primary sources
-                # This allows the search to find relevant content regardless of source textbook.
-
-                # Only skip if not a title match AND not a primary source
-                # This is a minimal filter to avoid processing completely unrelated PDFs
+                # PERFORMANCE: Skip non-matches early (before expensive operations)
                 if not is_dedicated and not is_primary_source:
-                    # For non-dedicated, non-primary: still allow through for content search
-                    # The relevance scoring will handle ranking appropriately
-                    pass  # Allow through - let content matching determine relevance
+                    continue  # Skip - not a title match and not a primary source
 
                 # This PDF is a candidate - track it
                 progress.candidates_processed += 1
 
-                # Now we know this PDF is worth checking - get checksum and page count
-                checksum = self.database.get_file_checksum(pdf_path)
-                page_count = self._get_pdf_page_count(pdf_path, checksum)
+                # FAST: Use cached checksum from tracked_files (no file reading)
+                checksum = self.database.get_cached_checksum(pdf_path)
+                if not checksum:
+                    # Fallback: compute checksum (slow but necessary for untracked files)
+                    checksum = self.database.get_file_checksum(pdf_path)
 
                 # Update progress with candidate info
                 if progress_callback:
@@ -409,25 +463,15 @@ class PDFSearcher:
 
                 if is_dedicated:
                     # DEDICATED CHAPTER - include ALL pages
-
-                    # Get a preview context from first page with the term
-                    preview_context = self._get_chapter_preview(pdf_path, intent_result.cleaned_query, checksum)
-
-                    # Detect sections for dedicated chapter
-                    matched_sections = []
-                    try:
-                        # Ensure we have text
-                        cached_pages = self._ensure_text_extracted(pdf_path, checksum)
-                        for i, text in cached_pages.items():
-                            page_num = i + 1
-                            if not text: continue
-
-                            sections = self.section_detector.detect_section_headers(text, page_num)
-                            for section in sections:
-                                if section.section_type.upper() == intent_result.intent.name:
-                                    matched_sections.append(section)
-                    except Exception as e:
-                        logger.warning("Section detection failed for dedicated chapter %s: %s", pdf_path.name, e)
+                    # PERFORMANCE: Skip expensive text extraction - just use title match
+                    # Get page count from cache only (fast) or use default
+                    cached_pages = self.database.get_all_cached_pages(pdf_path)
+                    if cached_pages:
+                        page_count = max(cached_pages.keys()) + 1
+                        preview_context = next(iter(cached_pages.values()), "")[:200]
+                    else:
+                        page_count = 1  # Default - will be updated when opened
+                        preview_context = f"Dedicated chapter on {intent_result.cleaned_query}"
 
                     chapter_result = ChapterResult(
                         pdf_path=pdf_path,
@@ -439,8 +483,8 @@ class PDFSearcher:
                         page_count=page_count,
                         matched_pages=list(range(1, page_count + 1)),  # All pages
                         preview_context=preview_context,
-                        total_occurrences=self._count_occurrences(pdf_path, intent_result.cleaned_query, checksum),
-                        matched_sections=matched_sections,
+                        total_occurrences=1,  # Skip counting - expensive
+                        matched_sections=[],  # Skip section detection - expensive
                         authority_score=authority_boost,
                         index_source="Title Match",
                         # Strategy weights for scoring
@@ -608,15 +652,59 @@ class PDFSearcher:
         logger.info("Strategy '%s': %d results (dedicated=%d, sections=%d, refs=%d) from %d series",
                     strat.name, len(sorted_results), dedicated, sections, refs, len(unique_series))
 
+        # =====================================================================
+        # STUDY MODE ENHANCEMENT (BROAD mode only)
+        # =====================================================================
+        # For BROAD mode, enhance results with foundational knowledge chapters
+        # (anatomy, biomechanics, pathophysiology) based on detected region.
+        # This is skipped when called recursively from foundation searches.
+        # =====================================================================
+        if strategy.lower() == "broad" and not skip_study_mode:
+            try:
+                from src.search.study_package import enhance_broad_results
+
+                enhanced_results, study_report = enhance_broad_results(
+                    searcher=self,
+                    query=query,
+                    direct_results=sorted_results,
+                    semantic_results=None,  # TODO: Add semantic results when available
+                    max_foundational=15,
+                )
+
+                # Log study mode results
+                foundational_count = sum(
+                    1 for r in enhanced_results
+                    if r.match_type == MatchType.FOUNDATIONAL
+                )
+                logger.info(
+                    "Study Mode: added %d foundational chapters (region=%s, gaps=%d)",
+                    foundational_count,
+                    study_report.detected_region or "unknown",
+                    len(study_report.missing_topics),
+                )
+
+                # Store report for potential UI access
+                self._last_study_report = study_report
+
+                # Use enhanced results
+                sorted_results = enhanced_results
+
+            except ImportError as e:
+                logger.warning("Study Mode unavailable: %s", e)
+            except Exception as e:
+                logger.error("Study Mode failed: %s", e)
+                # Continue with original results on error
+
         for result in sorted_results:
             if self._cancelled:
                 break
             yield result
 
 
-    def _get_pdf_page_count(self, pdf_path: Path, checksum: str) -> int:
+    def _get_pdf_page_count(self, pdf_path: Path, checksum: str = None) -> int:
         """Get total page count for a PDF from cache or by opening file."""
-        cached_pages = self.database.get_all_cached_pages(pdf_path, checksum)
+        # Try cache first (ignore checksum for speed - path is unique enough)
+        cached_pages = self.database.get_all_cached_pages(pdf_path)
         if cached_pages:
             return len(cached_pages)
         # Fallback: open PDF to get page count

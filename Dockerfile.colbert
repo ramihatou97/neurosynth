@@ -1,0 +1,25 @@
+
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# System dependencies for Faiss/Voyager
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    git \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install RAGatouille (Pinned loosely to known working config if possible, or just latest)
+# We trust python 3.10 + pip to resolve better than Py3.12
+RUN pip install --no-cache-dir ragatouille
+
+# PATCH: Downgrade LangChain to Monolithic version (Pre-split)
+# This avoids the community/core dependency hell entirely
+RUN pip install --no-cache-dir "langchain==0.0.339"
+
+# Copy verification script
+COPY verify_colbert.py /app/verify_colbert.py
+
+# Default command to run verification
+CMD ["python", "verify_colbert.py"]

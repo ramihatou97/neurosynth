@@ -8,6 +8,7 @@ FONTS = {
     "body": ("Helvetica", 12),
     "body_bold": ("Helvetica", 12, "bold"),
     "small": ("Helvetica", 10),
+    "small_bold": ("Helvetica", 10, "bold"),
     "mono": ("Courier", 11),
     "context_preview": ("Courier", 10),  # For inline context display
 }

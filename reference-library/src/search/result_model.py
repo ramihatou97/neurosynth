@@ -25,6 +25,7 @@ class MatchType(Enum):
     RELATED_SECTION = auto()    # Topic discussed in a section of another chapter
     REFERENCE = auto()          # Topic mentioned/referenced
     SEMANTIC = auto()           # Semantic similarity match
+    FOUNDATIONAL = auto()       # Foundational knowledge (anatomy, biomechanics, etc.)
 
     @property
     def relevance_score(self) -> int:
@@ -32,8 +33,9 @@ class MatchType(Enum):
         scores = {
             MatchType.DEDICATED_CHAPTER: 100,  # Highest - entire chapter is about topic
             MatchType.RELATED_SECTION: 70,     # High - section dedicated to topic
-            MatchType.REFERENCE: 40,           # Lower - just a mention
+            MatchType.FOUNDATIONAL: 65,        # Study mode - foundational knowledge
             MatchType.SEMANTIC: 60,            # Medium - semantic similarity
+            MatchType.REFERENCE: 40,           # Lower - just a mention
         }
         return scores.get(self, 40)
 
@@ -45,6 +47,7 @@ class MatchType(Enum):
             MatchType.RELATED_SECTION: "📑",    # Section
             MatchType.REFERENCE: "📝",          # Reference/mention
             MatchType.SEMANTIC: "🔍",           # Semantic search
+            MatchType.FOUNDATIONAL: "📚",       # Books - foundational knowledge
         }
         return icons.get(self, "📄")
 
@@ -56,6 +59,7 @@ class MatchType(Enum):
             MatchType.RELATED_SECTION: "Related Section",
             MatchType.REFERENCE: "Reference",
             MatchType.SEMANTIC: "Semantic Match",
+            MatchType.FOUNDATIONAL: "Foundational",
         }
         return names.get(self, "Unknown")
 
@@ -67,6 +71,7 @@ class MatchType(Enum):
             MatchType.RELATED_SECTION: "#3498db",    # Blue - related
             MatchType.REFERENCE: "#95a5a6",          # Gray - reference
             MatchType.SEMANTIC: "#9b59b6",           # Purple - semantic
+            MatchType.FOUNDATIONAL: "#e67e22",       # Orange - foundational knowledge
         }
         return colors.get(self, "#95a5a6")
 

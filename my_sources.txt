@@ -1,0 +1,23 @@
+# Please replace this list with your 20 most-used neurosurgery PDFs
+# You should verify these paths point to valid files.
+
+/Users/ramihatoum/Downloads/Spine-Surgery-Tricks-of-the-Trade-Vaccaro.pdf
+/Users/ramihatoum/Downloads/Surgical Management of Cerebral Metastases.pdf
+/Users/ramihatoum/Downloads/Cerebellar Tumors in Adults.pdf
+/Users/ramihatoum/Downloads/Chapter 1_ The Cerebrum.pdf
+/Users/ramihatoum/Downloads/Middle fossa approach.pdf
+/Users/ramihatoum/Downloads/Chemotherapy for Brain Tumors.pdf
+/Users/ramihatoum/Downloads/Current Surgical Management of High- Grade Gliomas- New and Recurrent.pdf
+/Users/ramihatoum/Documents/NeuroSynth/lumbar_discectomy.pdf
+/Users/ramihatoum/Downloads/s00276-024-03510-x.pdf
+/Users/ramihatoum/Downloads/978-3-319-99298-3.pdf
+/Users/ramihatoum/Downloads/pathway-to-competence-neurosurgery-e.pdf
+/Users/ramihatoum/Downloads/Temporal_Subtemporal Craniotomy _ Cohen Collection _ Volumes _ The Neurosurgical Atlas.pdf
+/Users/ramihatoum/Documents/NeuroSynth/supraorbital_craniotomy.pdf
+/Users/ramihatoum/Downloads/Intraoperative Neurophysiology- A Tool to Prevent and:or Document Intraoperative Injury to the Nervous System.pdf
+/Users/ramihatoum/Downloads/Ensuring Patient Safety in Surgery- First Do No Harm and Applying a Systems- Engineering Approach.pdf
+/Users/ramihatoum/Downloads/A Randomized Trial of Prenatal versus Postnatal Repair of Myelomeningocele.pdf
+/Users/ramihatoum/Downloads/neurosurgery-sample-saq-e.pdf
+/Users/ramihatoum/Downloads/neurosurgery_otr_e (2).pdf
+/Users/ramihatoum/Downloads/Spine_Surgery_Tricks_of_the_Trade_----_(Section_III_Anterior_Cervical_Decompression).pdf
+/Users/ramihatoum/Downloads/files (4) 2/neurosurgical_review_demo_20251104_070324.pdf

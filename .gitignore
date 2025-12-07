@@ -70,3 +70,4 @@ additional*.ini
 *.db
 *.sqlite
 *.sqlite3
+venv_colbert/

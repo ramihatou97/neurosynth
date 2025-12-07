@@ -1,0 +1,84 @@
+{
+  "queries": [
+    {
+      "query": "When is aspirin NOT allowed in children?",
+      "ground_truth": "Aspirin is contraindicated in children under 16 years old due to the risk of Reye's syndrome, particularly during viral infections like flu or chickenpox. It should also not be given to children with bleeding disorders, severe liver or kidney disease, or known aspirin allergy.",
+      "query_type": "contraindication",
+      "difficulty": "medium",
+      "safety_critical": true,
+      "negation_query": true
+    },
+    {
+      "query": "When is MRI scanning NOT allowed?",
+      "ground_truth": "MRI is contraindicated in patients with ferromagnetic implants (pacemakers, certain aneurysm clips, cochlear implants), metallic foreign bodies in the eyes, severe claustrophobia, and patients who cannot remain still. First trimester pregnancy requires careful risk-benefit assessment.",
+      "query_type": "contraindication",
+      "difficulty": "medium",
+      "safety_critical": true,
+      "negation_query": true
+    },
+    {
+      "query": "When is warfarin NOT allowed?",
+      "ground_truth": "Warfarin is contraindicated in active bleeding, pregnancy (especially first trimester and near delivery), severe liver disease, recent or planned surgery, uncontrolled hypertension, and patients with high fall risk or inability to monitor INR levels regularly.",
+      "query_type": "contraindication",
+      "difficulty": "medium",
+      "safety_critical": true,
+      "negation_query": true
+    },
+    {
+      "query": "When is live vaccine administration NOT allowed?",
+      "ground_truth": "Live vaccines are contraindicated in immunocompromised patients, pregnancy, severe illness with fever, recent blood transfusion or immunoglobulin administration, and patients on high-dose corticosteroids or immunosuppressive therapy.",
+      "query_type": "contraindication",
+      "difficulty": "medium",
+      "safety_critical": true,
+      "negation_query": true
+    },
+    {
+      "query": "When is metformin NOT allowed?",
+      "ground_truth": "Metformin is contraindicated in severe kidney disease (eGFR <30), acute heart failure, severe liver disease, alcoholism, conditions predisposing to lactic acidosis, and should be temporarily stopped before contrast imaging or surgery.",
+      "query_type": "contraindication",
+      "difficulty": "medium",
+      "safety_critical": true,
+      "negation_query": true
+    },
+    {
+      "query": "When is lumbar puncture NOT allowed?",
+      "ground_truth": "Lumbar puncture is contraindicated with increased intracranial pressure (except idiopathic intracranial hypertension), skin infection at puncture site, severe coagulopathy, severe spinal deformity, and suspected spinal epidural abscess.",
+      "query_type": "contraindication",
+      "difficulty": "medium",
+      "safety_critical": true,
+      "negation_query": true
+    },
+    {
+      "query": "When is ACE inhibitor therapy NOT allowed?",
+      "ground_truth": "ACE inhibitors are contraindicated in pregnancy, bilateral renal artery stenosis, hyperkalemia, history of angioedema, severe aortic stenosis, and should be used cautiously in patients with severe kidney disease or dehydration.",
+      "query_type": "contraindication",
+      "difficulty": "medium",
+      "safety_critical": true,
+      "negation_query": true
+    },
+    {
+      "query": "When is general anesthesia NOT allowed?",
+      "ground_truth": "General anesthesia is contraindicated in severe uncontrolled medical conditions, recent myocardial infarction, severe respiratory compromise, malignant hyperthermia susceptibility (for certain agents), and when patient refuses or cannot consent and it's not emergency surgery.",
+      "query_type": "contraindication",
+      "difficulty": "medium",
+      "safety_critical": true,
+      "negation_query": true
+    },
+    {
+      "query": "When is beta-blocker therapy NOT allowed?",
+      "ground_truth": "Beta-blockers are contraindicated in severe asthma or COPD with bronchospasm, severe bradycardia, high-degree heart block (without pacemaker), cardiogenic shock, severe peripheral vascular disease, and untreated pheochromocytoma.",
+      "query_type": "contraindication",
+      "difficulty": "medium",
+      "safety_critical": true,
+      "negation_query": true
+    },
+    {
+      "query": "When is thrombolytic therapy NOT allowed?",
+      "ground_truth": "Thrombolytic therapy is contraindicated in active internal bleeding, recent stroke (within 3 months), recent major surgery or trauma, severe hypertension (>180/110), known bleeding disorders, and suspected aortic dissection.",
+      "query_type": "contraindication",
+      "difficulty": "medium",
+      "safety_critical": true,
+      "negation_query": true
+    }
+  ]
+}

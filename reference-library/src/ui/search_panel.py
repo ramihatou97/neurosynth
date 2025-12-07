@@ -67,13 +67,13 @@ class SearchPanel(ctk.CTkFrame):
         )
         self.history_btn.pack(side="left", padx=(0, PADDING["small"]))
 
-        # Strategy Selector (STRICT/STANDARD/BROAD)
+        # Strategy Selector (STRICT/STANDARD/BROAD+STUDY)
         self.strategy_var = ctk.StringVar(value="standard")
         self.strategy_selector = ctk.CTkOptionMenu(
             search_frame,
-            values=["🎯 Strict", "⚖️ Standard", "🌐 Broad"],
+            values=["🎯 Strict", "⚖️ Standard", "📚 Study Mode", "🧠 Deep Search"],
             variable=self.strategy_var,
-            width=110,
+            width=120,
             font=FONTS["small"],
             command=self._on_strategy_change
         )
@@ -147,8 +147,10 @@ class SearchPanel(ctk.CTkFrame):
         # Map display name to strategy name
         if "Strict" in display:
             return "strict"
-        elif "Broad" in display:
-            return "broad"
+        elif "Study" in display:
+            return "broad"  # Study Mode uses BROAD strategy with enhancements
+        elif "Deep" in display:
+            return "deep"
         return "standard"
 
     def _on_strategy_change(self, value: str):
@@ -156,7 +158,8 @@ class SearchPanel(ctk.CTkFrame):
         descriptions = {
             "🎯 Strict": "Exact matches only, high authority sources",
             "⚖️ Standard": "Balanced search with query expansion",
-            "🌐 Broad": "Maximum coverage, all sources included"
+            "📚 Study Mode": "Foundational knowledge + anatomy + techniques",
+            "🧠 Deep Search": "AI Synthesis + Safety Verification (Slower)"
         }
         desc = descriptions.get(value, "")
         if desc:

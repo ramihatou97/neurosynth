@@ -37,9 +37,31 @@ class PreviewPanel(ctk.CTkFrame):
             font=FONTS["subheading"]
         ).pack(anchor="w", padx=PADDING["medium"], pady=PADDING["small"])
 
+        # Safety Alert Frame (Hidden by default)
+        self.safety_frame = ctk.CTkFrame(self, fg_color="#c0392b", corner_radius=6)
+        self.safety_label = ctk.CTkLabel(
+            self.safety_frame, 
+            text="", 
+            font=FONTS["body_bold"],
+            text_color="white",
+            justify="left",
+            wraplength=350
+        )
+        self.safety_label.pack(padx=PADDING["medium"], pady=PADDING["small"], fill="x")
+        # Don't pack safety_frame yet
+
         # Metadata section
         self.metadata_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.metadata_frame.pack(fill="x", padx=PADDING["medium"], pady=PADDING["small"])
+        
+        # Confidence Gauge (Hidden by default)
+        self.confidence_label = ctk.CTkLabel(
+            self.metadata_frame,
+            text="",
+            font=FONTS["small_bold"],
+            text_color="#27ae60"
+        )
+        # Pack order handled in show_result
 
         # Book info
         self.book_label = ctk.CTkLabel(
@@ -152,37 +174,91 @@ class PreviewPanel(ctk.CTkFrame):
     def show_result(self, result: SearchResult):
         """Display a search result in the preview panel."""
         self.current_result = result
+        
+        # Check if this is a Deep-DX synthesis result
+        extra_data = getattr(result, 'extra_data', {})
+        is_synthesis = extra_data.get('is_synthesis', False)
 
-        # Update metadata
-        display_series = config.KNOWN_SERIES.get(result.book_series, result.book_series)
-        self.book_label.configure(text=f"Book: {display_series}")
-        self.chapter_label.configure(text=f"Chapter: {result.display_name}")
-        self.page_label.configure(text=f"Page: {result.page_number}")
+        # Reset UI
+        self.safety_frame.pack_forget()
+        self.confidence_label.pack_forget()
+        self.location_label.configure(text="")
 
-        # Update match location info
-        match_count = getattr(result, 'match_count', 1)
-        location_icon = getattr(result, 'location_icon', '📄')
-        match_summary = getattr(result, 'match_summary', '')
-        if match_summary:
-            self.location_label.configure(text=f"{location_icon} {match_summary}")
+        if is_synthesis:
+            # --- DEEP-DX VIEW ---
+            self.book_label.configure(text="Source: Deep-DX Engine")
+            self.chapter_label.configure(text="Synthesized Answer")
+            self.page_label.configure(text="AI Generated")
+            
+            # Show Confidence
+            conf = extra_data.get('confidence', 0.0)
+            self.confidence_label.configure(
+                text=f"Confidence Score: {int(conf*100)}%",
+                text_color="#27ae60" if conf > 0.7 else "#e67e22"
+            )
+            self.confidence_label.pack(anchor="w")
+
+            # Show Safety Warnings
+            warnings = extra_data.get('critic_warnings', [])
+            if warnings:
+                warning_text = "⚠️ SAFETY WARNING:\n• " + "\n• ".join(warnings)
+                self.safety_label.configure(text=warning_text)
+                self.safety_frame.pack(fill="x", padx=PADDING["medium"], pady=PADDING["small"], before=self.metadata_frame)
+            
+            # Show Answer Content
+            self.context_text.configure(state="normal")
+            self.context_text.delete("1.0", "end")
+            self.context_text.insert("1.0", result.context) # The answer
+            
+            # Append Citations
+            citations = extra_data.get('citations', [])
+            if citations:
+                self.context_text.insert("end", "\n\n📚 SOURCES:\n")
+                for c in citations:
+                    ref = f"• {c['file_name']} (Page {c['page_number']})\n"
+                    self.context_text.insert("end", ref)
+                    
+            self.context_text.configure(state="disabled")
+            
+            # Disable PDF buttons for synthesis
+            self.open_btn.configure(state="disabled")
+            self.copy_btn.configure(state="normal")
+            
+            # Hide figures for synthesis (for now)
+            self._clear_thumbnails()
+            self.figures_header.configure(text="Figures (N/A):")
+            
         else:
-            self.location_label.configure(text="")
+            # --- STANDARD VIEW ---
+            display_series = config.KNOWN_SERIES.get(result.book_series, result.book_series)
+            self.book_label.configure(text=f"Book: {display_series}")
+            self.chapter_label.configure(text=f"Chapter: {result.display_name}")
+            self.page_label.configure(text=f"Page: {result.page_number}")
 
-        # Update context text
-        self.context_text.configure(state="normal")
-        self.context_text.delete("1.0", "end")
+            # Update match location info
+            match_count = getattr(result, 'match_count', 1)
+            location_icon = getattr(result, 'location_icon', '📄')
+            match_summary = getattr(result, 'match_summary', '')
+            if match_summary:
+                self.location_label.configure(text=f"{location_icon} {match_summary}")
+            else:
+                self.location_label.configure(text="")
 
-        # Highlight the search term in context
-        context = result.context
-        self.context_text.insert("1.0", context)
-        self.context_text.configure(state="disabled")
+            # Update context text
+            self.context_text.configure(state="normal")
+            self.context_text.delete("1.0", "end")
 
-        # Load and display figures for this page
-        self._load_figures(result)
+            # Highlight the search term in context
+            context = result.context
+            self.context_text.insert("1.0", context)
+            self.context_text.configure(state="disabled")
 
-        # Enable buttons
-        self.open_btn.configure(state="normal")
-        self.copy_btn.configure(state="normal")
+            # Load and display figures for this page
+            self._load_figures(result)
+
+            # Enable buttons
+            self.open_btn.configure(state="normal")
+            self.copy_btn.configure(state="normal")
 
     def _load_figures(self, result: SearchResult):
         """Load figures for the current result's page."""

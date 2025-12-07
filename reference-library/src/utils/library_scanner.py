@@ -89,8 +89,15 @@ class LibraryScanner:
 
         return dir_name
 
-    def _parse_chapter(self, pdf_path: Path, series_name: str, book_title: str) -> Optional[ChapterMetadata]:
-        """Parse chapter metadata from PDF filename."""
+    def _parse_chapter(self, pdf_path: Path, series_name: str, book_title: str, skip_page_count: bool = False) -> Optional[ChapterMetadata]:
+        """Parse chapter metadata from PDF filename.
+
+        Args:
+            pdf_path: Path to PDF file
+            series_name: Book series name
+            book_title: Book title
+            skip_page_count: If True, skip expensive PDF open for page count (FAST mode)
+        """
         filename = pdf_path.stem
 
         # Try standard pattern: "26 Positioning for Peripheral Nerve Surgery"
@@ -109,11 +116,14 @@ class LibraryScanner:
                 chapter_num = None
                 chapter_title = filename
 
-        # Get file stats
-        file_size = pdf_path.stat().st_size
+        # Get file stats (fast - just stat call)
+        try:
+            file_size = pdf_path.stat().st_size
+        except Exception:
+            file_size = 0
 
-        # Get page count (quick check without full extraction)
-        page_count = self._get_page_count(pdf_path)
+        # Get page count (SLOW - opens PDF) - skip in fast mode
+        page_count = 0 if skip_page_count else self._get_page_count(pdf_path)
 
         return ChapterMetadata(
             pdf_path=pdf_path,
@@ -125,11 +135,14 @@ class LibraryScanner:
             file_size=file_size
         )
 
-    def _parse_entire_book(self, pdf_path: Path) -> Optional[ChapterMetadata]:
+    def _parse_entire_book(self, pdf_path: Path, skip_page_count: bool = False) -> Optional[ChapterMetadata]:
         """Parse metadata for a complete book PDF."""
         filename = pdf_path.stem
-        file_size = pdf_path.stat().st_size
-        page_count = self._get_page_count(pdf_path)
+        try:
+            file_size = pdf_path.stat().st_size
+        except Exception:
+            file_size = 0
+        page_count = 0 if skip_page_count else self._get_page_count(pdf_path)
 
         return ChapterMetadata(
             pdf_path=pdf_path,
@@ -155,37 +168,72 @@ class LibraryScanner:
         """Get flat list of all PDF files in library."""
         pdfs = []
 
-        # Book chapters (handles trailing space)
+        # Legacy structure: Book chapters (handles trailing space)
         chapters_dir = self._find_subdir("Book chapters")
         if chapters_dir and chapters_dir.exists():
             pdfs.extend(chapters_dir.rglob("*.pdf"))
 
-        # Entire books (handles trailing space)
+        # Legacy structure: Entire books (handles trailing space)
         books_dir = self._find_subdir("Entire books")
         if books_dir and books_dir.exists():
             pdfs.extend(books_dir.glob("*.pdf"))
 
-        return sorted(pdfs)
+        # New structure: Numbered directories (01_*, 02_*, etc.)
+        # Handles: 01_COMPLETE_TEXTBOOKS, 02_MULTI_CHAPTER_BOOKS, 03_SINGLE_CHAPTERS,
+        #          04_EVIDENCE_BASE_STUDIES, 05_EDUCATIONAL_MATERIALS, 06_CLINICAL_GUIDELINES, etc.
+        for item in self.library_path.iterdir():
+            if item.is_dir() and item.name[:2].isdigit() and item.name[2] == '_':
+                pdfs.extend(item.rglob("*.pdf"))
 
-    def get_pdf_metadata(self, pdf_path: Path) -> ChapterMetadata:
-        """Get metadata for a specific PDF."""
-        # Determine if it's a chapter or entire book
+        # Fallback: If no PDFs found yet, scan entire library recursively
+        if not pdfs:
+            pdfs.extend(self.library_path.rglob("*.pdf"))
+
+        return sorted(set(pdfs))  # Remove duplicates and sort
+
+    def get_pdf_metadata(self, pdf_path: Path, fast: bool = False) -> ChapterMetadata:
+        """Get metadata for a specific PDF.
+
+        Args:
+            pdf_path: Path to PDF file
+            fast: If True, skip expensive page count lookup (for search loops)
+        """
+        # Determine if it's a chapter or entire book (legacy structure)
         if "entire books" in str(pdf_path).lower():
-            return self._parse_entire_book(pdf_path)
+            return self._parse_entire_book(pdf_path, skip_page_count=fast)
 
-        # Find the series from path
+        # Try legacy structure first: Book chapters
         chapters_dir = self._find_subdir("Book chapters")
         if chapters_dir:
             try:
                 relative = pdf_path.relative_to(chapters_dir)
                 series_name = relative.parts[0].strip() if relative.parts else "Unknown"
+                display_name = config.KNOWN_SERIES.get(series_name, series_name)
+                return self._parse_chapter(pdf_path, series_name, display_name, skip_page_count=fast)
             except ValueError:
-                series_name = "Unknown"
-        else:
-            series_name = "Unknown"
+                pass  # Not in legacy structure, try new structure
 
+        # New structure: Numbered directories (01_*, 02_*, etc.)
+        try:
+            relative = pdf_path.relative_to(self.library_path)
+            parts = relative.parts
+            if parts and len(parts[0]) > 3 and parts[0][:2].isdigit() and parts[0][2] == '_':
+                # e.g., "01_COMPLETE_TEXTBOOKS" -> category
+                category = parts[0]
+                # Use parent folder name as series if available
+                if len(parts) >= 2:
+                    series_name = parts[1].strip()
+                else:
+                    series_name = category
+                display_name = series_name
+                return self._parse_chapter(pdf_path, series_name, display_name, skip_page_count=fast)
+        except ValueError:
+            pass
+
+        # Fallback: use filename-based parsing
+        series_name = "Unknown"
         display_name = config.KNOWN_SERIES.get(series_name, series_name)
-        return self._parse_chapter(pdf_path, series_name, display_name)
+        return self._parse_chapter(pdf_path, series_name, display_name, skip_page_count=fast)
 
     def detect_changes(self) -> dict:
         """
@@ -237,107 +285,85 @@ class LibraryScanner:
         self,
         max_workers: int = 4,
         progress_callback: Optional[Callable[[int, int], None]] = None,
+        force: bool = False,
     ) -> dict:
         """
-        Sync the library: track all files and detect changes.
-        Call this on app launch.
-        FAST VERSION: Skips filesystem scan if database is populated.
-
-        Args:
-            max_workers: Number of parallel workers (default 4, reduced to prevent file descriptor exhaustion)
-            progress_callback: Optional callback(current, total) for progress updates
+        ULTRA-FAST library sync: Just discover PDFs, no heavy processing.
+        Uses simple filename parsing, no PDF file opening.
         """
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-
         if not self.database:
             raise ValueError("Database required for sync")
 
+        # Force mode: clear existing tracked files for clean slate
+        if force:
+            self.database.clear_tracked_files()
+
         tracked_paths = self.database.get_all_tracked_paths()
 
-        # OPTIMIZATION: Skip expensive filesystem scan if database is already populated
+        # Skip if database already populated
         if len(tracked_paths) > 0:
-            # Database has files - just return current state
             return {
                 'total_files': len(tracked_paths),
                 'new_files': 0,
                 'unindexed': self.database.get_new_files_count()
             }
 
-        # First sync - need to scan filesystem
-        all_pdfs = self.get_all_pdfs()
-        is_first_sync = True
+        # FAST: Discover all PDFs (just filesystem walk)
+        all_pdfs = list(self.get_all_pdfs())
+        total = len(all_pdfs)
 
-        # Filter to new files only
-        new_pdfs = [p for p in all_pdfs if str(p) not in tracked_paths]
+        if not all_pdfs:
+            return {'total_files': 0, 'new_files': 0, 'unindexed': 0}
 
-        if not new_pdfs:
-            return {
-                'total_files': len(all_pdfs),
-                'new_files': 0,
-                'unindexed': 0
-            }
-
-        # Worker function for parallel metadata collection
-        def _scan_single_pdf(pdf_path: Path) -> dict | None:
+        # ULTRA-FAST: Simple loop, no threading overhead
+        files_data = []
+        for idx, pdf_path in enumerate(all_pdfs):
             try:
-                # FAST: Get metadata without opening PDF (skip page count)
-                metadata = self._get_metadata_fast(pdf_path)
-                # FAST: Use size+mtime instead of reading file content
-                checksum = self.database.get_fast_checksum(pdf_path)
-                return {
+                # INSTANT: Parse metadata from filename only
+                chapter_title = pdf_path.stem.replace('-', ' ').replace('_', ' ')
+
+                # Get series from parent folder
+                try:
+                    relative = pdf_path.relative_to(self.library_path)
+                    parts = relative.parts
+                    if len(parts) >= 2:
+                        book_series = parts[1] if parts[0][:2].isdigit() else parts[0]
+                    else:
+                        book_series = parts[0] if parts else "Unknown"
+                except ValueError:
+                    book_series = "Unknown"
+
+                # FAST checksum: size + mtime only
+                stat = pdf_path.stat()
+                checksum = f"{stat.st_size}_{int(stat.st_mtime)}"
+
+                files_data.append({
                     "pdf_path": pdf_path,
                     "checksum": checksum,
-                    "file_size": pdf_path.stat().st_size,
-                    "book_series": metadata.book_series,
-                    "chapter_title": metadata.chapter_title,
+                    "file_size": stat.st_size,
+                    "book_series": str(book_series)[:100],
+                    "chapter_title": chapter_title[:200],
                     "page_count": 0
-                }
+                })
             except Exception:
-                return None
+                pass  # Skip problematic files
 
-        # PARALLEL metadata collection with ThreadPoolExecutor
-        files_data = []
-        failed_files = []
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Submit all tasks
-            future_to_path = {
-                executor.submit(_scan_single_pdf, p): p for p in new_pdfs
-            }
+            # Progress every 100 files
+            if progress_callback and idx % 100 == 0:
+                progress_callback(idx + 1, total)
 
-            # Collect results as they complete (enables progress reporting)
-            completed = 0
-            for future in as_completed(future_to_path):
-                pdf_path = future_to_path[future]
-                try:
-                    result = future.result()
-                    if result:
-                        files_data.append(result)
-                    else:
-                        # _scan_single_pdf returned None (failed silently)
-                        failed_files.append(pdf_path)
-                        print(f"Warning: Could not scan {pdf_path.name}")
-                except Exception as e:
-                    # Future raised an exception
-                    failed_files.append(pdf_path)
-                    print(f"Error scanning {pdf_path.name}: {e}")
-                completed += 1
+        # Final progress
+        if progress_callback:
+            progress_callback(total, total)
 
-                # Report progress
-                if progress_callback:
-                    progress_callback(completed, len(new_pdfs))
-
-        # Log summary if there were failures
-        if failed_files:
-            print(f"Warning: {len(failed_files)} of {len(new_pdfs)} files failed to scan")
-
-        # Batch insert all new files at once (single-threaded for SQLite safety)
+        # Batch insert
         if files_data:
-            self.database.track_files_batch(files_data, is_indexed=is_first_sync)
+            self.database.track_files_batch(files_data, is_indexed=True)
 
         return {
-            'total_files': len(all_pdfs),
+            'total_files': len(files_data),
             'new_files': len(files_data),
-            'unindexed': self.database.get_new_files_count()
+            'unindexed': 0
         }
 
     def cancel_extraction(self):

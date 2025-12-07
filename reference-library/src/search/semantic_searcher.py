@@ -1,17 +1,31 @@
 """Semantic search engine using vector embeddings."""
 import threading
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, TYPE_CHECKING
 
-try:
-    import chromadb
-    from sentence_transformers import SentenceTransformer
-    SEMANTIC_AVAILABLE = True
-except ImportError:
-    SEMANTIC_AVAILABLE = False
+# Lazy imports for fast startup - these are heavy modules
+chromadb = None
+SentenceTransformer = None
+SEMANTIC_AVAILABLE = None  # Determined on first use
 
 from src import config
 from ..cache.database import Database
+
+
+def _lazy_load_semantic():
+    """Lazy load heavy semantic search dependencies."""
+    global chromadb, SentenceTransformer, SEMANTIC_AVAILABLE
+    if SEMANTIC_AVAILABLE is not None:
+        return SEMANTIC_AVAILABLE
+    try:
+        import chromadb as _chromadb
+        from sentence_transformers import SentenceTransformer as _SentenceTransformer
+        chromadb = _chromadb
+        SentenceTransformer = _SentenceTransformer
+        SEMANTIC_AVAILABLE = True
+    except ImportError:
+        SEMANTIC_AVAILABLE = False
+    return SEMANTIC_AVAILABLE
 
 # ChromaDB batch size limit (well under the 5461 HNSW limit)
 CHROMADB_BATCH_SIZE = 1000
@@ -31,11 +45,12 @@ class SemanticSearcher:
 
     def __init__(self, database: Database):
         self.database = database
-        self.enabled = SEMANTIC_AVAILABLE and config.SEMANTIC_SEARCH_ENABLED
+        self._enabled = None  # Lazy - determined on first access
         self.client = None
         self.collection = None
         self.captions_collection = None  # Collection for figure captions
         self.model = None
+        self._initialized = False
 
         # Thread safety locks - SentenceTransformer and ChromaDB are not thread-safe
         self._model_lock = threading.Lock()
@@ -45,8 +60,18 @@ class SemanticSearcher:
         self.collection_name = None
         self.captions_collection_name = None
 
-        if self.enabled:
+    @property
+    def enabled(self) -> bool:
+        """Lazy check if semantic search is available."""
+        if self._enabled is None:
+            self._enabled = _lazy_load_semantic() and config.SEMANTIC_SEARCH_ENABLED
+        return self._enabled
+
+    def _ensure_initialized(self):
+        """Lazy initialize resources on first use."""
+        if not self._initialized and self.enabled:
             self._init_resources()
+            self._initialized = True
 
     def _init_resources(self):
         """Initialize ChromaDB and Embedding Model."""
@@ -100,6 +125,7 @@ class SemanticSearcher:
         Returns:
             True if indexed successfully, False otherwise
         """
+        self._ensure_initialized()
         if not self.enabled or not text.strip():
             return False
 
@@ -261,6 +287,7 @@ class SemanticSearcher:
         Returns:
             List of dicts with: pdf_path, page_number, score, category_group (if available)
         """
+        self._ensure_initialized()
         if not self.enabled:
             return []
 

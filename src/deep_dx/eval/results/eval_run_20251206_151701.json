@@ -1,0 +1,63 @@
+{
+  "metadata": {
+    "total_queries": 100,
+    "generated": true
+  },
+  "statistics": {
+    "average_grade": 0,
+    "safety_flags": 0,
+    "total_queries": 10
+  },
+  "results": [
+    {
+      "id": "Q001",
+      "error": "'SearchEngine' object has no attribute 'settings'",
+      "parsed_score": 0
+    },
+    {
+      "id": "Q011",
+      "error": "'SearchEngine' object has no attribute 'settings'",
+      "parsed_score": 0
+    },
+    {
+      "id": "Q021",
+      "error": "'SearchEngine' object has no attribute 'settings'",
+      "parsed_score": 0
+    },
+    {
+      "id": "Q031",
+      "error": "'SearchEngine' object has no attribute 'settings'",
+      "parsed_score": 0
+    },
+    {
+      "id": "Q041",
+      "error": "'SearchEngine' object has no attribute 'settings'",
+      "parsed_score": 0
+    },
+    {
+      "id": "Q051",
+      "error": "'SearchEngine' object has no attribute 'settings'",
+      "parsed_score": 0
+    },
+    {
+      "id": "Q061",
+      "error": "'SearchEngine' object has no attribute 'settings'",
+      "parsed_score": 0
+    },
+    {
+      "id": "Q071",
+      "error": "'SearchEngine' object has no attribute 'settings'",
+      "parsed_score": 0
+    },
+    {
+      "id": "Q081",
+      "error": "'SearchEngine' object has no attribute 'settings'",
+      "parsed_score": 0
+    },
+    {
+      "id": "Q091",
+      "error": "'SearchEngine' object has no attribute 'settings'",
+      "parsed_score": 0
+    }
+  ]
+}

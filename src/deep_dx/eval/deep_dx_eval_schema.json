@@ -1,0 +1,131 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Deep-Dx Evaluation Dataset Schema",
+  "description": "Schema for expert-annotated neurosurgical query-answer pairs",
+  "type": "object",
+  "required": ["version", "metadata", "queries"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Dataset version (semantic versioning)",
+      "example": "1.0.0"
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["created_date", "last_updated", "total_queries"],
+      "properties": {
+        "created_date": {
+          "type": "string",
+          "format": "date",
+          "description": "ISO 8601 date"
+        },
+        "last_updated": {
+          "type": "string",
+          "format": "date"
+        },
+        "total_queries": {
+          "type": "integer"
+        },
+        "curator": {
+          "type": "string",
+          "description": "Person who created/validated this dataset"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "queries": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/query"
+      }
+    }
+  },
+  "definitions": {
+    "query": {
+      "type": "object",
+      "required": ["id", "query", "ground_truth", "query_type", "difficulty", "safety_critical", "required_sources"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier (e.g., Q001, Q002)",
+          "pattern": "^Q[0-9]{3}$"
+        },
+        "query": {
+          "type": "string",
+          "description": "Natural language query as user would ask it",
+          "minLength": 10
+        },
+        "ground_truth": {
+          "type": "string",
+          "description": "Expert-validated correct answer",
+          "minLength": 50
+        },
+        "query_type": {
+          "type": "string",
+          "enum": ["factual", "procedural", "contraindication", "spatial", "comparative", "diagnostic"],
+          "description": "Category of question for metric analysis"
+        },
+        "difficulty": {
+          "type": "string",
+          "enum": ["easy", "medium", "hard"],
+          "description": "Easy: single-source, explicit. Medium: multi-source synthesis. Hard: requires inference or spatial reasoning"
+        },
+        "safety_critical": {
+          "type": "boolean",
+          "description": "True if incorrect answer could lead to patient harm"
+        },
+        "required_sources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of PDF filenames that contain the answer",
+          "minItems": 1
+        },
+        "expected_chunks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "source": {"type": "string"},
+              "page": {"type": "integer"},
+              "excerpt": {"type": "string"}
+            }
+          },
+          "description": "Optional: specific chunks that should be retrieved"
+        },
+        "negation_query": {
+          "type": "boolean",
+          "description": "True if query contains NOT/avoid/contraindication - tests negation handling"
+        },
+        "spatial_query": {
+          "type": "boolean",
+          "description": "True if query involves spatial relationships (anterior/posterior/medial/lateral)"
+        },
+        "adversarial": {
+          "type": "boolean",
+          "description": "True if this is specifically designed to test edge cases"
+        },
+        "tags": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Free-form tags for filtering (e.g., ['VS', 'cranial_nerve', 'approach_selection'])"
+        },
+        "added_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "added_from_failure": {
+          "type": "boolean",
+          "description": "True if added after system failed to answer correctly"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Any special considerations or context"
+        }
+      }
+    }
+  }
+}

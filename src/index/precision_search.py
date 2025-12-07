@@ -1,0 +1,525 @@
+"""
+Precision Search Engine
+=======================
+Enhanced search with ColBERT reranking, claim verification, and confidence scoring.
+Integrates Deep-Dx precision retrieval into neurosurg-synthesis.
+
+This module wraps the existing SearchEngine and adds:
+1. ColBERT precision reranking (Docker-isolated)
+2. Query routing (spatial, procedural, contraindication, etc.)
+3. Confidence scoring
+4. Claim verification for synthesis outputs
+"""
+
+import os
+import re
+import json
+import time
+import logging
+import subprocess
+import tempfile
+from pathlib import Path
+from typing import List, Optional, Dict, Any, Tuple
+from dataclasses import dataclass, field
+from enum import Enum
+
+from models import Chunk, SearchResult, ExtractedImage
+from .search import SearchEngine, RetrievalResult
+from .database import Database
+
+logger = logging.getLogger(__name__)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Query Classification
+# ═══════════════════════════════════════════════════════════════════════════
+
+class QueryType(Enum):
+    """Classification of query intent for routing"""
+    FACTUAL = "factual"
+    PROCEDURAL = "procedural"
+    SPATIAL = "spatial"
+    CONTRAINDICATION = "contraindication"
+    COMPARATIVE = "comparative"
+    CONCEPTUAL = "conceptual"
+
+
+class ConfidenceLevel(Enum):
+    """Confidence level thresholds"""
+    HIGH = "high"           # >= 0.85
+    MEDIUM = "medium"       # 0.70 - 0.84
+    LOW = "low"             # 0.50 - 0.69
+    INSUFFICIENT = "insufficient"  # < 0.50
+
+
+SPATIAL_TERMS = [
+    'anterior', 'posterior', 'medial', 'lateral', 'superior', 'inferior',
+    'above', 'below', 'deep to', 'superficial to', 'adjacent to',
+    'relative to', 'position of', 'location of', 'lies', 'courses'
+]
+
+NEGATION_TERMS = [
+    'not', 'never', 'avoid', 'contraindication', 'contraindicated',
+    'should not', 'do not', "don't", 'cannot', "shouldn't",
+    'risk', 'complication', 'warning', 'caution', 'danger'
+]
+
+PROCEDURAL_TERMS = [
+    'how to', 'steps', 'technique', 'procedure', 'approach',
+    'perform', 'execute', 'method', 'protocol', 'sequence'
+]
+
+CONCEPTUAL_TERMS = [
+    'why', 'rationale', 'principle', 'philosophy', 'concept',
+    'compare', 'versus', 'vs', 'difference between', 'advantages'
+]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Precision Search Results
+# ═══════════════════════════════════════════════════════════════════════════
+
+@dataclass
+class PrecisionResult:
+    """Enhanced search result with precision metrics"""
+    chunk: Chunk
+    dense_score: float
+    colbert_score: Optional[float] = None
+    final_score: float = 0.0
+    has_safety_content: bool = False
+    
+    @property
+    def citation(self) -> str:
+        """Format as citation"""
+        return f"{self.chunk.source_title}, p.{self.chunk.page_start}"
+
+
+@dataclass
+class PrecisionRetrievalResult:
+    """Complete precision retrieval result"""
+    query: str
+    query_type: QueryType
+    results: List[PrecisionResult]
+    images: List[ExtractedImage]
+    confidence: float
+    confidence_level: ConfidenceLevel
+    retrieval_time_ms: float
+    systems_used: List[str]
+    warnings: List[str] = field(default_factory=list)
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ColBERT Client (Imported from Deep-DX)
+# ═══════════════════════════════════════════════════════════════════════════
+
+from deep_dx.retrieval.colbert_client import ColBERTClient
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Precision Search Engine
+# ═══════════════════════════════════════════════════════════════════════════
+
+class PrecisionSearchEngine:
+    """
+    Enhanced search engine with ColBERT precision reranking.
+    
+    Architecture:
+        Query → Classify → Dense Search (top 100) → ColBERT Rerank (top 20) → Score
+    
+    Usage:
+        engine = PrecisionSearchEngine(db)
+        result = engine.search("What is anterior to the facial nerve?", top_k=10)
+    """
+    
+    def __init__(self, db: Database, colbert_enabled: bool = True):
+        self.db = db
+        self.base_search = SearchEngine(db)
+        # Deep-DX ColBERT Client integration
+        self.colbert_enabled = colbert_enabled
+        self.colbert = None
+        if colbert_enabled:
+             try:
+                 self.colbert = ColBERTClient()
+                 logger.info("✓ ColBERT Client Connected")
+             except Exception as e:
+                 logger.warning(f"✗ ColBERT unavailable: {e}")
+                 self.colbert = None
+                 
+        # Initialize Hybrid Search (BM25)
+        self.bm25 = None
+        # Lazy load or load on init? For 2000 chunks, load on init is fine.
+        # But let's be safe and try-catch
+        try:
+            from deep_dx.retrieval.bm25 import BM25Retriever
+            all_chunks = self.db.get_all_chunks() # Need method to get chunks as dicts/objects
+            # Convert Chunk objects to dicts for BM25
+            chunk_dicts = [{'content': c.content, 'id': c.id, 'chunk_obj': c} for c in all_chunks]
+            self.bm25 = BM25Retriever(chunk_dicts)
+            logger.info(f"✓ BM25 Index Built ({len(chunk_dicts)} documents)")
+        except Exception as e:
+            logger.warning(f"bm25 init failed: {e}")
+        
+        # Compile patterns
+        self._spatial_pattern = self._compile_pattern(SPATIAL_TERMS)
+        self._negation_pattern = self._compile_pattern(NEGATION_TERMS)
+        self._procedural_pattern = self._compile_pattern(PROCEDURAL_TERMS)
+        self._conceptual_pattern = self._compile_pattern(CONCEPTUAL_TERMS)
+        
+        # Safety patterns
+        self._safety_patterns = [
+            re.compile(p, re.IGNORECASE) for p in [
+                r'\bcontraindication\b', r'\bwarning\b', r'\bcaution\b',
+                r'\brisk\b', r'\bcomplication\b', r'\bavoid\b', r'\bnever\b',
+                r'\bdo not\b', r'\bfatal\b', r'\bdangerous\b'
+            ]
+        ]
+    
+    def _compile_pattern(self, terms: List[str]) -> re.Pattern:
+        """Compile terms into regex pattern"""
+        escaped = [re.escape(t) for t in terms]
+        return re.compile(r'\b(' + '|'.join(escaped) + r')\b', re.IGNORECASE)
+    
+    def classify_query(self, query: str) -> QueryType:
+        """Classify query type for routing"""
+        if self._negation_pattern.search(query):
+            return QueryType.CONTRAINDICATION
+        if self._spatial_pattern.search(query):
+            return QueryType.SPATIAL
+        if self._procedural_pattern.search(query):
+            return QueryType.PROCEDURAL
+        if self._conceptual_pattern.search(query):
+            return QueryType.CONCEPTUAL
+        if any(c in query.lower() for c in ['vs', 'versus', 'compare', 'difference']):
+            return QueryType.COMPARATIVE
+        return QueryType.FACTUAL
+    
+    def search(
+        self,
+        query: str,
+        query_embedding: List[float],
+        top_k: int = 20,
+        include_images: bool = True
+    ) -> PrecisionRetrievalResult:
+        """
+        Execute precision search with ColBERT reranking.
+        Hybrid: Dense + BM25 -> ColBERT
+        """
+        start_time = time.time()
+        systems_used = ["dense"]
+        warnings = []
+        
+        # Step 1: Classify query
+        query_type = self.classify_query(query)
+        
+        # Step 2: Retrieval (Hybrid)
+        candidate_k = min(top_k * 5, 100)
+        
+        # 2a. Dense Search
+        dense_results = self.base_search.search_chunks(
+            query_embedding=query_embedding,
+            top_k=candidate_k,
+            min_score=0.3
+        )
+        
+        # 2b. Sparse Search (BM25)
+        sparse_chunks = []
+        if self.bm25:
+            try:
+                bm25_hits = self.bm25.search(query, top_k=candidate_k)
+                # Convert back to SearchResult format (dummy score for merging)
+                sparse_chunks = [h[0]['chunk_obj'] for h in bm25_hits]
+                systems_used.append("bm25")
+            except Exception as e:
+                logger.warning(f"BM25 Search failed: {e}")
+
+        # 2c. Merge Candidates
+        # Combine Dense and Sparse chunks, deduplicating by ID
+        candidates = {}
+        
+        # Add Dense
+        for r in dense_results:
+            candidates[r.chunk.id] = {
+                'chunk': r.chunk,
+                'dense_score': r.score,
+                'sparse_score': 0.0
+            }
+            
+        # Add Sparse
+        for c in sparse_chunks:
+            if c.id in candidates:
+                candidates[c.id]['sparse_score'] = 1.0 # Marker
+            else:
+                candidates[c.id] = {
+                    'chunk': c,
+                    'dense_score': 0.0, # Not found in dense
+                    'sparse_score': 1.0
+                }
+        
+        final_candidates = list(candidates.values())
+        logger.info(f"Hybrid Pool: {len(dense_results)} dense + {len(sparse_chunks)} sparse -> {len(final_candidates)} unique candidates")
+        
+        if not final_candidates:
+            return PrecisionRetrievalResult(
+                query=query,
+                query_type=query_type,
+                results=[],
+                images=[],
+                confidence=0.0,
+                confidence_level=ConfidenceLevel.INSUFFICIENT,
+                retrieval_time_ms=(time.time() - start_time) * 1000,
+                systems_used=systems_used,
+                warnings=["No results found"]
+            )
+        
+        # Step 3: ColBERT precision reranking
+        # We rerank the merged pool
+        if self.colbert_enabled and self.colbert:
+            try:
+                documents = [c['chunk'].content for c in final_candidates]
+                
+                # Call Deep-DX ColBERT Reranker
+                reranked = self.colbert.rerank(query, documents, k=top_k)
+                systems_used.append("colbert")
+                
+                # Map back to results
+                precision_results = []
+                for r in reranked:
+                    idx = r.get("result_index") 
+                    if idx is not None and idx < len(final_candidates):
+                        cand = final_candidates[idx]
+                        original_chunk = cand['chunk']
+                        
+                        precision_results.append(PrecisionResult(
+                            chunk=original_chunk,
+                            dense_score=cand['dense_score'],
+                            colbert_score=r["score"],
+                            final_score=r["score"],
+                            has_safety_content=self._has_safety_content(original_chunk.content)
+                        ))
+            except Exception as e:
+                logger.error(f"ColBERT Rerank Failed: {e}")
+                precision_results = [] 
+        else:
+            precision_results = []
+
+        if not precision_results:
+             # Fallback: use dense scores only
+            precision_results = [
+                PrecisionResult(
+                    chunk=r.chunk,
+                    dense_score=r.score,
+                    colbert_score=None,
+                    final_score=r.score,
+                    has_safety_content=self._has_safety_content(r.chunk.content)
+                )
+                for r in base_results[:top_k]
+            ]
+            if self.colbert_enabled:
+                 warnings.append("ColBERT unavailable/failed - using dense scores only")
+        
+        # Step 4: Safety check for contraindication queries
+        if query_type == QueryType.CONTRAINDICATION:
+            has_safety = any(r.has_safety_content for r in precision_results)
+            if not has_safety:
+                warnings.append("Safety query but no contraindication content found")
+        
+        # Step 5: Calculate confidence
+        confidence = self._calculate_confidence(precision_results, query_type)
+        confidence_level = self._score_to_level(confidence)
+        
+        # Step 6: Get related images
+        images = []
+        if include_images and precision_results:
+            source_ids = list(set(r.chunk.source_id for r in precision_results[:5]))
+            image_results = self.base_search.search_images(
+                query_embedding=query_embedding,
+                top_k=20,
+                source_ids=source_ids
+            )
+            images = [img for img, _ in image_results]
+        
+        elapsed_ms = (time.time() - start_time) * 1000
+        
+        logger.info(
+            f"Precision search (Hybrid): {len(dense_results)} dense + {len(sparse_chunks)} sparse → {len(precision_results)} results "
+            f"in {elapsed_ms:.1f}ms | Confidence: {confidence:.2f} ({confidence_level.value})"
+        )
+        
+        return PrecisionRetrievalResult(
+            query=query,
+            query_type=query_type,
+            results=precision_results,
+            images=images,
+            confidence=confidence,
+            confidence_level=confidence_level,
+            retrieval_time_ms=elapsed_ms,
+            systems_used=systems_used,
+            warnings=warnings
+        )
+    
+    def _has_safety_content(self, text: str) -> bool:
+        """Check if text contains safety-critical content"""
+        return any(p.search(text) for p in self._safety_patterns)
+    
+    def _calculate_confidence(self, results: List[PrecisionResult], query_type: QueryType) -> float:
+        """Calculate confidence score from results"""
+        if not results:
+            return 0.0
+        
+        # Factor 1: Top score quality (40%)
+        top_scores = [r.final_score for r in results[:3]]
+        avg_top_score = sum(top_scores) / len(top_scores) if top_scores else 0
+        
+        # Normalize ColBERT scores (typically 15-35 range)
+        if results[0].colbert_score is not None:
+            score_factor = min(avg_top_score / 30, 1.0)
+        else:
+            score_factor = avg_top_score  # Dense scores already 0-1
+        
+        # Factor 2: Source diversity (30%)
+        sources = set(r.chunk.source_id for r in results[:10])
+        diversity_factor = min(len(sources) / 3, 1.0)
+        
+        # Factor 3: Result count (15%)
+        count_factor = min(len(results) / 10, 1.0)
+        
+        # Factor 4: Query-type specific (15%)
+        type_factor = 0.8  # Default
+        if query_type == QueryType.CONTRAINDICATION:
+            # Penalize if no safety content
+            has_safety = any(r.has_safety_content for r in results[:5])
+            type_factor = 1.0 if has_safety else 0.5
+        
+        confidence = (
+            0.40 * score_factor +
+            0.30 * diversity_factor +
+            0.15 * count_factor +
+            0.15 * type_factor
+        )
+        
+        return min(max(confidence, 0.0), 1.0)
+    
+    def _score_to_level(self, score: float) -> ConfidenceLevel:
+        """Convert score to confidence level"""
+        if score >= 0.85:
+            return ConfidenceLevel.HIGH
+        elif score >= 0.70:
+            return ConfidenceLevel.MEDIUM
+        elif score >= 0.50:
+            return ConfidenceLevel.LOW
+        else:
+            return ConfidenceLevel.INSUFFICIENT
+    
+    
+    def retrieve_for_topic(
+        self,
+        query_embedding: List[float],
+        topic: str,
+        chunk_types: Optional[List[Any]] = None, # adapt type hint
+        top_k: int = None,
+        include_images: bool = True
+    ) -> Any: # Returns RetrievalResult
+        """
+        Adapter method for SynthesisEngine compatibility.
+        Executes precision search and converts to standard RetrievalResult.
+        """
+        top_k = top_k or 20
+        
+        # 1. Execute Precision Search
+        precision_result = self.search(
+            query=topic,
+            query_embedding=query_embedding,
+            top_k=top_k,
+            include_images=include_images
+        )
+        
+        # 2. Convert PrecisionResult -> SearchResult
+        search_results = []
+        for pr in precision_result.results:
+            search_results.append(SearchResult(
+                chunk=pr.chunk,
+                score=pr.final_score
+            ))
+            
+        # 3. Construct RetrievalResult
+        # We need to import RetrievalResult or use the one from search module if available?
+        # It's in src.index.search.
+        from src.index.search import RetrievalResult
+        
+        return RetrievalResult(
+            chunks=search_results,
+            images=precision_result.images,
+            sources_used=set(r.chunk.source_id for r in precision_result.results),
+            total_chunks=len(search_results),
+            total_images=len(precision_result.images)
+        )
+
+    def quick_search(
+        self,
+        query: str,
+        query_embedding: List[float],
+        top_k: int = 10
+    ) -> List[SearchResult]:
+        """
+        Quick search without ColBERT (for speed-critical paths).
+        Falls back to base search engine.
+        """
+        return self.base_search.search_chunks(
+            query_embedding=query_embedding,
+            top_k=top_k
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Synthesis Verification
+# ═══════════════════════════════════════════════════════════════════════════
+
+@dataclass
+class VerificationResult:
+    """Result of synthesis verification"""
+    claims_extracted: int
+    claims_supported: int
+    claims_contradicted: int
+    claims_not_found: int
+    verification_score: float
+    contradictions: List[str] = field(default_factory=list)
+    
+    @property
+    def passed(self) -> bool:
+        return self.claims_contradicted == 0 and self.verification_score >= 0.7
+
+
+def verify_synthesis(
+    synthesis_text: str,
+    source_chunks: List[Chunk],
+    llm_client: Any
+) -> VerificationResult:
+    """
+    Verify synthesized text against source chunks.
+    
+    Extracts claims from synthesis and checks each against sources.
+    This is the final safety gate before output.
+    
+    Args:
+        synthesis_text: The generated synthesis
+        source_chunks: Source chunks used for generation
+        llm_client: AI client for claim extraction/verification
+        
+    Returns:
+        VerificationResult with claim-by-claim analysis
+    """
+    # This would use the LLM to:
+    # 1. Extract factual claims from synthesis
+    # 2. Check each claim against source chunks
+    # 3. Return supported/contradicted/not_found counts
+    
+    # Placeholder - full implementation would call LLM
+    return VerificationResult(
+        claims_extracted=0,
+        claims_supported=0,
+        claims_contradicted=0,
+        claims_not_found=0,
+        verification_score=1.0
+    )

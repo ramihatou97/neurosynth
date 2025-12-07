@@ -67,6 +67,16 @@ class Database:
         # Combine size and mtime for a fast "fingerprint"
         return f"{stat.st_size}_{int(stat.st_mtime)}"
 
+    def get_cached_checksum(self, pdf_path: Path) -> Optional[str]:
+        """Get checksum from tracked_files table (fast - no file reading)."""
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT file_checksum FROM tracked_files WHERE pdf_path = ?",
+                (str(pdf_path),)
+            )
+            row = cursor.fetchone()
+            return row["file_checksum"] if row else None
+
     def cache_pdf_text(self, pdf_path: Path, page_num: int, text: str, checksum: str):
         """Cache extracted PDF text."""
         with self._get_connection() as conn:
@@ -112,14 +122,56 @@ class Database:
             row = cursor.fetchone()
             return row["text_content"] if row else None
 
-    def get_all_cached_pages(self, pdf_path: Path, checksum: str) -> dict[int, str]:
-        """Get all cached pages for a PDF."""
+    def get_all_cached_pages(self, pdf_path: Path, checksum: str = None) -> dict[int, str]:
+        """Get all cached pages for a PDF.
+
+        Args:
+            pdf_path: Path to PDF file
+            checksum: Optional checksum to match. If None, returns any cached pages for path.
+        """
         with self._get_connection() as conn:
-            cursor = conn.execute("""
-                SELECT page_number, text_content FROM pdf_text_cache
-                WHERE pdf_path = ? AND file_checksum = ?
-            """, (str(pdf_path), checksum))
+            if checksum:
+                cursor = conn.execute("""
+                    SELECT page_number, text_content FROM pdf_text_cache
+                    WHERE pdf_path = ? AND file_checksum = ?
+                """, (str(pdf_path), checksum))
+            else:
+                # Get any cached pages for this path (ignore checksum)
+                cursor = conn.execute("""
+                    SELECT page_number, text_content FROM pdf_text_cache
+                    WHERE pdf_path = ?
+                """, (str(pdf_path),))
             return {row["page_number"]: row["text_content"] for row in cursor}
+
+    def has_page_cache_for_library(self, library_path: Path) -> bool:
+        """Check if text cache exists for PDFs in the current library.
+
+        Returns True only if at least one tracked file has cached text.
+        This prevents using stale cache from a different library.
+        """
+        with self._get_connection() as conn:
+            try:
+                # Check if any tracked file has matching text cache
+                # tracked_files uses fast checksum, pdf_text_cache uses MD5
+                # So we check by path prefix instead
+                library_str = str(library_path)
+                cursor = conn.execute("""
+                    SELECT 1 FROM pdf_text_cache
+                    WHERE pdf_path LIKE ?
+                    LIMIT 1
+                """, (f"{library_str}%",))
+                return cursor.fetchone() is not None
+            except Exception:
+                return False
+
+    def has_page_cache(self) -> bool:
+        """Check if any text has been cached (legacy - use has_page_cache_for_library)."""
+        with self._get_connection() as conn:
+            try:
+                cursor = conn.execute("SELECT 1 FROM pdf_text_cache LIMIT 1")
+                return cursor.fetchone() is not None
+            except Exception:
+                return False
 
     # Categorization Cache Methods
 
@@ -386,6 +438,12 @@ class Database:
         """Remove a file from tracking (e.g., if deleted)."""
         with self._get_connection() as conn:
             conn.execute("DELETE FROM tracked_files WHERE pdf_path = ?", (str(pdf_path),))
+            conn.commit()
+
+    def clear_tracked_files(self):
+        """Clear all tracked files (use when changing library)."""
+        with self._get_connection() as conn:
+            conn.execute("DELETE FROM tracked_files")
             conn.commit()
 
     def get_new_files_count(self) -> int:

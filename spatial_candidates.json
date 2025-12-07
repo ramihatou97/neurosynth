@@ -1,0 +1,84 @@
+{
+  "queries": [
+    {
+      "query": "What is medial to the fibula in the lower leg?",
+      "ground_truth": "The tibia is medial to the fibula in the lower leg.",
+      "query_type": "spatial",
+      "difficulty": "hard",
+      "safety_critical": false,
+      "spatial_query": true
+    },
+    {
+      "query": "What is medial to the lateral ventricles in the brain?",
+      "ground_truth": "The third ventricle and septum pellucidum are medial to the lateral ventricles.",
+      "query_type": "spatial",
+      "difficulty": "hard",
+      "safety_critical": false,
+      "spatial_query": true
+    },
+    {
+      "query": "What is medial to the greater trochanter of the femur?",
+      "ground_truth": "The lesser trochanter and the femoral neck are medial to the greater trochanter.",
+      "query_type": "spatial",
+      "difficulty": "hard",
+      "safety_critical": false,
+      "spatial_query": true
+    },
+    {
+      "query": "What is medial to the lateral malleolus?",
+      "ground_truth": "The medial malleolus, tibia, and the entire ankle joint are medial to the lateral malleolus.",
+      "query_type": "spatial",
+      "difficulty": "hard",
+      "safety_critical": false,
+      "spatial_query": true
+    },
+    {
+      "query": "What is medial to the ascending colon?",
+      "ground_truth": "The small intestine (ileum), right paracolic gutter contents, and parts of the mesentery are medial to the ascending colon.",
+      "query_type": "spatial",
+      "difficulty": "hard",
+      "safety_critical": false,
+      "spatial_query": true
+    },
+    {
+      "query": "What is medial to the lateral pterygoid muscle?",
+      "ground_truth": "The medial pterygoid muscle and the pterygoid process of the sphenoid bone are medial to the lateral pterygoid muscle.",
+      "query_type": "spatial",
+      "difficulty": "hard",
+      "safety_critical": false,
+      "spatial_query": true
+    },
+    {
+      "query": "What is medial to the lateral border of the scapula?",
+      "ground_truth": "The infraspinous fossa, supraspinous fossa, and the medial border of the scapula are medial to the lateral border.",
+      "query_type": "spatial",
+      "difficulty": "hard",
+      "safety_critical": false,
+      "spatial_query": true
+    },
+    {
+      "query": "What is medial to the lateral meniscus of the knee?",
+      "ground_truth": "The medial meniscus, anterior and posterior cruciate ligaments, and the intercondylar area are medial to the lateral meniscus.",
+      "query_type": "spatial",
+      "difficulty": "hard",
+      "safety_critical": false,
+      "spatial_query": true
+    },
+    {
+      "query": "What is medial to the lateral rectus muscle of the eye?",
+      "ground_truth": "The inferior rectus, superior rectus, medial rectus muscles, and the optic nerve are medial to the lateral rectus muscle.",
+      "query_type": "spatial",
+      "difficulty": "hard",
+      "safety_critical": false,
+      "spatial_query": true
+    },
+    {
+      "query": "What is medial to the lateral epicondyle of the humerus?",
+      "ground_truth": "The medial epicondyle, trochlea, and the olecranon fossa are medial to the lateral epicondyle of the humerus.",
+      "query_type": "spatial",
+      "difficulty": "hard",
+      "safety_critical": false,
+      "spatial_query": true
+    }
+  ]
+}

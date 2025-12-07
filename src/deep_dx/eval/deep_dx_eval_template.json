@@ -1,0 +1,218 @@
+{
+  "version": "1.0.0",
+  "metadata": {
+    "created_date": "2024-12-06",
+    "last_updated": "2024-12-06",
+    "total_queries": 10,
+    "curator": "Your Name",
+    "notes": "Initial evaluation dataset - 10 example queries across all types. Expand to 100 queries by adding real cases from clinical practice."
+  },
+  "queries": [
+    {
+      "id": "Q001",
+      "query": "What is the typical position of the facial nerve in a 3cm vestibular schwannoma?",
+      "ground_truth": "In vestibular schwannomas measuring 3cm, the facial nerve is typically displaced anteriorly and stretched over the anterior surface of the tumor. The nerve becomes attenuated, may be splayed across the tumor capsule, and can appear translucent, making identification challenging. In approximately 85-90% of cases >2.5cm, the nerve is displaced anteriorly rather than posteriorly.",
+      "query_type": "spatial",
+      "difficulty": "medium",
+      "safety_critical": true,
+      "required_sources": [
+        "Samii_Vestibular_Schwannoma.pdf",
+        "Rhoton_Cranial_Anatomy.pdf"
+      ],
+      "expected_chunks": [
+        {
+          "source": "Samii_Vestibular_Schwannoma.pdf",
+          "page": 147,
+          "excerpt": "facial nerve is displaced anteriorly in 87% of cases measuring >2.5cm"
+        }
+      ],
+      "negation_query": false,
+      "spatial_query": true,
+      "adversarial": false,
+      "tags": ["vestibular_schwannoma", "facial_nerve", "CN_VII", "anatomy"],
+      "added_date": "2024-12-06",
+      "added_from_failure": false,
+      "notes": "Critical for surgical planning - incorrect expectation could lead to nerve injury"
+    },
+    {
+      "id": "Q002",
+      "query": "When should retrosigmoid approach NOT be used for vestibular schwannoma?",
+      "ground_truth": "Contraindications to retrosigmoid approach for vestibular schwannoma include: (1) Only hearing ear with serviceable hearing (prefer translabyrinthine to avoid drilling near cochlea), (2) Significant cisternal adhesions from prior surgery, (3) Unfavorable anatomy with high jugular bulb and low transverse sinus limiting surgical corridor, (4) Purely intracanalicular tumors with lateral extension >8mm into IAC (translabyrinthine provides better exposure), (5) Patient medical contraindications to sitting/semisitting position if preferred.",
+      "query_type": "contraindication",
+      "difficulty": "medium",
+      "safety_critical": true,
+      "required_sources": [
+        "Samii_Vestibular_Schwannoma.pdf",
+        "Youmans_Skull_Base.pdf"
+      ],
+      "negation_query": true,
+      "spatial_query": false,
+      "adversarial": false,
+      "tags": ["vestibular_schwannoma", "retrosigmoid", "contraindications", "approach_selection"],
+      "added_date": "2024-12-06",
+      "added_from_failure": false,
+      "notes": "Tests negation handling - system must NOT return 'when TO use' information"
+    },
+    {
+      "id": "Q003",
+      "query": "How do you identify the facial nerve during translabyrinthine approach?",
+      "ground_truth": "During translabyrinthine approach, the facial nerve is identified in stages: (1) First, identify the vertical (mastoid) segment by drilling blue line of bone over the mastoid segment, typically 1cm posterior to external auditory canal; (2) Follow the nerve superiorly to the second genu; (3) The labyrinthine segment is then identified running from the geniculate ganglion to the IAC; (4) In the IAC, the facial nerve is the anterior-superior structure, separated from cochlear nerve by a thin Bill's bar of bone; (5) Stimulation at 0.05mA confirms identity before tumor dissection. The key anatomical landmark is the relationship to the superior semicircular canal - the labyrinthine segment runs just anterior to it.",
+      "query_type": "procedural",
+      "difficulty": "hard",
+      "safety_critical": true,
+      "required_sources": [
+        "Brackmann_Otologic_Surgery.pdf",
+        "Rhoton_Cranial_Anatomy.pdf"
+      ],
+      "negation_query": false,
+      "spatial_query": true,
+      "adversarial": false,
+      "tags": ["translabyrinthine", "facial_nerve", "surgical_technique", "nerve_identification"],
+      "added_date": "2024-12-06",
+      "added_from_failure": false,
+      "notes": "Tests multi-step procedural retrieval - answer requires synthesis from multiple sources"
+    },
+    {
+      "id": "Q004",
+      "query": "What is the blood supply to the facial nerve in the cerebellopontine angle?",
+      "ground_truth": "The facial nerve in the cerebellopontine angle is supplied by perforating branches from the anterior inferior cerebellar artery (AICA). Specifically, the internal auditory artery (labyrinthine artery), which arises from AICA in 85% of cases, provides the primary vascular supply. This artery travels with the facial and vestibulocochlear nerves into the internal auditory canal. The nerve receives additional collateral supply from the stylomastoid artery (branch of posterior auricular or occipital artery) once it exits the stylomastoid foramen.",
+      "query_type": "factual",
+      "difficulty": "easy",
+      "safety_critical": false,
+      "required_sources": [
+        "Rhoton_Cranial_Anatomy.pdf"
+      ],
+      "negation_query": false,
+      "spatial_query": false,
+      "adversarial": false,
+      "tags": ["facial_nerve", "vascular_anatomy", "AICA", "blood_supply"],
+      "added_date": "2024-12-06",
+      "added_from_failure": false,
+      "notes": "Straightforward factual query - should have high retrieval confidence"
+    },
+    {
+      "id": "Q005",
+      "query": "Retrosigmoid versus translabyrinthine for 2.5cm vestibular schwannoma with serviceable hearing - which approach and why?",
+      "ground_truth": "For a 2.5cm vestibular schwannoma with serviceable hearing (AAO-HNS Class A or B), retrosigmoid approach is preferred. Rationale: (1) Hearing preservation is possible with retrosigmoid (30-60% success rate for tumors <2.5cm with good preoperative hearing), whereas translabyrinthine sacrifices hearing by design; (2) At 2.5cm, the tumor size is at the threshold - larger tumors (>3cm) have lower hearing preservation rates and translabyrinthine may be preferred; (3) Retrosigmoid provides adequate visualization of the lateral IAC with drilling of the posterior canal wall; (4) Consider patient counseling about hearing preservation expectations - 40-70% will lose serviceable hearing even with retrosigmoid. If hearing preservation fails intraoperatively, can convert approach if needed.",
+      "query_type": "comparative",
+      "difficulty": "hard",
+      "safety_critical": false,
+      "required_sources": [
+        "Samii_Vestibular_Schwannoma.pdf",
+        "Brackmann_Otologic_Surgery.pdf",
+        "Youmans_Skull_Base.pdf"
+      ],
+      "negation_query": false,
+      "spatial_query": false,
+      "adversarial": false,
+      "tags": ["approach_selection", "retrosigmoid", "translabyrinthine", "hearing_preservation", "vestibular_schwannoma"],
+      "added_date": "2024-12-06",
+      "added_from_failure": false,
+      "notes": "Tests multi-source synthesis and comparative reasoning"
+    },
+    {
+      "id": "Q006",
+      "query": "What is posterior to the facial nerve in the internal auditory canal?",
+      "ground_truth": "In the internal auditory canal, the inferior vestibular nerve is positioned posterior to the facial nerve. The IAC contents are arranged in a consistent four-quadrant pattern when viewed from the fundus: facial nerve (anterior-superior), cochlear nerve (anterior-inferior), superior vestibular nerve (posterior-superior), and inferior vestibular nerve (posterior-inferior). A thin vertical crest of bone called Bill's bar separates the facial nerve from the cochlear nerve anteriorly. The posterior relationship is clinically important during translabyrinthine surgery where the inferior vestibular nerve may be encountered before identifying the facial nerve.",
+      "query_type": "spatial",
+      "difficulty": "easy",
+      "safety_critical": true,
+      "required_sources": [
+        "Rhoton_Cranial_Anatomy.pdf",
+        "Brackmann_Otologic_Surgery.pdf"
+      ],
+      "negation_query": false,
+      "spatial_query": true,
+      "adversarial": false,
+      "tags": ["facial_nerve", "IAC", "spatial_anatomy", "vestibular_nerve"],
+      "added_date": "2024-12-06",
+      "added_from_failure": false,
+      "notes": "Tests spatial relationship understanding - critical for graph validation"
+    },
+    {
+      "id": "Q007",
+      "query": "Do NOT use sitting position for posterior fossa surgery when?",
+      "ground_truth": "Contraindications to sitting position for posterior fossa surgery include: (1) Unrepaired cardiac right-to-left shunt (risk of paradoxical air embolism leading to stroke), (2) Ventriculoatrial shunt (air entry risk), (3) Severe cardiovascular disease or inability to tolerate decreased preload, (4) Uncontrolled hypertension, (5) Severe cervical spine pathology preventing neck flexion, (6) Prior documented paradoxical air embolism. Relative contraindications include advanced age, significant cerebrovascular disease, and patient preference. The primary concern is venous air embolism, which occurs in 25-40% of sitting position cases though clinically significant embolism is rare (1-2%).",
+      "query_type": "contraindication",
+      "difficulty": "medium",
+      "safety_critical": true,
+      "required_sources": [
+        "Youmans_Positioning.pdf",
+        "Greenberg_Handbook.pdf"
+      ],
+      "negation_query": true,
+      "spatial_query": false,
+      "adversarial": true,
+      "tags": ["positioning", "sitting_position", "contraindications", "posterior_fossa", "VAE"],
+      "added_date": "2024-12-06",
+      "added_from_failure": false,
+      "notes": "ADVERSARIAL: Tests negation handling with 'DO NOT' - system must not return indications for sitting position"
+    },
+    {
+      "id": "Q008",
+      "query": "How do outcomes differ between retrosigmoid and translabyrinthine for large vestibular schwannomas?",
+      "ground_truth": "For large vestibular schwannomas (>3cm), outcomes comparison: FACIAL NERVE PRESERVATION: Similar rates (House-Brackmann I-II in 50-70% for both approaches; no statistically significant difference in meta-analyses). HEARING: Translabyrinthine sacrifices hearing by design; retrosigmoid offers hearing preservation attempt but success rate <10% for tumors >3cm. GROSS TOTAL RESECTION: Comparable rates (90-95% for both). COMPLICATIONS: Translabyrinthine has higher CSF leak rates (10-15% vs 5-8% retrosigmoid) but lower cerebellar retraction injury. OPERATIVE TIME: Translabyrinthine typically longer (6-8 hours vs 4-6 hours). RECURRENCE: Similar long-term rates (5-year recurrence ~5% for both with GTR). The choice is often driven by hearing status (if serviceable, consider retrosigmoid; if non-serviceable, translabyrinthine preferred) and surgeon expertise.",
+      "query_type": "comparative",
+      "difficulty": "hard",
+      "safety_critical": false,
+      "required_sources": [
+        "Samii_Vestibular_Schwannoma.pdf",
+        "Brackmann_Otologic_Surgery.pdf",
+        "Contemporary_VS_Outcomes_2020.pdf"
+      ],
+      "expected_chunks": [
+        {
+          "source": "Contemporary_VS_Outcomes_2020.pdf",
+          "page": 12,
+          "excerpt": "Meta-analysis of 3,126 patients showed no significant difference in facial nerve outcomes between approaches for tumors >3cm (p=0.34)"
+        }
+      ],
+      "negation_query": false,
+      "spatial_query": false,
+      "adversarial": false,
+      "tags": ["vestibular_schwannoma", "outcomes", "comparative", "retrosigmoid", "translabyrinthine", "large_tumor"],
+      "added_date": "2024-12-06",
+      "added_from_failure": false,
+      "notes": "Tests synthesis of quantitative data from multiple sources including recent literature"
+    },
+    {
+      "id": "Q009",
+      "query": "What structure is medial to the trigeminal nerve at Meckel's cave?",
+      "ground_truth": "Medial to the trigeminal nerve at Meckel's cave is the cavernous sinus and the internal carotid artery. Specifically, the cavernous segment of the internal carotid artery (C4 segment) runs along the medial wall of the cavernous sinus, immediately medial to the trigeminal ganglion which sits in Meckel's cave (a dural depression on the anterior surface of the petrous temporal bone). The abducens nerve (CN VI) also runs medially, traveling through the cavernous sinus close to the ICA. This relationship is critical during approaches to Meckel's cave or the cavernous sinus, as medial dissection risks ICA injury.",
+      "query_type": "spatial",
+      "difficulty": "medium",
+      "safety_critical": true,
+      "required_sources": [
+        "Rhoton_Cranial_Anatomy.pdf",
+        "Youmans_Skull_Base.pdf"
+      ],
+      "negation_query": false,
+      "spatial_query": true,
+      "adversarial": false,
+      "tags": ["trigeminal_nerve", "Meckels_cave", "cavernous_sinus", "spatial_anatomy", "ICA"],
+      "added_date": "2024-12-06",
+      "added_from_failure": false,
+      "notes": "Tests spatial query with medial/lateral relationships"
+    },
+    {
+      "id": "Q010",
+      "query": "In elderly patients over 75, is observation preferred over surgery for small vestibular schwannomas?",
+      "ground_truth": "For elderly patients over 75 with small vestibular schwannomas (<2cm), observation with serial imaging is often preferred over immediate surgery, but this is individualized. Considerations: (1) GROWTH RATE: Small VS in elderly grow more slowly (average 1-2mm/year vs 2-4mm/year in younger patients); (2) LIFE EXPECTANCY: Many will not experience tumor-related morbidity in their remaining lifespan; (3) SURGICAL RISK: Age >70 is associated with higher perioperative morbidity, longer hospital stays, and slower recovery; (4) FUNCTIONAL STATUS: Highly functional elderly with symptomatic tumors may still benefit from surgery. EXCEPTIONS warranting surgery: rapidly growing tumors, brainstem compression with symptoms, intractable symptoms (vertigo, facial pain), or patient preference after informed discussion. Stereotactic radiosurgery is an alternative with lower morbidity for tumors <3cm in elderly patients unsuitable for observation.",
+      "query_type": "diagnostic",
+      "difficulty": "hard",
+      "safety_critical": false,
+      "required_sources": [
+        "Samii_Vestibular_Schwannoma.pdf",
+        "AANS_Guidelines_VS_Management.pdf",
+        "Geriatric_Neurosurgery_Considerations.pdf"
+      ],
+      "negation_query": false,
+      "spatial_query": false,
+      "adversarial": false,
+      "tags": ["vestibular_schwannoma", "elderly", "observation", "treatment_selection", "age_considerations"],
+      "added_date": "2024-12-06",
+      "added_from_failure": false,
+      "notes": "Tests clinical decision-making synthesis requiring integration of age, tumor characteristics, and treatment options"
+    }
+  ]
+}
