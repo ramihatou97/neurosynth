@@ -52,7 +52,7 @@ class HybridIntentClassifier:
         """Lazy-load AI classifier."""
         if self._ai_classifier is None and self.api_key:
             try:
-                from src.ai.query_intent import QueryIntentClassifier
+                from reference_library.ai.query_intent import QueryIntentClassifier
                 self._ai_classifier = QueryIntentClassifier(
                     api_key=self.api_key,
                     database=self.database

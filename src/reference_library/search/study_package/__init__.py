@@ -6,7 +6,7 @@ Enhances BROAD mode search to include foundational knowledge
 (anatomy, biomechanics, pathophysiology) for any neurosurgical topic.
 
 Usage:
-    from src.search.study_package import enhance_broad_results, analyze_query
+    from reference_library.search.study_package import enhance_broad_results, analyze_query
     
     # In BROAD mode search:
     enhanced_results, report = enhance_broad_results(

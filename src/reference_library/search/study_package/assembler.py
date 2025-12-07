@@ -21,7 +21,7 @@ from reference_library.search.study_package.report import StudyModeReport, Topic
 from reference_library.search.result_model import ChapterResult, MatchType
 
 if TYPE_CHECKING:
-    from src.search.pdf_searcher import PDFSearcher
+    from reference_library.search.pdf_searcher import PDFSearcher
 
 logger = logging.getLogger(__name__)
 

@@ -6,11 +6,11 @@ from typing import Optional, List, TYPE_CHECKING
 from datetime import datetime
 
 if TYPE_CHECKING:
-    from src.search.section_detector import DetectedSection
+    from reference_library.search.section_detector import DetectedSection
 else:
     # Runtime import - handle potential circularity or path issues
     try:
-        from src.search.section_detector import DetectedSection
+        from reference_library.search.section_detector import DetectedSection
     except ImportError:
         # Fallback if src not in path (e.g. running tests directly)
         try:

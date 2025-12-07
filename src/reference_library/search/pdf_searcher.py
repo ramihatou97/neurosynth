@@ -6,7 +6,7 @@ from typing import Generator, Optional, Callable, Dict, List, Tuple, TYPE_CHECKI
 import fitz  # PyMuPDF
 
 if TYPE_CHECKING:
-    from src.search.study_package.report import StudyModeReport
+    from reference_library.search.study_package.report import StudyModeReport
 
 from .result_model import (
     SearchResult, PageMatch, SearchProgress, ChapterMetadata,
@@ -661,7 +661,7 @@ class PDFSearcher:
         # =====================================================================
         if strategy.lower() == "broad" and not skip_study_mode:
             try:
-                from src.search.study_package import enhance_broad_results
+                from reference_library.search.study_package import enhance_broad_results
 
                 enhanced_results, study_report = enhance_broad_results(
                     searcher=self,
