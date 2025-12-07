@@ -1,13 +1,15 @@
 """Preview panel for displaying selected result details."""
-import customtkinter as ctk
-from typing import Optional, Callable
-from pathlib import Path
+
 import subprocess
 import sys
+from pathlib import Path
+from typing import Optional
 
+import customtkinter as ctk
 from PIL import Image, ImageTk
 
 from src import config
+
 from ..search.result_model import SearchResult
 from .styles import FONTS, PADDING
 
@@ -31,62 +33,50 @@ class PreviewPanel(ctk.CTkFrame):
     def _setup_ui(self):
         """Set up the preview panel UI."""
         # Header
-        ctk.CTkLabel(
-            self,
-            text="Preview",
-            font=FONTS["subheading"]
-        ).pack(anchor="w", padx=PADDING["medium"], pady=PADDING["small"])
+        ctk.CTkLabel(self, text="Preview", font=FONTS["subheading"]).pack(
+            anchor="w", padx=PADDING["medium"], pady=PADDING["small"]
+        )
 
         # Safety Alert Frame (Hidden by default)
         self.safety_frame = ctk.CTkFrame(self, fg_color="#c0392b", corner_radius=6)
         self.safety_label = ctk.CTkLabel(
-            self.safety_frame, 
-            text="", 
+            self.safety_frame,
+            text="",
             font=FONTS["body_bold"],
             text_color="white",
             justify="left",
-            wraplength=350
+            wraplength=350,
         )
         self.safety_label.pack(padx=PADDING["medium"], pady=PADDING["small"], fill="x")
         # Don't pack safety_frame yet
 
         # Metadata section
         self.metadata_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.metadata_frame.pack(fill="x", padx=PADDING["medium"], pady=PADDING["small"])
-        
+        self.metadata_frame.pack(
+            fill="x", padx=PADDING["medium"], pady=PADDING["small"]
+        )
+
         # Confidence Gauge (Hidden by default)
         self.confidence_label = ctk.CTkLabel(
-            self.metadata_frame,
-            text="",
-            font=FONTS["small_bold"],
-            text_color="#27ae60"
+            self.metadata_frame, text="", font=FONTS["small_bold"], text_color="#27ae60"
         )
         # Pack order handled in show_result
 
         # Book info
         self.book_label = ctk.CTkLabel(
-            self.metadata_frame,
-            text="Book: -",
-            font=FONTS["body"],
-            anchor="w"
+            self.metadata_frame, text="Book: -", font=FONTS["body"], anchor="w"
         )
         self.book_label.pack(fill="x")
 
         # Chapter info
         self.chapter_label = ctk.CTkLabel(
-            self.metadata_frame,
-            text="Chapter: -",
-            font=FONTS["body"],
-            anchor="w"
+            self.metadata_frame, text="Chapter: -", font=FONTS["body"], anchor="w"
         )
         self.chapter_label.pack(fill="x")
 
         # Page info
         self.page_label = ctk.CTkLabel(
-            self.metadata_frame,
-            text="Page: -",
-            font=FONTS["body"],
-            anchor="w"
+            self.metadata_frame, text="Page: -", font=FONTS["body"], anchor="w"
         )
         self.page_label.pack(fill="x")
 
@@ -96,7 +86,7 @@ class PreviewPanel(ctk.CTkFrame):
             text="",
             font=FONTS["body"],
             anchor="w",
-            text_color="#6c5ce7"
+            text_color="#6c5ce7",
         )
         self.location_label.pack(fill="x")
 
@@ -106,29 +96,24 @@ class PreviewPanel(ctk.CTkFrame):
         )
 
         # Context text
-        ctk.CTkLabel(
-            self,
-            text="Context:",
-            font=FONTS["body"]
-        ).pack(anchor="w", padx=PADDING["medium"])
+        ctk.CTkLabel(self, text="Context:", font=FONTS["body"]).pack(
+            anchor="w", padx=PADDING["medium"]
+        )
 
         # Text box for context
         self.context_text = ctk.CTkTextbox(
-            self,
-            font=FONTS["mono"],
-            wrap="word",
-            height=200
+            self, font=FONTS["mono"], wrap="word", height=200
         )
-        self.context_text.pack(fill="both", expand=True, padx=PADDING["medium"], pady=PADDING["small"])
+        self.context_text.pack(
+            fill="both", expand=True, padx=PADDING["medium"], pady=PADDING["small"]
+        )
 
         # Figures section
         self.figures_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.figures_frame.pack(fill="x", padx=PADDING["medium"], pady=PADDING["small"])
 
         self.figures_header = ctk.CTkLabel(
-            self.figures_frame,
-            text="Figures (0):",
-            font=FONTS["body"]
+            self.figures_frame, text="Figures (0):", font=FONTS["body"]
         )
         self.figures_header.pack(anchor="w")
 
@@ -143,7 +128,7 @@ class PreviewPanel(ctk.CTkFrame):
             font=FONTS["small"],
             text_color="gray",
             wraplength=350,
-            anchor="w"
+            anchor="w",
         )
         self.caption_label.pack(fill="x")
 
@@ -157,7 +142,7 @@ class PreviewPanel(ctk.CTkFrame):
             command=self._open_pdf,
             width=100,
             font=FONTS["body"],
-            state="disabled"
+            state="disabled",
         )
         self.open_btn.pack(side="left", padx=(0, PADDING["small"]))
 
@@ -167,17 +152,17 @@ class PreviewPanel(ctk.CTkFrame):
             command=self._copy_reference,
             width=120,
             font=FONTS["body"],
-            state="disabled"
+            state="disabled",
         )
         self.copy_btn.pack(side="left")
 
     def show_result(self, result: SearchResult):
         """Display a search result in the preview panel."""
         self.current_result = result
-        
+
         # Check if this is a Deep-DX synthesis result
-        extra_data = getattr(result, 'extra_data', {})
-        is_synthesis = extra_data.get('is_synthesis', False)
+        extra_data = getattr(result, "extra_data", {})
+        is_synthesis = extra_data.get("is_synthesis", False)
 
         # Reset UI
         self.safety_frame.pack_forget()
@@ -189,56 +174,63 @@ class PreviewPanel(ctk.CTkFrame):
             self.book_label.configure(text="Source: Deep-DX Engine")
             self.chapter_label.configure(text="Synthesized Answer")
             self.page_label.configure(text="AI Generated")
-            
+
             # Show Confidence
-            conf = extra_data.get('confidence', 0.0)
+            conf = extra_data.get("confidence", 0.0)
             self.confidence_label.configure(
                 text=f"Confidence Score: {int(conf*100)}%",
-                text_color="#27ae60" if conf > 0.7 else "#e67e22"
+                text_color="#27ae60" if conf > 0.7 else "#e67e22",
             )
             self.confidence_label.pack(anchor="w")
 
             # Show Safety Warnings
-            warnings = extra_data.get('critic_warnings', [])
+            warnings = extra_data.get("critic_warnings", [])
             if warnings:
                 warning_text = "⚠️ SAFETY WARNING:\n• " + "\n• ".join(warnings)
                 self.safety_label.configure(text=warning_text)
-                self.safety_frame.pack(fill="x", padx=PADDING["medium"], pady=PADDING["small"], before=self.metadata_frame)
-            
+                self.safety_frame.pack(
+                    fill="x",
+                    padx=PADDING["medium"],
+                    pady=PADDING["small"],
+                    before=self.metadata_frame,
+                )
+
             # Show Answer Content
             self.context_text.configure(state="normal")
             self.context_text.delete("1.0", "end")
-            self.context_text.insert("1.0", result.context) # The answer
-            
+            self.context_text.insert("1.0", result.context)  # The answer
+
             # Append Citations
-            citations = extra_data.get('citations', [])
+            citations = extra_data.get("citations", [])
             if citations:
                 self.context_text.insert("end", "\n\n📚 SOURCES:\n")
                 for c in citations:
                     ref = f"• {c['file_name']} (Page {c['page_number']})\n"
                     self.context_text.insert("end", ref)
-                    
+
             self.context_text.configure(state="disabled")
-            
+
             # Disable PDF buttons for synthesis
             self.open_btn.configure(state="disabled")
             self.copy_btn.configure(state="normal")
-            
+
             # Hide figures for synthesis (for now)
             self._clear_thumbnails()
             self.figures_header.configure(text="Figures (N/A):")
-            
+
         else:
             # --- STANDARD VIEW ---
-            display_series = config.KNOWN_SERIES.get(result.book_series, result.book_series)
+            display_series = config.KNOWN_SERIES.get(
+                result.book_series, result.book_series
+            )
             self.book_label.configure(text=f"Book: {display_series}")
             self.chapter_label.configure(text=f"Chapter: {result.display_name}")
             self.page_label.configure(text=f"Page: {result.page_number}")
 
             # Update match location info
-            match_count = getattr(result, 'match_count', 1)
-            location_icon = getattr(result, 'location_icon', '📄')
-            match_summary = getattr(result, 'match_summary', '')
+            match_count = getattr(result, "match_count", 1)
+            location_icon = getattr(result, "location_icon", "📄")
+            match_summary = getattr(result, "match_summary", "")
             if match_summary:
                 self.location_label.configure(text=f"{location_icon} {match_summary}")
             else:
@@ -272,8 +264,7 @@ class PreviewPanel(ctk.CTkFrame):
         # Get figures for this page
         try:
             figures = self.database.get_page_figures(
-                result.pdf_path,
-                result.page_number
+                result.pdf_path, result.page_number
             )
         except Exception as e:
             print(f"Error loading figures: {e}")
@@ -299,7 +290,7 @@ class PreviewPanel(ctk.CTkFrame):
                 self.thumbnail_frame,
                 text=f"+{overflow}",
                 font=FONTS["body"],
-                text_color="gray"
+                text_color="gray",
             )
             overflow_label.pack(side="left", padx=PADDING["small"])
 
@@ -334,9 +325,7 @@ class PreviewPanel(ctk.CTkFrame):
 
             # Create thumbnail container with border
             thumb_container = ctk.CTkFrame(
-                self.thumbnail_frame,
-                fg_color=border_color,
-                corner_radius=4
+                self.thumbnail_frame, fg_color=border_color, corner_radius=4
             )
             thumb_container.pack(side="left", padx=2, pady=2)
 
@@ -346,7 +335,7 @@ class PreviewPanel(ctk.CTkFrame):
                 image=photo,
                 text="",
                 width=THUMB_SIZE[0] + 4,
-                height=THUMB_SIZE[1] + 4
+                height=THUMB_SIZE[1] + 4,
             )
             thumb_label.pack(padx=2, pady=2)
 
@@ -396,6 +385,7 @@ class PreviewPanel(ctk.CTkFrame):
             subprocess.run(["open", image_path])
         elif sys.platform == "win32":  # Windows
             import os
+
             os.startfile(image_path)
         else:  # Linux
             subprocess.run(["xdg-open", image_path])
@@ -423,11 +413,10 @@ class PreviewPanel(ctk.CTkFrame):
             return
 
         pdf_path = self.current_result.pdf_path
-        
+
         if not pdf_path.exists():
             self.caption_label.configure(
-                text=f"Error: PDF not found at {pdf_path}",
-                text_color="red"
+                text=f"Error: PDF not found at {pdf_path}", text_color="red"
             )
             return
 
@@ -437,13 +426,13 @@ class PreviewPanel(ctk.CTkFrame):
                 subprocess.run(["open", "-a", "Preview", str(pdf_path)])
             elif sys.platform == "win32":  # Windows
                 import os
+
                 os.startfile(str(pdf_path))
             else:  # Linux
                 subprocess.run(["xdg-open", str(pdf_path)])
         except Exception as e:
             self.caption_label.configure(
-                text=f"Error opening PDF: {e}",
-                text_color="red"
+                text=f"Error opening PDF: {e}", text_color="red"
             )
 
     def _copy_reference(self):

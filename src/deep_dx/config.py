@@ -1,9 +1,10 @@
 """Deep-Dx Configuration - Extends NeuroSynth settings"""
 
 from pathlib import Path
+
+from neurosynth.config import get_settings as get_neurosynth_settings
 from pydantic import Field
 from pydantic_settings import BaseSettings
-from neurosynth.config import get_settings as get_neurosynth_settings
 
 
 class DeepDxSettings(BaseSettings):

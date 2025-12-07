@@ -15,9 +15,9 @@ Usage:
 import argparse
 import json
 import random
-from pathlib import Path
-from typing import List, Dict
 from datetime import datetime
+from pathlib import Path
+from typing import Dict, List
 
 try:
     from anthropic import Anthropic
@@ -72,7 +72,7 @@ IMPORTANT:
 """
 
 
-def load_pdf_chunks(pdf_path: Path, num_chunks: int = 10) -> List[Dict[str, str]]:
+def load_pdf_chunks(pdf_path: Path, num_chunks: int = 10) -> list[dict[str, str]]:
     """
     Extract text chunks from PDF using PyMuPDF.
 
@@ -96,7 +96,9 @@ def load_pdf_chunks(pdf_path: Path, num_chunks: int = 10) -> List[Dict[str, str]
         total_pages = len(doc)
 
         # Sample pages evenly across the document
-        sample_pages = sorted(random.sample(range(total_pages), min(num_chunks, total_pages)))
+        sample_pages = sorted(
+            random.sample(range(total_pages), min(num_chunks, total_pages))
+        )
 
         for page_num in sample_pages:
             page = doc[page_num]
@@ -108,13 +110,15 @@ def load_pdf_chunks(pdf_path: Path, num_chunks: int = 10) -> List[Dict[str, str]
 
             # Take first ~500 words
             words = text.split()[:500]
-            chunk_text = ' '.join(words)
+            chunk_text = " ".join(words)
 
-            chunks.append({
-                'text': chunk_text,
-                'source': f"{pdf_path.name}:p{page_num + 1}",
-                'page': page_num + 1
-            })
+            chunks.append(
+                {
+                    "text": chunk_text,
+                    "source": f"{pdf_path.name}:p{page_num + 1}",
+                    "page": page_num + 1,
+                }
+            )
 
         doc.close()
         return chunks
@@ -124,7 +128,9 @@ def load_pdf_chunks(pdf_path: Path, num_chunks: int = 10) -> List[Dict[str, str]
         return []
 
 
-def generate_query_from_chunk(client: Anthropic, chunk: Dict[str, str], model: str) -> Dict | None:
+def generate_query_from_chunk(
+    client: Anthropic, chunk: dict[str, str], model: str
+) -> dict | None:
     """
     Generate a candidate evaluation query from a text chunk using Claude.
 
@@ -137,15 +143,13 @@ def generate_query_from_chunk(client: Anthropic, chunk: Dict[str, str], model: s
         Query dict or None if generation fails
     """
     try:
-        prompt = QUERY_GENERATION_PROMPT.format(text=chunk['text'])
+        prompt = QUERY_GENERATION_PROMPT.format(text=chunk["text"])
 
         response = client.messages.create(
             model=model,
             max_tokens=1500,
             temperature=0.7,  # Some creativity for diverse questions
-            messages=[
-                {"role": "user", "content": prompt}
-            ]
+            messages=[{"role": "user", "content": prompt}],
         )
 
         # Extract JSON from response
@@ -160,14 +164,26 @@ def generate_query_from_chunk(client: Anthropic, chunk: Dict[str, str], model: s
         query_data = json.loads(content.strip())
 
         # Add metadata
-        query_data['source_file'] = chunk['source']
-        query_data['source_page'] = chunk.get('page', 0)
-        query_data['generated_date'] = datetime.now().isoformat()
-        query_data['negation_query'] = any(word in query_data['query'].lower()
-                                           for word in ['not', 'avoid', 'contraindication', 'never'])
-        query_data['spatial_query'] = any(word in query_data['query'].lower()
-                                          for word in ['anterior', 'posterior', 'medial', 'lateral',
-                                                      'superior', 'inferior', 'above', 'below'])
+        query_data["source_file"] = chunk["source"]
+        query_data["source_page"] = chunk.get("page", 0)
+        query_data["generated_date"] = datetime.now().isoformat()
+        query_data["negation_query"] = any(
+            word in query_data["query"].lower()
+            for word in ["not", "avoid", "contraindication", "never"]
+        )
+        query_data["spatial_query"] = any(
+            word in query_data["query"].lower()
+            for word in [
+                "anterior",
+                "posterior",
+                "medial",
+                "lateral",
+                "superior",
+                "inferior",
+                "above",
+                "below",
+            ]
+        )
 
         return query_data
 
@@ -181,14 +197,29 @@ def generate_query_from_chunk(client: Anthropic, chunk: Dict[str, str], model: s
 
 def main():
     parser = argparse.ArgumentParser(description="Generate evaluation query candidates")
-    parser.add_argument("--num-queries", type=int, default=150,
-                       help="Number of candidate queries to generate (default: 150)")
-    parser.add_argument("--pdf-dir", type=Path,
-                       help="Directory containing PDFs (default: from NeuroSynth config)")
-    parser.add_argument("--output", type=Path, default=Path("generated_candidates.json"),
-                       help="Output file for generated candidates")
-    parser.add_argument("--model", type=str, default="claude-sonnet-4-20250514",
-                       help="Claude model to use")
+    parser.add_argument(
+        "--num-queries",
+        type=int,
+        default=150,
+        help="Number of candidate queries to generate (default: 150)",
+    )
+    parser.add_argument(
+        "--pdf-dir",
+        type=Path,
+        help="Directory containing PDFs (default: from NeuroSynth config)",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("generated_candidates.json"),
+        help="Output file for generated candidates",
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="claude-sonnet-4-20250514",
+        help="Claude model to use",
+    )
     args = parser.parse_args()
 
     # Get PDF directory from NeuroSynth config if not specified
@@ -244,7 +275,7 @@ def main():
             query_data = generate_query_from_chunk(client, chunk, args.model)
             if query_data:
                 # Add ID
-                query_data['id'] = f"Q{len(candidates) + 1:03d}"
+                query_data["id"] = f"Q{len(candidates) + 1:03d}"
                 candidates.append(query_data)
                 print(f"  ✓ Generated: {query_data['query'][:60]}...")
 
@@ -259,9 +290,9 @@ def main():
             "total_queries": len(candidates),
             "source_directory": str(args.pdf_dir),
             "model_used": args.model,
-            "notes": "THESE ARE CANDIDATES - Review and curate before using as gold standard"
+            "notes": "THESE ARE CANDIDATES - Review and curate before using as gold standard",
         },
-        "queries": candidates
+        "queries": candidates,
     }
 
     # Save
@@ -274,13 +305,15 @@ def main():
     print("  2. Edit/fix any incorrect queries")
     print("  3. Select best 100 queries")
     print("  4. Rename to gold_standard_eval.json")
-    print("  5. Run validation: python validate_eval_dataset.py gold_standard_eval.json")
+    print(
+        "  5. Run validation: python validate_eval_dataset.py gold_standard_eval.json"
+    )
 
     # Print distribution
     print("\n📊 Query Type Distribution:")
     type_counts = {}
     for q in candidates:
-        qtype = q['query_type']
+        qtype = q["query_type"]
         type_counts[qtype] = type_counts.get(qtype, 0) + 1
 
     for qtype, count in sorted(type_counts.items()):

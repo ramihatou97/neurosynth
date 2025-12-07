@@ -42,7 +42,9 @@ class TestAsyncAIClient:
         from ai.async_client import AsyncAIClient
 
         client = AsyncAIClient()
+        # Set mock client AND loop id to prevent lazy client creation
         client._client = mock_httpx_client
+        client._client_loop_id = id(asyncio.get_running_loop())
 
         # Act
         embedding = await client.get_embedding("test query")
@@ -65,9 +67,11 @@ class TestAsyncAIClient:
         mock_httpx_client.post = AsyncMock(return_value=mock_response)
 
         from ai.async_client import AsyncAIClient
-        
+
         client = AsyncAIClient()
+        # Set mock client AND loop id to prevent lazy client creation
         client._client = mock_httpx_client
+        client._client_loop_id = id(asyncio.get_running_loop())
 
         # Act
         result = await client.synthesize(
@@ -97,7 +101,9 @@ class TestAsyncAIClient:
         from ai.async_client import AsyncAIClient
 
         client = AsyncAIClient()
+        # Set mock client AND loop id to prevent lazy client creation
         client._client = mock_httpx_client
+        client._client_loop_id = id(asyncio.get_running_loop())
 
         # Act
         embeddings = await client.get_embeddings(["query1", "query2"])
@@ -110,9 +116,11 @@ class TestAsyncAIClient:
     async def test_client_close(self, mock_env, mock_httpx_client):
         """Test client cleanup."""
         from ai.async_client import AsyncAIClient
-        
+
         client = AsyncAIClient()
+        # Set mock client AND loop id to prevent lazy client creation
         client._client = mock_httpx_client
+        client._client_loop_id = id(asyncio.get_running_loop())
         mock_httpx_client.aclose = AsyncMock()
 
         # Act

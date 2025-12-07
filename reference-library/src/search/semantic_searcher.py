@@ -1,7 +1,8 @@
 """Semantic search engine using vector embeddings."""
+
 import threading
 from pathlib import Path
-from typing import List, Dict, Any, Optional, TYPE_CHECKING
+from typing import Any, Optional
 
 # Lazy imports for fast startup - these are heavy modules
 chromadb = None
@@ -9,6 +10,7 @@ SentenceTransformer = None
 SEMANTIC_AVAILABLE = None  # Determined on first use
 
 from src import config
+
 from ..cache.database import Database
 
 
@@ -20,12 +22,14 @@ def _lazy_load_semantic():
     try:
         import chromadb as _chromadb
         from sentence_transformers import SentenceTransformer as _SentenceTransformer
+
         chromadb = _chromadb
         SentenceTransformer = _SentenceTransformer
         SEMANTIC_AVAILABLE = True
     except ImportError:
         SEMANTIC_AVAILABLE = False
     return SEMANTIC_AVAILABLE
+
 
 # ChromaDB batch size limit (well under the 5461 HNSW limit)
 CHROMADB_BATCH_SIZE = 1000
@@ -88,31 +92,39 @@ class SemanticSearcher:
                 metadata={
                     "hnsw:space": "cosine",
                     "model": config.EMBEDDING_MODEL,
-                    "model_type": config.EMBEDDING_MODEL_TYPE
-                }
+                    "model_type": config.EMBEDDING_MODEL_TYPE,
+                },
             )
 
             # Create or get collection for figure captions
-            self.captions_collection_name = f"figure_captions_{config.EMBEDDING_MODEL_TYPE}"
+            self.captions_collection_name = (
+                f"figure_captions_{config.EMBEDDING_MODEL_TYPE}"
+            )
             self.captions_collection = self.client.get_or_create_collection(
                 name=self.captions_collection_name,
                 metadata={
                     "hnsw:space": "cosine",
                     "model": config.EMBEDDING_MODEL,
-                    "model_type": config.EMBEDDING_MODEL_TYPE
-                }
+                    "model_type": config.EMBEDDING_MODEL_TYPE,
+                },
             )
 
             # Load model (downloads on first run)
-            print(f"Loading embedding model: {config.EMBEDDING_MODEL} ({config.EMBEDDING_MODEL_TYPE})")
+            print(
+                f"Loading embedding model: {config.EMBEDDING_MODEL} ({config.EMBEDDING_MODEL_TYPE})"
+            )
             self.model = SentenceTransformer(config.EMBEDDING_MODEL)
-            print(f"Semantic search initialized successfully with {config.EMBEDDING_MODEL_TYPE} model")
+            print(
+                f"Semantic search initialized successfully with {config.EMBEDDING_MODEL_TYPE} model"
+            )
 
         except Exception as e:
             print(f"Failed to initialize semantic search: {e}")
             self.enabled = False
 
-    def index_page(self, pdf_path: Path, page_number: int, text: str, checksum: str) -> bool:
+    def index_page(
+        self, pdf_path: Path, page_number: int, text: str, checksum: str
+    ) -> bool:
         """
         Embed and index a single page.
 
@@ -147,11 +159,13 @@ class SemanticSearcher:
                 self.collection.upsert(
                     ids=[doc_id],
                     embeddings=[embedding],
-                    metadatas=[{
-                        "pdf_path": str(pdf_path),
-                        "page_number": page_number,
-                        "checksum": checksum
-                    }]
+                    metadatas=[
+                        {
+                            "pdf_path": str(pdf_path),
+                            "page_number": page_number,
+                            "checksum": checksum,
+                        }
+                    ],
                 )
 
             # Track in SQLite for cache management
@@ -168,18 +182,15 @@ class SemanticSearcher:
         This spawns a separate Python process that has its own GIL,
         so the main process UI thread remains responsive.
         """
-        import subprocess
         import json
+        import subprocess
         import sys
 
         # Path to the worker script
         worker_path = Path(__file__).parent.parent / "utils" / "embedding_worker.py"
 
         # Prepare input
-        input_data = json.dumps({
-            "texts": texts,
-            "model": config.EMBEDDING_MODEL
-        })
+        input_data = json.dumps({"texts": texts, "model": config.EMBEDDING_MODEL})
 
         # Run subprocess
         result = subprocess.run(
@@ -187,7 +198,7 @@ class SemanticSearcher:
             input=input_data,
             capture_output=True,
             text=True,
-            timeout=300  # 5 minute timeout
+            timeout=300,  # 5 minute timeout
         )
 
         if result.returncode != 0:
@@ -202,7 +213,7 @@ class SemanticSearcher:
         pdf_path: Path,
         pages: dict[int, str],
         checksum: str,
-        use_subprocess: bool = True
+        use_subprocess: bool = True,
     ) -> int:
         """
         Batch embed and index multiple pages.
@@ -237,7 +248,9 @@ class SemanticSearcher:
                 embeddings = self._encode_subprocess(texts)
             else:
                 with self._model_lock:
-                    embeddings = self.model.encode(texts, show_progress_bar=False).tolist()
+                    embeddings = self.model.encode(
+                        texts, show_progress_bar=False
+                    ).tolist()
 
             # Prepare batch data for ChromaDB
             ids = []
@@ -245,22 +258,24 @@ class SemanticSearcher:
             for i, (page_num, _) in enumerate(to_index):
                 doc_id = f"{pdf_path}:{page_num + 1}"
                 ids.append(doc_id)
-                metas.append({
-                    "pdf_path": str(pdf_path),
-                    "page_number": page_num + 1,
-                    "checksum": checksum
-                })
+                metas.append(
+                    {
+                        "pdf_path": str(pdf_path),
+                        "page_number": page_num + 1,
+                        "checksum": checksum,
+                    }
+                )
 
             # Batch upsert to ChromaDB with chunking to avoid HNSW limits
             with self._collection_lock:
                 for i in range(0, len(ids), CHROMADB_BATCH_SIZE):
-                    batch_ids = ids[i:i + CHROMADB_BATCH_SIZE]
-                    batch_embeddings = embeddings[i:i + CHROMADB_BATCH_SIZE]
-                    batch_metas = metas[i:i + CHROMADB_BATCH_SIZE]
+                    batch_ids = ids[i : i + CHROMADB_BATCH_SIZE]
+                    batch_embeddings = embeddings[i : i + CHROMADB_BATCH_SIZE]
+                    batch_metas = metas[i : i + CHROMADB_BATCH_SIZE]
                     self.collection.upsert(
                         ids=batch_ids,
                         embeddings=batch_embeddings,
-                        metadatas=batch_metas
+                        metadatas=batch_metas,
                     )
 
             # Track in SQLite
@@ -273,8 +288,9 @@ class SemanticSearcher:
             print(f"Error batch indexing {pdf_path.name}: {e}")
             return 0
 
-    def search(self, query: str, n_results: int = 30,
-               category_filter: Optional[str] = None) -> List[Dict[str, Any]]:
+    def search(
+        self, query: str, n_results: int = 30, category_filter: Optional[str] = None
+    ) -> list[dict[str, Any]]:
         """
         Perform semantic search with optional category filtering.
 
@@ -307,24 +323,28 @@ class SemanticSearcher:
                     query_embeddings=[query_embedding],
                     n_results=n_results,
                     where=where,  # Apply category filter if specified
-                    include=["metadatas", "distances"]
+                    include=["metadatas", "distances"],
                 )
 
             # Transform to cleaner format
             clean_results = []
-            if not results['ids'] or not results['ids'][0]:
+            if not results["ids"] or not results["ids"][0]:
                 return []
 
-            for i in range(len(results['ids'][0])):
-                meta = results['metadatas'][0][i]
+            for i in range(len(results["ids"][0])):
+                meta = results["metadatas"][0][i]
                 # Convert cosine distance to similarity score
-                score = 1.0 - results['distances'][0][i]
-                clean_results.append({
-                    "pdf_path": Path(meta["pdf_path"]),
-                    "page_number": int(meta["page_number"]),
-                    "score": score,
-                    "category_group": meta.get("category_group")  # Include if available
-                })
+                score = 1.0 - results["distances"][0][i]
+                clean_results.append(
+                    {
+                        "pdf_path": Path(meta["pdf_path"]),
+                        "page_number": int(meta["page_number"]),
+                        "score": score,
+                        "category_group": meta.get(
+                            "category_group"
+                        ),  # Include if available
+                    }
+                )
 
             return clean_results
 
@@ -332,8 +352,9 @@ class SemanticSearcher:
             print(f"Semantic search error: {e}")
             return []
 
-    def update_page_category(self, pdf_path: Path, page_number: int,
-                            category_group: str, category: str):
+    def update_page_category(
+        self, pdf_path: Path, page_number: int, category_group: str, category: str
+    ):
         """
         Update category metadata for an already-indexed page.
 
@@ -355,23 +376,22 @@ class SemanticSearcher:
             # Get existing metadata (thread-safe)
             with self._collection_lock:
                 existing = self.collection.get(ids=[doc_id], include=["metadatas"])
-                if not existing['ids']:
+                if not existing["ids"]:
                     return  # Page not indexed yet
 
                 # Update metadata
-                metadata = existing['metadatas'][0]
+                metadata = existing["metadatas"][0]
                 metadata["category_group"] = category_group
                 metadata["category"] = category
 
                 # Update in ChromaDB (requires re-upserting with same embedding)
                 # Note: ChromaDB doesn't have a metadata-only update, so we keep the embedding
-                self.collection.update(
-                    ids=[doc_id],
-                    metadatas=[metadata]
-                )
+                self.collection.update(ids=[doc_id], metadatas=[metadata])
 
         except Exception as e:
-            print(f"Warning: Failed to update category for {pdf_path.name} p{page_number}: {e}")
+            print(
+                f"Warning: Failed to update category for {pdf_path.name} p{page_number}: {e}"
+            )
 
     def get_indexed_count(self) -> int:
         """Get number of indexed pages in ChromaDB."""
@@ -392,7 +412,7 @@ class SemanticSearcher:
                 "enabled": False,
                 "model": None,
                 "model_type": None,
-                "indexed_count": 0
+                "indexed_count": 0,
             }
 
         return {
@@ -400,7 +420,7 @@ class SemanticSearcher:
             "model": config.EMBEDDING_MODEL,
             "model_type": config.EMBEDDING_MODEL_TYPE,
             "indexed_count": self.get_indexed_count(),
-            "collection_name": self.collection.name if self.collection else None
+            "collection_name": self.collection.name if self.collection else None,
         }
 
     def clear_index(self):
@@ -418,8 +438,8 @@ class SemanticSearcher:
                     metadata={
                         "hnsw:space": "cosine",
                         "model": config.EMBEDDING_MODEL,
-                        "model_type": config.EMBEDDING_MODEL_TYPE
-                    }
+                        "model_type": config.EMBEDDING_MODEL_TYPE,
+                    },
                 )
             # Also clear SQLite tracking
             self.database.clear_semantic_index()
@@ -435,7 +455,7 @@ class SemanticSearcher:
         caption: str,
         pdf_path: Path,
         page_number: int,
-        image_type: str = "unknown"
+        image_type: str = "unknown",
     ) -> bool:
         """
         Embed and index a figure caption.
@@ -467,12 +487,16 @@ class SemanticSearcher:
                 self.captions_collection.upsert(
                     ids=[figure_id],
                     embeddings=[embedding],
-                    metadatas=[{
-                        "pdf_path": str(pdf_path),
-                        "page_number": page_number,
-                        "image_type": image_type,
-                        "caption_preview": caption[:200]  # Store preview for display
-                    }]
+                    metadatas=[
+                        {
+                            "pdf_path": str(pdf_path),
+                            "page_number": page_number,
+                            "image_type": image_type,
+                            "caption_preview": caption[
+                                :200
+                            ],  # Store preview for display
+                        }
+                    ],
                 )
 
             # Track in SQLite (figure_id used as both element_id and point_id for ChromaDB)
@@ -484,9 +508,7 @@ class SemanticSearcher:
             return False
 
     def index_figures_batch(
-        self,
-        figures: List[Dict[str, Any]],
-        on_progress: Optional[callable] = None
+        self, figures: list[dict[str, Any]], on_progress: Optional[callable] = None
     ) -> int:
         """
         Batch index figure captions.
@@ -512,7 +534,7 @@ class SemanticSearcher:
                     caption=caption,
                     pdf_path=Path(fig["pdf_path"]),
                     page_number=fig["page_number"],
-                    image_type=fig.get("image_type", "unknown")
+                    image_type=fig.get("image_type", "unknown"),
                 )
                 if success:
                     indexed += 1
@@ -523,11 +545,8 @@ class SemanticSearcher:
         return indexed
 
     def search_captions(
-        self,
-        query: str,
-        n_results: int = 20,
-        image_types: Optional[List[str]] = None
-    ) -> List[Dict[str, Any]]:
+        self, query: str, n_results: int = 20, image_types: Optional[list[str]] = None
+    ) -> list[dict[str, Any]]:
         """
         Search figure captions semantically.
 
@@ -558,25 +577,27 @@ class SemanticSearcher:
                     query_embeddings=[query_embedding],
                     n_results=n_results,
                     where=where,
-                    include=["metadatas", "distances"]
+                    include=["metadatas", "distances"],
                 )
 
             # Transform to cleaner format
             clean_results = []
-            if not results['ids'] or not results['ids'][0]:
+            if not results["ids"] or not results["ids"][0]:
                 return []
 
-            for i in range(len(results['ids'][0])):
-                meta = results['metadatas'][0][i]
-                score = 1.0 - results['distances'][0][i]
-                clean_results.append({
-                    "figure_id": results['ids'][0][i],
-                    "pdf_path": Path(meta["pdf_path"]),
-                    "page_number": int(meta["page_number"]),
-                    "image_type": meta.get("image_type", "unknown"),
-                    "caption_preview": meta.get("caption_preview", ""),
-                    "score": score
-                })
+            for i in range(len(results["ids"][0])):
+                meta = results["metadatas"][0][i]
+                score = 1.0 - results["distances"][0][i]
+                clean_results.append(
+                    {
+                        "figure_id": results["ids"][0][i],
+                        "pdf_path": Path(meta["pdf_path"]),
+                        "page_number": int(meta["page_number"]),
+                        "image_type": meta.get("image_type", "unknown"),
+                        "caption_preview": meta.get("caption_preview", ""),
+                        "score": score,
+                    }
+                )
 
             return clean_results
 
@@ -589,8 +610,8 @@ class SemanticSearcher:
         query: str,
         n_text_results: int = 30,
         n_caption_results: int = 15,
-        include_captions: bool = True
-    ) -> Dict[str, List[Dict[str, Any]]]:
+        include_captions: bool = True,
+    ) -> dict[str, list[dict[str, Any]]]:
         """
         Perform combined search across text and captions.
 
@@ -605,7 +626,7 @@ class SemanticSearcher:
         """
         results = {
             "text_results": self.search(query, n_text_results),
-            "caption_results": []
+            "caption_results": [],
         }
 
         if include_captions:
@@ -640,8 +661,8 @@ class SemanticSearcher:
                     metadata={
                         "hnsw:space": "cosine",
                         "model": config.EMBEDDING_MODEL,
-                        "model_type": config.EMBEDDING_MODEL_TYPE
-                    }
+                        "model_type": config.EMBEDDING_MODEL_TYPE,
+                    },
                 )
             print("Caption index cleared")
         except Exception as e:

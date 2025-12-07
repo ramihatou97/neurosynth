@@ -1,8 +1,9 @@
 """Search panel component with input and filters."""
-import customtkinter as ctk
-from typing import Callable
 
-from src import config
+from collections.abc import Callable
+
+import customtkinter as ctk
+
 from .styles import FONTS, PADDING
 
 
@@ -15,7 +16,7 @@ class SearchPanel(ctk.CTkFrame):
         on_search: Callable[[str], None],  # (query)
         on_cancel: Callable[[], None],
         database=None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(parent, **kwargs)
         self.on_search = on_search
@@ -36,26 +37,28 @@ class SearchPanel(ctk.CTkFrame):
         search_frame.pack(fill="x", padx=PADDING["medium"], pady=(0, PADDING["medium"]))
 
         # Search label
-        ctk.CTkLabel(
-            search_frame,
-            text="Search Subject:",
-            font=FONTS["body"]
-        ).pack(side="left", padx=(0, PADDING["small"]))
+        ctk.CTkLabel(search_frame, text="Search Subject:", font=FONTS["body"]).pack(
+            side="left", padx=(0, PADDING["small"])
+        )
 
         # Search entry
         self.search_entry = ctk.CTkEntry(
             search_frame,
             width=300,
             placeholder_text="Enter neurosurgical topic (e.g., vestibular schwannoma)",
-            font=FONTS["body"]
+            font=FONTS["body"],
         )
-        self.search_entry.pack(side="left", fill="x", expand=True, padx=PADDING["small"])
+        self.search_entry.pack(
+            side="left", fill="x", expand=True, padx=PADDING["small"]
+        )
         self.search_entry.bind("<Return>", lambda e: self._do_search())
         self.search_entry.bind("<KeyRelease>", self._on_key_release)
         self.search_entry.bind("<Down>", self._on_arrow_down)
         self.search_entry.bind("<Up>", self._on_arrow_up)
         self.search_entry.bind("<Escape>", lambda e: self._hide_autocomplete())
-        self.search_entry.bind("<FocusOut>", lambda e: self.after(100, self._hide_autocomplete))
+        self.search_entry.bind(
+            "<FocusOut>", lambda e: self.after(100, self._hide_autocomplete)
+        )
 
         # History button (recent searches)
         self.history_btn = ctk.CTkButton(
@@ -63,7 +66,7 @@ class SearchPanel(ctk.CTkFrame):
             text="History",
             command=self._show_history_menu,
             width=60,
-            font=FONTS["small"]
+            font=FONTS["small"],
         )
         self.history_btn.pack(side="left", padx=(0, PADDING["small"]))
 
@@ -75,7 +78,7 @@ class SearchPanel(ctk.CTkFrame):
             variable=self.strategy_var,
             width=120,
             font=FONTS["small"],
-            command=self._on_strategy_change
+            command=self._on_strategy_change,
         )
         self.strategy_selector.pack(side="left", padx=(0, PADDING["small"]))
         # Set default display
@@ -87,7 +90,7 @@ class SearchPanel(ctk.CTkFrame):
             text="Search",
             command=self._do_search,
             width=80,
-            font=FONTS["body"]
+            font=FONTS["body"],
         )
         self.search_btn.pack(side="left", padx=PADDING["small"])
 
@@ -99,7 +102,7 @@ class SearchPanel(ctk.CTkFrame):
             width=80,
             fg_color="#e74c3c",
             hover_color="#c0392b",
-            font=FONTS["body"]
+            font=FONTS["body"],
         )
         # Don't pack yet - will show when searching
 
@@ -108,15 +111,14 @@ class SearchPanel(ctk.CTkFrame):
         # Don't pack initially - shown when related terms found
 
         self.related_label = ctk.CTkLabel(
-            self.related_frame,
-            text="Also try:",
-            font=FONTS["small"],
-            text_color="gray"
+            self.related_frame, text="Also try:", font=FONTS["small"], text_color="gray"
         )
         self.related_label.pack(side="left", padx=(PADDING["medium"], PADDING["small"]))
 
         # Frame to hold clickable term buttons
-        self.related_terms_frame = ctk.CTkFrame(self.related_frame, fg_color="transparent")
+        self.related_terms_frame = ctk.CTkFrame(
+            self.related_frame, fg_color="transparent"
+        )
         self.related_terms_frame.pack(side="left", fill="x")
 
         self._related_term_buttons = []
@@ -124,11 +126,15 @@ class SearchPanel(ctk.CTkFrame):
     def _do_search(self):
         """Trigger search callback."""
         # If autocomplete is open and a suggestion is selected, use it
-        if (self._autocomplete_popup and
-            hasattr(self, '_suggestion_buttons') and
-            self._selected_suggestion_idx >= 0 and
-            self._selected_suggestion_idx < len(self._suggestion_buttons)):
-            suggestion = self._suggestion_buttons[self._selected_suggestion_idx].cget("text")
+        if (
+            self._autocomplete_popup
+            and hasattr(self, "_suggestion_buttons")
+            and self._selected_suggestion_idx >= 0
+            and self._selected_suggestion_idx < len(self._suggestion_buttons)
+        ):
+            suggestion = self._suggestion_buttons[self._selected_suggestion_idx].cget(
+                "text"
+            )
             self._hide_autocomplete()
             self.set_query(suggestion)
 
@@ -159,7 +165,7 @@ class SearchPanel(ctk.CTkFrame):
             "🎯 Strict": "Exact matches only, high authority sources",
             "⚖️ Standard": "Balanced search with query expansion",
             "📚 Study Mode": "Foundational knowledge + anatomy + techniques",
-            "🧠 Deep Search": "AI Synthesis + Safety Verification (Slower)"
+            "🧠 Deep Search": "AI Synthesis + Safety Verification (Slower)",
         }
         desc = descriptions.get(value, "")
         if desc:
@@ -168,25 +174,22 @@ class SearchPanel(ctk.CTkFrame):
     def _show_strategy_hint(self, text: str):
         """Show a temporary hint below the search bar."""
         # Create hint label if not exists
-        if not hasattr(self, '_strategy_hint'):
+        if not hasattr(self, "_strategy_hint"):
             self._strategy_hint = ctk.CTkLabel(
-                self,
-                text="",
-                font=FONTS["small"],
-                text_color="#3498db"
+                self, text="", font=FONTS["small"], text_color="#3498db"
             )
 
         self._strategy_hint.configure(text=text)
         self._strategy_hint.pack(fill="x", padx=PADDING["medium"], pady=(0, 4))
 
         # Auto-hide after 2 seconds
-        if hasattr(self, '_hint_after_id') and self._hint_after_id:
+        if hasattr(self, "_hint_after_id") and self._hint_after_id:
             self.after_cancel(self._hint_after_id)
         self._hint_after_id = self.after(2000, self._hide_strategy_hint)
 
     def _hide_strategy_hint(self):
         """Hide the strategy hint."""
-        if hasattr(self, '_strategy_hint'):
+        if hasattr(self, "_strategy_hint"):
             self._strategy_hint.pack_forget()
 
     def set_searching(self, is_searching: bool):
@@ -233,7 +236,7 @@ class SearchPanel(ctk.CTkFrame):
                 text_color="#3498db",
                 hover_color="#2c3e50",
                 height=24,
-                command=lambda t=term: self._on_related_term_click(t)
+                command=lambda t=term: self._on_related_term_click(t),
             )
             btn.pack(side="left", padx=2)
             self._related_term_buttons.append(btn)
@@ -285,10 +288,7 @@ class SearchPanel(ctk.CTkFrame):
 
         # Header
         ctk.CTkLabel(
-            frame,
-            text="Recent Searches",
-            font=FONTS["small"],
-            text_color="gray"
+            frame, text="Recent Searches", font=FONTS["small"], text_color="gray"
         ).pack(padx=PADDING["small"], pady=(PADDING["small"], 0))
 
         # Add each recent search
@@ -302,7 +302,7 @@ class SearchPanel(ctk.CTkFrame):
                 fg_color="transparent",
                 hover_color=("gray80", "gray30"),
                 anchor="w",
-                command=lambda q=query, p=popup: self._select_history_item(q, p)
+                command=lambda q=query, p=popup: self._select_history_item(q, p),
             )
             btn.pack(fill="x", padx=PADDING["small"], pady=2)
 
@@ -341,10 +341,7 @@ class SearchPanel(ctk.CTkFrame):
             return
 
         # Get suggestions
-        suggestions = self.database.get_search_suggestions(
-            query,
-            limit=7
-        )
+        suggestions = self.database.get_search_suggestions(query, limit=7)
         if not suggestions:
             self._hide_autocomplete()
             return
@@ -362,7 +359,9 @@ class SearchPanel(ctk.CTkFrame):
         x = self.search_entry.winfo_rootx()
         y = self.search_entry.winfo_rooty() + self.search_entry.winfo_height()
         width = self.search_entry.winfo_width()
-        self._autocomplete_popup.geometry(f"{width}x{len(suggestions) * 30 + 10}+{x}+{y}")
+        self._autocomplete_popup.geometry(
+            f"{width}x{len(suggestions) * 30 + 10}+{x}+{y}"
+        )
 
         # Frame
         frame = ctk.CTkFrame(self._autocomplete_popup, corner_radius=4)
@@ -381,7 +380,7 @@ class SearchPanel(ctk.CTkFrame):
                 hover_color=("gray80", "gray30"),
                 anchor="w",
                 height=28,
-                command=lambda s=suggestion: self._select_suggestion(s)
+                command=lambda s=suggestion: self._select_suggestion(s),
             )
             btn.pack(fill="x", padx=2, pady=1)
             self._suggestion_buttons.append(btn)
@@ -401,16 +400,19 @@ class SearchPanel(ctk.CTkFrame):
 
         # Unhighlight current
         if self._selected_suggestion_idx >= 0:
-            self._suggestion_buttons[self._selected_suggestion_idx].configure(fg_color="transparent")
+            self._suggestion_buttons[self._selected_suggestion_idx].configure(
+                fg_color="transparent"
+            )
 
         # Move down
         self._selected_suggestion_idx = min(
-            self._selected_suggestion_idx + 1,
-            len(self._suggestion_buttons) - 1
+            self._selected_suggestion_idx + 1, len(self._suggestion_buttons) - 1
         )
 
         # Highlight new
-        self._suggestion_buttons[self._selected_suggestion_idx].configure(fg_color=("gray80", "gray30"))
+        self._suggestion_buttons[self._selected_suggestion_idx].configure(
+            fg_color=("gray80", "gray30")
+        )
         return "break"
 
     def _on_arrow_up(self, event):
@@ -420,13 +422,17 @@ class SearchPanel(ctk.CTkFrame):
 
         # Unhighlight current
         if self._selected_suggestion_idx >= 0:
-            self._suggestion_buttons[self._selected_suggestion_idx].configure(fg_color="transparent")
+            self._suggestion_buttons[self._selected_suggestion_idx].configure(
+                fg_color="transparent"
+            )
 
         # Move up
         self._selected_suggestion_idx = max(self._selected_suggestion_idx - 1, 0)
 
         # Highlight new
-        self._suggestion_buttons[self._selected_suggestion_idx].configure(fg_color=("gray80", "gray30"))
+        self._suggestion_buttons[self._selected_suggestion_idx].configure(
+            fg_color=("gray80", "gray30")
+        )
         return "break"
 
     def _select_suggestion(self, suggestion: str):

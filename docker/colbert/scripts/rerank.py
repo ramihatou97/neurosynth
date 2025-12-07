@@ -26,84 +26,86 @@ Output JSON format:
 }
 """
 
-import json
 import argparse
-import time
+import json
 import sys
+import time
 from pathlib import Path
+
 
 def main():
     parser = argparse.ArgumentParser(description="ColBERT Reranking")
     parser.add_argument("--input", required=True, help="Input JSON file path")
     parser.add_argument("--output", required=True, help="Output JSON file path")
-    parser.add_argument("--model", default="colbert-ir/colbertv2.0", help="ColBERT model")
+    parser.add_argument(
+        "--model", default="colbert-ir/colbertv2.0", help="ColBERT model"
+    )
     args = parser.parse_args()
-    
+
     start_time = time.time()
-    
+
     try:
         # Load input
-        with open(args.input, 'r') as f:
+        with open(args.input) as f:
             data = json.load(f)
-        
+
         query = data["query"]
         documents = data["documents"]
         k = data.get("k", 20)
-        
+
         if len(documents) == 0:
             # No documents to rerank
-            result = {
-                "results": [],
-                "query": query,
-                "time_ms": 0
-            }
-            with open(args.output, 'w') as f:
+            result = {"results": [], "query": query, "time_ms": 0}
+            with open(args.output, "w") as f:
                 json.dump(result, f)
             return
-        
+
         # Load ColBERT model
         from ragatouille import RAGPretrainedModel
+
         model = RAGPretrainedModel.from_pretrained(args.model)
-        
+
         # Perform reranking
         rerank_results = model.rerank(
-            query=query,
-            documents=documents,
-            k=min(k, len(documents))
+            query=query, documents=documents, k=min(k, len(documents))
         )
-        
+
         # Format results
         results = []
         for r in rerank_results:
-            results.append({
-                "index": r["result_index"],
-                "score": float(r["score"]),
-                "text": r["content"][:500]  # Truncate for response
-            })
-        
+            results.append(
+                {
+                    "index": r["result_index"],
+                    "score": float(r["score"]),
+                    "text": r["content"][:500],  # Truncate for response
+                }
+            )
+
         elapsed_ms = (time.time() - start_time) * 1000
-        
+
         output = {
             "results": results,
             "query": query,
             "time_ms": elapsed_ms,
-            "model": args.model
+            "model": args.model,
         }
-        
+
         # Write output
-        with open(args.output, 'w') as f:
+        with open(args.output, "w") as f:
             json.dump(output, f, indent=2)
-        
-        print(f"✅ Reranked {len(documents)} documents to top {len(results)} in {elapsed_ms:.1f}ms")
-        
+
+        print(
+            f"✅ Reranked {len(documents)} documents to top {len(results)} in {elapsed_ms:.1f}ms"
+        )
+
     except Exception as e:
         error_output = {
             "error": str(e),
             "results": [],
-            "query": data.get("query", "") if 'data' in dir() else "",
-            "time_ms": (time.time() - start_time) * 1000
+            "query": data.get("query", "") if "data" in dir() else "",
+            "time_ms": (time.time() - start_time) * 1000,
         }
-        with open(args.output, 'w') as f:
+        with open(args.output, "w") as f:
             json.dump(error_output, f)
         print(f"❌ Error: {e}", file=sys.stderr)
         sys.exit(1)

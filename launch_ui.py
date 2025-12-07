@@ -1,12 +1,12 @@
-import sys
 import os
-from pathlib import Path
 import subprocess
+import sys
+from pathlib import Path
 
 # Paths
-current_dir = Path(__file__).resolve().parent    # neurosynth/
+current_dir = Path(__file__).resolve().parent  # neurosynth/
 ref_lib_dir = current_dir / "reference-library"  # neurosynth/reference-library/
-deep_dx_src = current_dir / "src"                # neurosynth/src/
+deep_dx_src = current_dir / "src"  # neurosynth/src/
 
 # Verify paths
 if not ref_lib_dir.exists():
@@ -36,7 +36,9 @@ env["PYTHONPATH"] = f"{deep_dx_src}:{current_python_path}"
 # Launch
 try:
     # Run python with the main.py script
-    subprocess.run([sys.executable, str(main_py)], env=env, cwd=str(ref_lib_dir), check=True)
+    subprocess.run(
+        [sys.executable, str(main_py)], env=env, cwd=str(ref_lib_dir), check=True
+    )
 except subprocess.CalledProcessError as e:
     print(f"Application exited with code: {e.returncode}")
 except KeyboardInterrupt:

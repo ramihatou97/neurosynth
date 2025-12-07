@@ -59,14 +59,12 @@ class AsyncAIClient:
             or settings.anthropic_api_key
             or os.getenv("ANTHROPIC_API_KEY")
         )
-
+        self._timeout = timeout
         self._validate_keys()
 
-        # Persistent client with connection pooling
-        self._client = httpx.AsyncClient(
-            timeout=timeout,
-            limits=httpx.Limits(max_keepalive_connections=20, max_connections=100),
-        )
+        # Lazy-initialized client to support multiple event loops (GUI threading)
+        self._client: Optional[httpx.AsyncClient] = None
+        self._client_loop_id: Optional[int] = None
         logger.info("AsyncAIClient initialized with connection pooling")
 
     def _validate_keys(self):
@@ -81,6 +79,43 @@ class AsyncAIClient:
                 "Anthropic API key required. Set ANTHROPIC_API_KEY environment variable "
                 "or pass anthropic_api_key parameter."
             )
+
+    # ========================================================================
+    # Client Management (supports multiple event loops for GUI threading)
+    # ========================================================================
+
+    def _get_client(self) -> httpx.AsyncClient:
+        """Get or create an httpx.AsyncClient for the current event loop.
+
+        This handles the case where the GUI creates new event loops per search,
+        which would otherwise break a pre-created client.
+        """
+        import asyncio
+
+        try:
+            current_loop = asyncio.get_running_loop()
+            current_loop_id = id(current_loop)
+        except RuntimeError:
+            current_loop_id = None
+
+        # Create new client if none exists or if loop changed
+        if self._client is None or self._client_loop_id != current_loop_id:
+            # Close old client if exists (best effort)
+            if self._client is not None:
+                try:
+                    # Can't await here, so we mark for GC cleanup
+                    self._client = None
+                except Exception:
+                    pass
+
+            self._client = httpx.AsyncClient(
+                timeout=self._timeout,
+                limits=httpx.Limits(max_keepalive_connections=20, max_connections=100),
+            )
+            self._client_loop_id = current_loop_id
+            logger.debug("Created new httpx.AsyncClient for event loop %s", current_loop_id)
+
+        return self._client
 
     # ========================================================================
     # Embeddings
@@ -132,7 +167,8 @@ class AsyncAIClient:
 
         logger.debug(f"Requesting embeddings for {len(texts)} texts with model {model}")
 
-        response = await self._client.post(
+        client = self._get_client()
+        response = await client.post(
             self.VOYAGE_API_URL,
             headers=headers,
             json={"model": model, "input": cleaned, "input_type": "document"},
@@ -199,7 +235,8 @@ Guidelines:
 
         logger.info(f"Requesting synthesis with model {model}, max_tokens={max_tokens}")
 
-        response = await self._client.post(
+        client = self._get_client()
+        response = await client.post(
             self.ANTHROPIC_API_URL, headers=headers, json=payload
         )
         response.raise_for_status()
@@ -223,7 +260,10 @@ Guidelines:
 
     async def close(self):
         """Close the persistent HTTP client."""
-        await self._client.aclose()
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
+            self._client_loop_id = None
         logger.info("AsyncAIClient closed")
 
     async def __aenter__(self):

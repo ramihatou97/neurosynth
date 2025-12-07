@@ -10,15 +10,15 @@ Assembles comprehensive search results for BROAD mode by combining:
 This is the main integration point for enhancing BROAD mode.
 """
 
-import re
 import logging
-from typing import List, Dict, Set, Optional, Tuple, TYPE_CHECKING
+import re
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Optional
 
-from src.search.study_package.analyzer import QueryAnalyzer, QueryAnalysis, get_analyzer
-from src.search.study_package.taxonomy import KNOWLEDGE_CATEGORIES
-from src.search.study_package.report import StudyModeReport, TopicSource
 from src.search.result_model import ChapterResult, MatchType
+from src.search.study_package.analyzer import QueryAnalysis, QueryAnalyzer, get_analyzer
+from src.search.study_package.report import StudyModeReport, TopicSource
+from src.search.study_package.taxonomy import KNOWLEDGE_CATEGORIES
 
 if TYPE_CHECKING:
     from src.search.pdf_searcher import PDFSearcher
@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class StudyPackageResult:
     """A result in the study package with category metadata."""
+
     title: str
     source: str
     page_number: int
@@ -42,7 +43,7 @@ class StudyPackageResult:
 
     # Original result data (ChapterResult or Dict)
     original_result: Optional[ChapterResult] = None
-    original_dict: Dict = field(default_factory=dict)
+    original_dict: dict = field(default_factory=dict)
 
     def to_chapter_result(self) -> Optional[ChapterResult]:
         """Convert to ChapterResult if possible."""
@@ -50,7 +51,7 @@ class StudyPackageResult:
             return self.original_result
         return None
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert to dictionary for compatibility."""
         result = {
             "title": self.title,
@@ -69,17 +70,18 @@ class StudyPackageResult:
 @dataclass
 class StudyPackage:
     """Complete study package for a query."""
+
     query: str
     analysis: QueryAnalysis
     report: StudyModeReport
 
     # Categorized results
-    direct_results: List[StudyPackageResult] = field(default_factory=list)
-    foundational_results: List[StudyPackageResult] = field(default_factory=list)
-    semantic_results: List[StudyPackageResult] = field(default_factory=list)
+    direct_results: list[StudyPackageResult] = field(default_factory=list)
+    foundational_results: list[StudyPackageResult] = field(default_factory=list)
+    semantic_results: list[StudyPackageResult] = field(default_factory=list)
 
     @property
-    def all_results(self) -> List[StudyPackageResult]:
+    def all_results(self) -> list[StudyPackageResult]:
         """Get all results in priority order."""
         all_r = self.direct_results + self.foundational_results + self.semantic_results
         # Sort by priority (lower first), then by relevance (higher first)
@@ -87,13 +89,17 @@ class StudyPackage:
 
     @property
     def total_count(self) -> int:
-        return len(self.direct_results) + len(self.foundational_results) + len(self.semantic_results)
+        return (
+            len(self.direct_results)
+            + len(self.foundational_results)
+            + len(self.semantic_results)
+        )
 
-    def get_by_category(self, category: str) -> List[StudyPackageResult]:
+    def get_by_category(self, category: str) -> list[StudyPackageResult]:
         """Get results filtered by knowledge category."""
         return [r for r in self.all_results if r.category == category]
 
-    def to_chapter_results(self, max_results: int = 100) -> List[ChapterResult]:
+    def to_chapter_results(self, max_results: int = 100) -> list[ChapterResult]:
         """Convert to list of ChapterResult objects."""
         results = []
         for spr in self.all_results[:max_results]:
@@ -101,7 +107,7 @@ class StudyPackage:
                 results.append(spr.original_result)
         return results
 
-    def to_result_list(self, max_results: int = 100) -> List[Dict]:
+    def to_result_list(self, max_results: int = 100) -> list[dict]:
         """Convert to list of result dictionaries."""
         return [r.to_dict() for r in self.all_results[:max_results]]
 
@@ -126,9 +132,9 @@ class StudyPackageAssembler:
 
     def __init__(
         self,
-        searcher: Optional['PDFSearcher'] = None,
+        searcher: Optional["PDFSearcher"] = None,
         analyzer: Optional[QueryAnalyzer] = None,
-        categories: Optional[Dict] = None,
+        categories: Optional[dict] = None,
     ):
         """
         Initialize assembler.
@@ -145,8 +151,8 @@ class StudyPackageAssembler:
     def assemble(
         self,
         query: str,
-        direct_results: List[ChapterResult],
-        semantic_results: Optional[List[ChapterResult]] = None,
+        direct_results: list[ChapterResult],
+        semantic_results: Optional[list[ChapterResult]] = None,
         max_foundational: int = 15,
         foundational_searches_per_category: int = 2,
     ) -> StudyPackage:
@@ -167,7 +173,10 @@ class StudyPackageAssembler:
         analysis = self.analyzer.analyze(query)
         logger.info(
             "Study package: query='%s' -> region=%s, subregion=%s, confidence=%.2f",
-            query, analysis.primary_region, analysis.subregion, analysis.confidence
+            query,
+            analysis.primary_region,
+            analysis.subregion,
+            analysis.confidence,
         )
 
         # Initialize report
@@ -183,11 +192,13 @@ class StudyPackageAssembler:
         package = StudyPackage(query=query, analysis=analysis, report=report)
 
         # Track seen titles to avoid duplicates
-        seen_titles: Set[str] = set()
+        seen_titles: set[str] = set()
 
         # Process direct results first (highest priority)
         for result in direct_results:
-            processed = self._process_chapter_result(result, analysis, MatchType.DEDICATED_CHAPTER)
+            processed = self._process_chapter_result(
+                result, analysis, MatchType.DEDICATED_CHAPTER
+            )
             if processed and processed.title.lower() not in seen_titles:
                 seen_titles.add(processed.title.lower())
                 package.direct_results.append(processed)
@@ -213,14 +224,18 @@ class StudyPackageAssembler:
         # Process semantic results (excluding duplicates)
         if semantic_results:
             for result in semantic_results:
-                processed = self._process_chapter_result(result, analysis, MatchType.SEMANTIC)
+                processed = self._process_chapter_result(
+                    result, analysis, MatchType.SEMANTIC
+                )
                 if processed and processed.title.lower() not in seen_titles:
                     seen_titles.add(processed.title.lower())
                     package.semantic_results.append(processed)
 
         # Sort each category
         package.direct_results.sort(key=lambda x: -x.relevance_score)
-        package.foundational_results.sort(key=lambda x: (x.priority, -x.relevance_score))
+        package.foundational_results.sort(
+            key=lambda x: (x.priority, -x.relevance_score)
+        )
         package.semantic_results.sort(key=lambda x: -x.relevance_score)
 
         logger.info(
@@ -327,12 +342,12 @@ class StudyPackageAssembler:
 
     def _search_foundations(
         self,
-        foundation_terms: Dict[str, List[str]],
-        seen_titles: Set[str],
+        foundation_terms: dict[str, list[str]],
+        seen_titles: set[str],
         max_total: int,
         max_per_category: int,
         report: StudyModeReport,
-    ) -> List[StudyPackageResult]:
+    ) -> list[StudyPackageResult]:
         """
         Search for foundational chapters using region-specific terms.
 
@@ -350,10 +365,16 @@ class StudyPackageAssembler:
             logger.warning("No searcher available for foundation searches")
             return []
 
-        results: List[StudyPackageResult] = []
+        results: list[StudyPackageResult] = []
 
         # Priority order for categories
-        category_order = ["anatomy", "biomechanics", "pathophysiology", "diagnostic", "approaches"]
+        category_order = [
+            "anatomy",
+            "biomechanics",
+            "pathophysiology",
+            "diagnostic",
+            "approaches",
+        ]
 
         for category in category_order:
             if len(results) >= max_total:
@@ -375,12 +396,20 @@ class StudyPackageAssembler:
                         continue
 
                     for sr in search_results[:3]:  # Top 3 per search
-                        title = sr.chapter_title.lower() if hasattr(sr, 'chapter_title') else ""
+                        title = (
+                            sr.chapter_title.lower()
+                            if hasattr(sr, "chapter_title")
+                            else ""
+                        )
                         if title and title not in seen_titles:
                             seen_titles.add(title)
 
                             # Track as matched topic
-                            report.matched_topics[term] = sr.chapter_title if hasattr(sr, 'chapter_title') else title
+                            report.matched_topics[term] = (
+                                sr.chapter_title
+                                if hasattr(sr, "chapter_title")
+                                else title
+                            )
 
                             # Create a new ChapterResult with FOUNDATIONAL match type
                             foundational_result = ChapterResult(
@@ -404,12 +433,16 @@ class StudyPackageAssembler:
                             processed = StudyPackageResult(
                                 title=sr.chapter_title,
                                 source=sr.book_title,
-                                page_number=sr.matched_pages[0] if sr.matched_pages else 0,
+                                page_number=(
+                                    sr.matched_pages[0] if sr.matched_pages else 0
+                                ),
                                 relevance_score=MatchType.FOUNDATIONAL.relevance_score,
                                 category=category,
                                 match_type=MatchType.FOUNDATIONAL,
                                 region_match=True,
-                                priority=self._get_priority(category, MatchType.FOUNDATIONAL),
+                                priority=self._get_priority(
+                                    category, MatchType.FOUNDATIONAL
+                                ),
                                 original_result=foundational_result,
                             )
                             results.append(processed)
@@ -423,7 +456,7 @@ class StudyPackageAssembler:
 
         return results
 
-    def _run_foundation_search(self, term: str) -> List[ChapterResult]:
+    def _run_foundation_search(self, term: str) -> list[ChapterResult]:
         """
         Run a FAST title-only search for foundational content.
 
@@ -473,13 +506,14 @@ class StudyPackageAssembler:
 # INTEGRATION HELPER
 # =============================================================================
 
+
 def enhance_broad_results(
-    searcher: 'PDFSearcher',
+    searcher: "PDFSearcher",
     query: str,
-    direct_results: List[ChapterResult],
-    semantic_results: Optional[List[ChapterResult]] = None,
+    direct_results: list[ChapterResult],
+    semantic_results: Optional[list[ChapterResult]] = None,
     max_foundational: int = 15,
-) -> Tuple[List[ChapterResult], StudyModeReport]:
+) -> tuple[list[ChapterResult], StudyModeReport]:
     """
     Enhance BROAD mode results with Study Package.
 

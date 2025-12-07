@@ -2,22 +2,22 @@
 Index module - Database, chunking, and vector search
 """
 
-from .database import Database
 from .chunker import SemanticChunker
-from .search import SearchEngine
+from .database import Database
 from .precision_search import (
-    PrecisionSearchEngine,
-    PrecisionRetrievalResult,
-    PrecisionResult,
-    QueryType,
-    ConfidenceLevel,
     ColBERTClient,
-    verify_synthesis
+    ConfidenceLevel,
+    PrecisionResult,
+    PrecisionRetrievalResult,
+    PrecisionSearchEngine,
+    QueryType,
+    verify_synthesis,
 )
+from .search import SearchEngine
 
 __all__ = [
-    "Database", 
-    "SemanticChunker", 
+    "Database",
+    "SemanticChunker",
     "SearchEngine",
     "PrecisionSearchEngine",
     "PrecisionRetrievalResult",
@@ -25,5 +25,5 @@ __all__ = [
     "QueryType",
     "ConfidenceLevel",
     "ColBERTClient",
-    "verify_synthesis"
+    "verify_synthesis",
 ]

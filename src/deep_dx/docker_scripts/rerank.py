@@ -1,8 +1,9 @@
-
-import sys
-import json
 import argparse
+import json
+import sys
+
 from ragatouille import RAGPretrainedModel
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -12,11 +13,11 @@ def main():
     args = parser.parse_args()
 
     # 1. Load Input
-    with open(args.input, 'r') as f:
+    with open(args.input) as f:
         data = json.load(f)
-    
+
     query = data["query"]
-    documents = data["documents"] # List of strings
+    documents = data["documents"]  # List of strings
     k = data.get("k", 10)
 
     # 2. Load Model (Not index, just the reranker model)
@@ -27,8 +28,9 @@ def main():
     results = RAG.rerank(query=query, documents=documents, k=k)
 
     # 4. Output
-    with open(args.output, 'w') as f:
+    with open(args.output, "w") as f:
         json.dump({"results": results}, f)
+
 
 if __name__ == "__main__":
     main()

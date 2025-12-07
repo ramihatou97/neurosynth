@@ -1,4 +1,3 @@
-
 import os
 import shutil
 from pathlib import Path
@@ -6,6 +5,7 @@ from pathlib import Path
 # Config
 SOURCE_LIST = Path("/Users/ramihatoum/neurosynth/my_sources.txt")
 DEST_DIR = Path("/Users/ramihatoum/neurosynth/data/sources")
+
 
 def main():
     if not SOURCE_LIST.exists():
@@ -17,8 +17,10 @@ def main():
     print(f"📂 Destination: {DEST_DIR}")
 
     # Read sources
-    with open(SOURCE_LIST, 'r') as f:
-        lines = [l.strip() for l in f.readlines() if l.strip() and not l.startswith('#')]
+    with open(SOURCE_LIST) as f:
+        lines = [
+            l.strip() for l in f.readlines() if l.strip() and not l.startswith("#")
+        ]
 
     print(f"🔍 Found {len(lines)} files to copy")
 
@@ -28,7 +30,7 @@ def main():
         if not src.exists():
             print(f"  ⚠️  Missing: {src.name}")
             continue
-        
+
         try:
             shutil.copy2(src, DEST_DIR / src.name)
             # print(f"  ✓ Copied: {src.name}")
@@ -37,6 +39,7 @@ def main():
             print(f"  ❌ Failed {src.name}: {e}")
 
     print(f"\n✅ Successfully copied {success_count}/{len(lines)} files")
+
 
 if __name__ == "__main__":
     main()

@@ -1,12 +1,16 @@
 """Library directory structure scanner and parser."""
+
 import re
+from collections.abc import Callable
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Optional
+
 import fitz  # PyMuPDF
 
-from ..search.result_model import ChapterMetadata, BookSeries, LibraryIndex
-from ..cache.database import Database
 from src import config
+
+from ..cache.database import Database
+from ..search.result_model import BookSeries, ChapterMetadata, LibraryIndex
 
 # Visual extraction imports (lazy loaded)
 _visual_imports_loaded = False
@@ -19,8 +23,10 @@ class LibraryScanner:
     """Parse the neurosurgery reference library directory structure."""
 
     # Patterns for parsing chapter filenames
-    CHAPTER_PATTERN = re.compile(r'^(\d+)\s+(.+)\.pdf$', re.IGNORECASE)
-    CHAPTER_PATTERN_ALT = re.compile(r'^Chapter\s*(\d+)[_:\s]+(.+)\.pdf$', re.IGNORECASE)
+    CHAPTER_PATTERN = re.compile(r"^(\d+)\s+(.+)\.pdf$", re.IGNORECASE)
+    CHAPTER_PATTERN_ALT = re.compile(
+        r"^Chapter\s*(\d+)[_:\s]+(.+)\.pdf$", re.IGNORECASE
+    )
 
     def __init__(self, library_path: Path, database: Optional[Database] = None):
         self.library_path = library_path
@@ -35,7 +41,7 @@ class LibraryScanner:
         chapters_dir = self._find_subdir("Book chapters")
         if chapters_dir and chapters_dir.exists():
             for series_dir in chapters_dir.iterdir():
-                if series_dir.is_dir() and not series_dir.name.startswith('.'):
+                if series_dir.is_dir() and not series_dir.name.startswith("."):
                     series = self._scan_series(series_dir)
                     if series and series.chapters:
                         index.series[series.name] = series
@@ -63,9 +69,7 @@ class LibraryScanner:
         display_name = config.KNOWN_SERIES.get(series_name, series_name)
 
         series = BookSeries(
-            name=series_name,
-            display_name=display_name,
-            path=series_dir
+            name=series_name, display_name=display_name, path=series_dir
         )
 
         # Recursively find all PDFs in this series
@@ -89,7 +93,13 @@ class LibraryScanner:
 
         return dir_name
 
-    def _parse_chapter(self, pdf_path: Path, series_name: str, book_title: str, skip_page_count: bool = False) -> Optional[ChapterMetadata]:
+    def _parse_chapter(
+        self,
+        pdf_path: Path,
+        series_name: str,
+        book_title: str,
+        skip_page_count: bool = False,
+    ) -> Optional[ChapterMetadata]:
         """Parse chapter metadata from PDF filename.
 
         Args:
@@ -132,10 +142,12 @@ class LibraryScanner:
             chapter_number=chapter_num,
             chapter_title=chapter_title,
             page_count=page_count,
-            file_size=file_size
+            file_size=file_size,
         )
 
-    def _parse_entire_book(self, pdf_path: Path, skip_page_count: bool = False) -> Optional[ChapterMetadata]:
+    def _parse_entire_book(
+        self, pdf_path: Path, skip_page_count: bool = False
+    ) -> Optional[ChapterMetadata]:
         """Parse metadata for a complete book PDF."""
         filename = pdf_path.stem
         try:
@@ -151,7 +163,7 @@ class LibraryScanner:
             chapter_number=None,
             chapter_title=filename,
             page_count=page_count,
-            file_size=file_size
+            file_size=file_size,
         )
 
     def _get_page_count(self, pdf_path: Path) -> int:
@@ -182,7 +194,7 @@ class LibraryScanner:
         # Handles: 01_COMPLETE_TEXTBOOKS, 02_MULTI_CHAPTER_BOOKS, 03_SINGLE_CHAPTERS,
         #          04_EVIDENCE_BASE_STUDIES, 05_EDUCATIONAL_MATERIALS, 06_CLINICAL_GUIDELINES, etc.
         for item in self.library_path.iterdir():
-            if item.is_dir() and item.name[:2].isdigit() and item.name[2] == '_':
+            if item.is_dir() and item.name[:2].isdigit() and item.name[2] == "_":
                 pdfs.extend(item.rglob("*.pdf"))
 
         # Fallback: If no PDFs found yet, scan entire library recursively
@@ -209,7 +221,9 @@ class LibraryScanner:
                 relative = pdf_path.relative_to(chapters_dir)
                 series_name = relative.parts[0].strip() if relative.parts else "Unknown"
                 display_name = config.KNOWN_SERIES.get(series_name, series_name)
-                return self._parse_chapter(pdf_path, series_name, display_name, skip_page_count=fast)
+                return self._parse_chapter(
+                    pdf_path, series_name, display_name, skip_page_count=fast
+                )
             except ValueError:
                 pass  # Not in legacy structure, try new structure
 
@@ -217,7 +231,12 @@ class LibraryScanner:
         try:
             relative = pdf_path.relative_to(self.library_path)
             parts = relative.parts
-            if parts and len(parts[0]) > 3 and parts[0][:2].isdigit() and parts[0][2] == '_':
+            if (
+                parts
+                and len(parts[0]) > 3
+                and parts[0][:2].isdigit()
+                and parts[0][2] == "_"
+            ):
                 # e.g., "01_COMPLETE_TEXTBOOKS" -> category
                 category = parts[0]
                 # Use parent folder name as series if available
@@ -226,14 +245,18 @@ class LibraryScanner:
                 else:
                     series_name = category
                 display_name = series_name
-                return self._parse_chapter(pdf_path, series_name, display_name, skip_page_count=fast)
+                return self._parse_chapter(
+                    pdf_path, series_name, display_name, skip_page_count=fast
+                )
         except ValueError:
             pass
 
         # Fallback: use filename-based parsing
         series_name = "Unknown"
         display_name = config.KNOWN_SERIES.get(series_name, series_name)
-        return self._parse_chapter(pdf_path, series_name, display_name, skip_page_count=fast)
+        return self._parse_chapter(
+            pdf_path, series_name, display_name, skip_page_count=fast
+        )
 
     def detect_changes(self) -> dict:
         """
@@ -243,11 +266,7 @@ class LibraryScanner:
         if not self.database:
             raise ValueError("Database required for change detection")
 
-        changes = {
-            'new': [],
-            'modified': [],
-            'deleted': []
-        }
+        changes = {"new": [], "modified": [], "deleted": []}
 
         # Get all current PDFs in library
         current_pdfs = set(str(p) for p in self.get_all_pdfs())
@@ -260,7 +279,7 @@ class LibraryScanner:
         for path_str in new_paths:
             path = Path(path_str)
             if path.exists():
-                changes['new'].append(path)
+                changes["new"].append(path)
                 # Track the new file (FAST: no PDF opening)
                 metadata = self._get_metadata_fast(path)
                 checksum = self.database.get_fast_checksum(path)
@@ -270,13 +289,13 @@ class LibraryScanner:
                     file_size=path.stat().st_size,
                     book_series=metadata.book_series,
                     chapter_title=metadata.chapter_title,
-                    page_count=0  # Skip for fast detection
+                    page_count=0,  # Skip for fast detection
                 )
 
         # Find deleted files (tracked but not in library)
         deleted_paths = tracked_paths - current_pdfs
         for path_str in deleted_paths:
-            changes['deleted'].append(Path(path_str))
+            changes["deleted"].append(Path(path_str))
             self.database.remove_tracked_file(Path(path_str))
 
         return changes
@@ -303,9 +322,9 @@ class LibraryScanner:
         # Skip if database already populated
         if len(tracked_paths) > 0:
             return {
-                'total_files': len(tracked_paths),
-                'new_files': 0,
-                'unindexed': self.database.get_new_files_count()
+                "total_files": len(tracked_paths),
+                "new_files": 0,
+                "unindexed": self.database.get_new_files_count(),
             }
 
         # FAST: Discover all PDFs (just filesystem walk)
@@ -313,14 +332,14 @@ class LibraryScanner:
         total = len(all_pdfs)
 
         if not all_pdfs:
-            return {'total_files': 0, 'new_files': 0, 'unindexed': 0}
+            return {"total_files": 0, "new_files": 0, "unindexed": 0}
 
         # ULTRA-FAST: Simple loop, no threading overhead
         files_data = []
         for idx, pdf_path in enumerate(all_pdfs):
             try:
                 # INSTANT: Parse metadata from filename only
-                chapter_title = pdf_path.stem.replace('-', ' ').replace('_', ' ')
+                chapter_title = pdf_path.stem.replace("-", " ").replace("_", " ")
 
                 # Get series from parent folder
                 try:
@@ -337,14 +356,16 @@ class LibraryScanner:
                 stat = pdf_path.stat()
                 checksum = f"{stat.st_size}_{int(stat.st_mtime)}"
 
-                files_data.append({
-                    "pdf_path": pdf_path,
-                    "checksum": checksum,
-                    "file_size": stat.st_size,
-                    "book_series": str(book_series)[:100],
-                    "chapter_title": chapter_title[:200],
-                    "page_count": 0
-                })
+                files_data.append(
+                    {
+                        "pdf_path": pdf_path,
+                        "checksum": checksum,
+                        "file_size": stat.st_size,
+                        "book_series": str(book_series)[:100],
+                        "chapter_title": chapter_title[:200],
+                        "page_count": 0,
+                    }
+                )
             except Exception:
                 pass  # Skip problematic files
 
@@ -361,9 +382,9 @@ class LibraryScanner:
             self.database.track_files_batch(files_data, is_indexed=True)
 
         return {
-            'total_files': len(files_data),
-            'new_files': len(files_data),
-            'unindexed': 0
+            "total_files": len(files_data),
+            "new_files": len(files_data),
+            "unindexed": 0,
         }
 
     def cancel_extraction(self):
@@ -385,7 +406,7 @@ class LibraryScanner:
                 chapter_number=None,
                 chapter_title=pdf_path.stem,
                 page_count=0,
-                file_size=pdf_path.stat().st_size
+                file_size=pdf_path.stat().st_size,
             )
 
         # Find the series from path
@@ -423,7 +444,7 @@ class LibraryScanner:
             chapter_number=chapter_num,
             chapter_title=chapter_title,
             page_count=0,  # Skip for fast sync
-            file_size=pdf_path.stat().st_size
+            file_size=pdf_path.stat().st_size,
         )
 
     # Visual Extraction Methods
@@ -437,11 +458,12 @@ class LibraryScanner:
 
         try:
             from .neurosynth_imports import (
+                NEUROSYNTH_AVAILABLE,
                 ImageExtractor,
-                VisualElement,
                 ImageType,
-                NEUROSYNTH_AVAILABLE
+                VisualElement,
             )
+
             if NEUROSYNTH_AVAILABLE:
                 _ImageExtractor = ImageExtractor
                 _VisualElement = VisualElement
@@ -461,7 +483,7 @@ class LibraryScanner:
         pdf_path: Path,
         output_dir: Optional[Path] = None,
         force: bool = False,
-        hybrid: bool = True
+        hybrid: bool = True,
     ) -> list[dict]:
         """Extract figures from a single PDF.
 
@@ -494,8 +516,7 @@ class LibraryScanner:
 
         # Create extractor with Reference Library's config
         extractor = _ImageExtractor(
-            min_size=config.MIN_IMAGE_SIZE,
-            max_size=config.MAX_IMAGE_SIZE
+            min_size=config.MIN_IMAGE_SIZE, max_size=config.MAX_IMAGE_SIZE
         )
 
         # Extract images synchronously (hybrid mode captures labels/arrows)
@@ -522,7 +543,11 @@ class LibraryScanner:
                 "bbox": elem.bbox,
                 "caption": elem.caption,
                 "caption_confidence": elem.caption_confidence,
-                "image_type": elem.image_type.value if hasattr(elem.image_type, 'value') else str(elem.image_type),
+                "image_type": (
+                    elem.image_type.value
+                    if hasattr(elem.image_type, "value")
+                    else str(elem.image_type)
+                ),
                 "type_confidence": elem.type_confidence,
                 "context_text": elem.context_text,
                 "visual_hash": elem.visual_hash,
@@ -546,7 +571,7 @@ class LibraryScanner:
         Returns:
             Number of thumbnails generated
         """
-        from .thumbnail_cache import get_thumbnail_cache, THUMB_SIZE_SMALL
+        from .thumbnail_cache import THUMB_SIZE_SMALL, get_thumbnail_cache
 
         thumb_cache = get_thumbnail_cache()
         generated = 0
@@ -554,7 +579,9 @@ class LibraryScanner:
         for fig in figures:
             image_path = fig.get("image_path")
             if image_path and Path(image_path).exists():
-                thumb_path = thumb_cache.get_or_create_thumbnail(image_path, THUMB_SIZE_SMALL)
+                thumb_path = thumb_cache.get_or_create_thumbnail(
+                    image_path, THUMB_SIZE_SMALL
+                )
                 if thumb_path:
                     generated += 1
 
@@ -564,7 +591,7 @@ class LibraryScanner:
         self,
         pdf_paths: Optional[list[Path]] = None,
         on_progress: Optional[Callable[[str, int, int], None]] = None,
-        force: bool = False
+        force: bool = False,
     ) -> dict:
         """Extract figures from multiple PDFs with batch processing.
 
@@ -591,7 +618,7 @@ class LibraryScanner:
             "pdfs_processed": 0,
             "pdfs_skipped": 0,
             "total_figures": 0,
-            "figures_by_type": {}
+            "figures_by_type": {},
         }
 
         for i, pdf_path in enumerate(pdf_paths):
@@ -612,8 +639,9 @@ class LibraryScanner:
                 # Count by type
                 for fig in figures:
                     fig_type = fig.get("image_type", "unknown")
-                    stats["figures_by_type"][fig_type] = \
+                    stats["figures_by_type"][fig_type] = (
                         stats["figures_by_type"].get(fig_type, 0) + 1
+                    )
 
                 if on_progress:
                     on_progress(pdf_path.name, len(figures), i + 1)

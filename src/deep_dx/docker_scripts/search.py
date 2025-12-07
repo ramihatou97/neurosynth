@@ -1,20 +1,24 @@
-
-import sys
-import json
 import argparse
+import json
+import sys
+
 from ragatouille import RAGPretrainedModel
+
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True)
     parser.add_argument("--output", required=True)
-    parser.add_argument("--index_path", default="/app/data/colbert_index/.ragatouille/colbert/indexes/neurosynth_v1")
+    parser.add_argument(
+        "--index_path",
+        default="/app/data/colbert_index/.ragatouille/colbert/indexes/neurosynth_v1",
+    )
     args = parser.parse_args()
 
     # 1. Load Input
-    with open(args.input, 'r') as f:
+    with open(args.input) as f:
         data = json.load(f)
-    
+
     query = data["query"]
     k = data.get("k", 10)
 
@@ -30,8 +34,9 @@ def main():
     results = RAG.search(query, k=k)
 
     # 4. Output
-    with open(args.output, 'w') as f:
+    with open(args.output, "w") as f:
         json.dump({"results": results}, f)
+
 
 if __name__ == "__main__":
     main()

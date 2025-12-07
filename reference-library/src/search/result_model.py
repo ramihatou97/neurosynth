@@ -1,9 +1,10 @@
 """Data models for search results and library structure."""
+
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum, auto
 from pathlib import Path
-from typing import Optional, List, TYPE_CHECKING
-from datetime import datetime
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from src.search.section_detector import DetectedSection
@@ -21,21 +22,22 @@ else:
 
 class MatchType(Enum):
     """Type of match - determines how the result should be displayed and used."""
+
     DEDICATED_CHAPTER = auto()  # Chapter is dedicated to this topic (title match)
-    RELATED_SECTION = auto()    # Topic discussed in a section of another chapter
-    REFERENCE = auto()          # Topic mentioned/referenced
-    SEMANTIC = auto()           # Semantic similarity match
-    FOUNDATIONAL = auto()       # Foundational knowledge (anatomy, biomechanics, etc.)
+    RELATED_SECTION = auto()  # Topic discussed in a section of another chapter
+    REFERENCE = auto()  # Topic mentioned/referenced
+    SEMANTIC = auto()  # Semantic similarity match
+    FOUNDATIONAL = auto()  # Foundational knowledge (anatomy, biomechanics, etc.)
 
     @property
     def relevance_score(self) -> int:
         """Base relevance score for this match type."""
         scores = {
             MatchType.DEDICATED_CHAPTER: 100,  # Highest - entire chapter is about topic
-            MatchType.RELATED_SECTION: 70,     # High - section dedicated to topic
-            MatchType.FOUNDATIONAL: 65,        # Study mode - foundational knowledge
-            MatchType.SEMANTIC: 60,            # Medium - semantic similarity
-            MatchType.REFERENCE: 40,           # Lower - just a mention
+            MatchType.RELATED_SECTION: 70,  # High - section dedicated to topic
+            MatchType.FOUNDATIONAL: 65,  # Study mode - foundational knowledge
+            MatchType.SEMANTIC: 60,  # Medium - semantic similarity
+            MatchType.REFERENCE: 40,  # Lower - just a mention
         }
         return scores.get(self, 40)
 
@@ -44,10 +46,10 @@ class MatchType(Enum):
         """Get icon for display in UI."""
         icons = {
             MatchType.DEDICATED_CHAPTER: "📖",  # Book - dedicated chapter
-            MatchType.RELATED_SECTION: "📑",    # Section
-            MatchType.REFERENCE: "📝",          # Reference/mention
-            MatchType.SEMANTIC: "🔍",           # Semantic search
-            MatchType.FOUNDATIONAL: "📚",       # Books - foundational knowledge
+            MatchType.RELATED_SECTION: "📑",  # Section
+            MatchType.REFERENCE: "📝",  # Reference/mention
+            MatchType.SEMANTIC: "🔍",  # Semantic search
+            MatchType.FOUNDATIONAL: "📚",  # Books - foundational knowledge
         }
         return icons.get(self, "📄")
 
@@ -68,21 +70,22 @@ class MatchType(Enum):
         """Color for UI display."""
         colors = {
             MatchType.DEDICATED_CHAPTER: "#27ae60",  # Green - primary source
-            MatchType.RELATED_SECTION: "#3498db",    # Blue - related
-            MatchType.REFERENCE: "#95a5a6",          # Gray - reference
-            MatchType.SEMANTIC: "#9b59b6",           # Purple - semantic
-            MatchType.FOUNDATIONAL: "#e67e22",       # Orange - foundational knowledge
+            MatchType.RELATED_SECTION: "#3498db",  # Blue - related
+            MatchType.REFERENCE: "#95a5a6",  # Gray - reference
+            MatchType.SEMANTIC: "#9b59b6",  # Purple - semantic
+            MatchType.FOUNDATIONAL: "#e67e22",  # Orange - foundational knowledge
         }
         return colors.get(self, "#95a5a6")
 
 
 class MatchLocation(Enum):
     """Where in the document the match was found."""
-    CHAPTER_TITLE = auto()    # Match in chapter/PDF filename
-    SECTION_HEADER = auto()   # Match in section/subsection header
-    BODY_TEXT = auto()        # Match in main body text
-    FOOTNOTE = auto()         # Match in footnotes/references
-    SEMANTIC = auto()         # Match from semantic search
+
+    CHAPTER_TITLE = auto()  # Match in chapter/PDF filename
+    SECTION_HEADER = auto()  # Match in section/subsection header
+    BODY_TEXT = auto()  # Match in main body text
+    FOOTNOTE = auto()  # Match in footnotes/references
+    SEMANTIC = auto()  # Match from semantic search
 
     @property
     def relevance_score(self) -> int:
@@ -124,6 +127,7 @@ class MatchLocation(Enum):
 @dataclass
 class PageMatch:
     """A single match on a specific page."""
+
     page_number: int
     match_text: str  # The matched text snippet
     context: str  # Surrounding text for AI categorization
@@ -134,6 +138,7 @@ class PageMatch:
 @dataclass
 class SearchResult:
     """A search result from a PDF file (one per page, aggregated)."""
+
     pdf_path: Path
     book_series: str
     book_title: str
@@ -144,7 +149,7 @@ class SearchResult:
     context: str
     # New fields for hierarchical search
     match_count: int = 1  # Number of matches on this page
-    match_locations: List[MatchLocation] = field(default_factory=list)
+    match_locations: list[MatchLocation] = field(default_factory=list)
     relevance_score: float = 50.0  # Calculated from match locations
     is_title_match: bool = False  # True if query matches chapter title
     # Legacy fields (kept for compatibility)
@@ -205,6 +210,7 @@ class ChapterResult:
     - RELATED_SECTION: The chapter has a section dedicated to the topic
     - REFERENCE: The topic is mentioned in the chapter
     """
+
     pdf_path: Path
     book_series: str
     book_title: str
@@ -213,7 +219,7 @@ class ChapterResult:
     match_type: MatchType
     page_count: int
     # Pages with actual matches (for REFERENCE type) or all pages (for DEDICATED)
-    matched_pages: List[int] = field(default_factory=list)
+    matched_pages: list[int] = field(default_factory=list)
     # Best context snippet for preview
     preview_context: str = ""
     # Total keyword occurrences across all pages
@@ -222,17 +228,21 @@ class ChapterResult:
     relevance_score: float = 0.0
     # Individual page results (for drill-down)
     # Individual page results (for drill-down)
-    page_results: List[SearchResult] = field(default_factory=list)
-    
+    page_results: list[SearchResult] = field(default_factory=list)
+
     # Enhanced Search Fields
-    matched_sections: List['DetectedSection'] = field(default_factory=list)
+    matched_sections: list["DetectedSection"] = field(default_factory=list)
     authority_score: int = 0  # 0-100 score from Master Index
-    index_source: str = ""    # Source of authority (e.g., "L7")
+    index_source: str = ""  # Source of authority (e.g., "L7")
 
     # Strategy Weights (set by searcher based on active strategy)
     # FIX 0.8: Updated comments to reflect corrected strategy weights
-    authority_weight: float = 0.5  # How much authority affects score (STRICT=0.2, STANDARD=0.5, BROAD=0.3)
-    section_weight: float = 1.0    # How much section matches boost score (STRICT=1.5, STANDARD=1.0, BROAD=0.5)
+    authority_weight: float = (
+        0.5  # How much authority affects score (STRICT=0.2, STANDARD=0.5, BROAD=0.3)
+    )
+    section_weight: float = (
+        1.0  # How much section matches boost score (STRICT=1.5, STANDARD=1.0, BROAD=0.5)
+    )
 
     def __post_init__(self):
         """Calculate relevance score using strategy weights."""
@@ -248,7 +258,9 @@ class ChapterResult:
         # STRICT: authority_weight=0.2 -> section match is primary signal
         # STANDARD: authority_weight=0.5 -> balanced authority influence
         # BROAD: authority_weight=0.3 -> less emphasis on authority
-        authority_bonus = self.authority_score * self.authority_weight  # Max 20-50 points depending on weight
+        authority_bonus = (
+            self.authority_score * self.authority_weight
+        )  # Max 20-50 points depending on weight
 
         # Section Match Bonus (weighted by strategy)
         # STRICT: section_weight=1.5 -> strongly prioritize exact section matches
@@ -256,8 +268,9 @@ class ChapterResult:
         # BROAD: section_weight=0.5 -> moderate boost
         section_bonus = (100 if self.matched_sections else 0) * self.section_weight
 
-        self.relevance_score = base_score + occurrence_bonus + page_bonus + authority_bonus + section_bonus
-
+        self.relevance_score = (
+            base_score + occurrence_bonus + page_bonus + authority_bonus + section_bonus
+        )
 
     @property
     def display_name(self) -> str:
@@ -295,7 +308,7 @@ class ChapterResult:
         """True if this is a dedicated chapter about the topic."""
         return self.match_type == MatchType.DEDICATED_CHAPTER
 
-    def get_all_pages(self) -> List[int]:
+    def get_all_pages(self) -> list[int]:
         """Get all pages to include when synthesizing."""
         if self.match_type == MatchType.DEDICATED_CHAPTER:
             # Include entire chapter
@@ -308,6 +321,7 @@ class ChapterResult:
 @dataclass
 class ChapterMetadata:
     """Metadata for a single chapter/PDF file."""
+
     pdf_path: Path
     book_series: str
     book_title: str
@@ -320,6 +334,7 @@ class ChapterMetadata:
 @dataclass
 class BookSeries:
     """A book series containing multiple chapters."""
+
     name: str
     display_name: str
     path: Path
@@ -337,6 +352,7 @@ class BookSeries:
 @dataclass
 class LibraryIndex:
     """Complete index of the reference library."""
+
     root_path: Path
     series: dict[str, BookSeries] = field(default_factory=dict)
     entire_books: list[ChapterMetadata] = field(default_factory=list)
@@ -366,6 +382,7 @@ class SearchProgress:
     - candidates_processed: PDFs with text actually extracted (slow)
     - total_matches: Results found from candidates
     """
+
     total_pdfs: int
     searched_pdfs: int = 0
     candidates_processed: int = 0  # PDFs that passed filter and had text extracted
