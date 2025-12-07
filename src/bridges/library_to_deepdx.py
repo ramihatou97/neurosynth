@@ -29,9 +29,9 @@ from qdrant_client.models import Distance, VectorParams
 
 # Import local modules
 try:
+    from index.database import Database
+    from models import Chunk, ChunkType, DocumentType, SourceMetadata, Specialty
     from neurosynth.llm.voyage import VoyageClient
-    from neurosynth.models import ChunkType, DocumentType, Specialty, SourceMetadata, Chunk
-    from neurosynth.index.database import Database
 except ImportError as e:
     print(f"Import error: {e}")
     print("Make sure you're running from the neurosynth root directory.")
@@ -66,26 +66,66 @@ QDRANT_BATCH_SIZE = 100
 # =============================================================================
 
 SPECIALTY_KEYWORDS = {
-    Specialty.SPINE: ["spine", "spinal", "vertebr", "lumbar", "cervical", "thoracic", "disc", "scoliosis"],
-    Specialty.TUMOR: ["tumor", "tumour", "glioma", "meningioma", "schwannoma", "oncol", "neoplasm"],
-    Specialty.VASCULAR: ["vascular", "aneurysm", "avm", "stroke", "hemorrhage", "carotid", "angiography"],
-    Specialty.SKULL_BASE: ["skull base", "acoustic", "pituitary", "sellar", "petrosal", "craniopharyngioma"],
-    Specialty.FUNCTIONAL: ["dbs", "deep brain", "parkinson", "tremor", "epilepsy", "functional"],
+    Specialty.SPINE: [
+        "spine",
+        "spinal",
+        "vertebr",
+        "lumbar",
+        "cervical",
+        "thoracic",
+        "disc",
+        "scoliosis",
+    ],
+    Specialty.TUMOR: [
+        "tumor",
+        "tumour",
+        "glioma",
+        "meningioma",
+        "schwannoma",
+        "oncol",
+        "neoplasm",
+    ],
+    Specialty.VASCULAR: [
+        "vascular",
+        "aneurysm",
+        "avm",
+        "stroke",
+        "hemorrhage",
+        "carotid",
+        "angiography",
+    ],
+    Specialty.SKULL_BASE: [
+        "skull base",
+        "acoustic",
+        "pituitary",
+        "sellar",
+        "petrosal",
+        "craniopharyngioma",
+    ],
+    Specialty.FUNCTIONAL: [
+        "dbs",
+        "deep brain",
+        "parkinson",
+        "tremor",
+        "epilepsy",
+        "functional",
+    ],
     Specialty.PEDIATRIC: ["pediatric", "paediatric", "child", "infant", "congenital"],
     Specialty.TRAUMA: ["trauma", "injury", "fracture", "tbi", "concussion"],
     Specialty.ANATOMY: ["anatomy", "neuroanatomy", "atlas", "dissection"],
 }
 
+
 def classify_specialty(title: str, path: str) -> Specialty:
     """Classify document specialty based on title and path."""
     text = f"{title} {path}".lower()
-    
+
     scores = {spec: 0 for spec in Specialty}
     for specialty, keywords in SPECIALTY_KEYWORDS.items():
         for kw in keywords:
             if kw in text:
                 scores[specialty] += 1
-    
+
     best = max(scores, key=scores.get)
     return best if scores[best] > 0 else Specialty.GENERAL
 
@@ -94,20 +134,21 @@ def classify_specialty(title: str, path: str) -> Specialty:
 # TIER CLASSIFICATION (for search ranking)
 # =============================================================================
 
+
 def classify_tier(title: str, path: str) -> str:
     """Classify document tier for search ranking."""
     text = f"{title} {path}".lower()
-    
+
     # Tier 1: Gold standard references
     tier1_keywords = ["rhoton", "atlas", "7.0 tesla", "7t", "greenberg handbook"]
     if any(kw in text for kw in tier1_keywords):
         return "1"
-    
+
     # Tier 2: Major textbooks
     tier2_keywords = ["youmans", "greenberg", "principles", "schmidek", "winn"]
     if any(kw in text for kw in tier2_keywords):
         return "2"
-    
+
     # Tier 3: Everything else
     return "3"
 
@@ -116,21 +157,24 @@ def classify_tier(title: str, path: str) -> str:
 # TEXT CHUNKING
 # =============================================================================
 
-def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[tuple[str, int, int]]:
+
+def chunk_text(
+    text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP
+) -> list[tuple[str, int, int]]:
     """Split text into overlapping chunks.
-    
+
     Returns list of (chunk_text, char_start, char_end) tuples.
     """
     if not text or len(text.strip()) < 50:
         return []
-    
+
     chunks = []
     start = 0
     text_len = len(text)
-    
+
     while start < text_len:
         end = min(start + chunk_size, text_len)
-        
+
         # Try to break at sentence boundary
         if end < text_len:
             # Look for sentence end in last 20% of chunk
@@ -140,10 +184,10 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
                 idx = text.rfind(punct, search_start, end)
                 if idx > best_break:
                     best_break = idx + 1
-            
+
             if best_break > search_start:
                 end = best_break
-        
+
         chunk_text = text[start:end].strip()
         if len(chunk_text) > 50:  # Minimum viable chunk
             chunks.append((chunk_text, start, end))
@@ -157,6 +201,7 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
 # MAIN BRIDGE CLASS
 # =============================================================================
 
+
 class LibraryToDeepDxBridge:
     """Orchestrates the ETL pipeline from Reference Library to Deep-DX."""
 
@@ -165,7 +210,7 @@ class LibraryToDeepDxBridge:
         source_db: Path = SOURCE_DB_PATH,
         target_db: Path = TARGET_DB_PATH,
         qdrant_url: str = QDRANT_URL,
-        skip_qdrant: bool = False
+        skip_qdrant: bool = False,
     ):
         self.source_db_path = source_db
         self.target_db_path = target_db
@@ -222,12 +267,16 @@ class LibraryToDeepDxBridge:
                 print(f"✅ Qdrant: {self.qdrant_url}")
 
                 # Ensure collection exists
-                collections = [c.name for c in self._qdrant.get_collections().collections]
+                collections = [
+                    c.name for c in self._qdrant.get_collections().collections
+                ]
                 if COLLECTION_NAME not in collections:
                     print(f"   → Creating collection '{COLLECTION_NAME}'...")
                     self._qdrant.create_collection(
                         collection_name=COLLECTION_NAME,
-                        vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE)
+                        vectors_config=VectorParams(
+                            size=VECTOR_SIZE, distance=Distance.COSINE
+                        ),
                     )
                 else:
                     # Get current count
@@ -272,12 +321,14 @@ class LibraryToDeepDxBridge:
 
         files = []
         for row in cursor:
-            files.append({
-                "pdf_path": row["pdf_path"],
-                "book_series": row["book_series"],
-                "chapter_title": row["chapter_title"],
-                "cached_pages": row["cached_pages"],
-            })
+            files.append(
+                {
+                    "pdf_path": row["pdf_path"],
+                    "book_series": row["book_series"],
+                    "chapter_title": row["chapter_title"],
+                    "cached_pages": row["cached_pages"],
+                }
+            )
 
         return files
 
@@ -286,7 +337,7 @@ class LibraryToDeepDxBridge:
         cursor = self._source_conn.cursor()
         cursor.execute(
             "SELECT page_number, text_content FROM pdf_text_cache WHERE pdf_path = ? ORDER BY page_number",
-            (pdf_path,)
+            (pdf_path,),
         )
         return {row["page_number"]: row["text_content"] for row in cursor}
 
@@ -302,7 +353,9 @@ class LibraryToDeepDxBridge:
     async def process_file(self, file_info: dict) -> tuple[SourceMetadata, list[Chunk]]:
         """Process a single file: create source metadata and chunks."""
         pdf_path = file_info["pdf_path"]
-        title = file_info["chapter_title"] or Path(pdf_path).stem.replace("-", " ").replace("_", " ")
+        title = file_info["chapter_title"] or Path(pdf_path).stem.replace(
+            "-", " "
+        ).replace("_", " ")
 
         # Generate IDs
         source_id = self.generate_source_id(pdf_path)
@@ -365,15 +418,17 @@ class LibraryToDeepDxBridge:
 
         # Process in batches
         for i in range(0, len(texts), EMBEDDING_BATCH_SIZE):
-            batch_texts = texts[i:i + EMBEDDING_BATCH_SIZE]
-            batch_chunks = chunks[i:i + EMBEDDING_BATCH_SIZE]
+            batch_texts = texts[i : i + EMBEDDING_BATCH_SIZE]
+            batch_chunks = chunks[i : i + EMBEDDING_BATCH_SIZE]
 
             try:
-                vectors = await self._voyage.embed_texts(batch_texts, batch_size=len(batch_texts))
+                vectors = await self._voyage.embed_texts(
+                    batch_texts, batch_size=len(batch_texts)
+                )
 
                 for chunk, vector in zip(batch_chunks, vectors):
                     if vector is not None:
-                        if hasattr(vector, 'tolist'):
+                        if hasattr(vector, "tolist"):
                             vector = vector.tolist()
                         chunk.embedding = vector
                         embedded += 1
@@ -402,7 +457,7 @@ class LibraryToDeepDxBridge:
                 "source_doc_id": chunk.source_id,
                 "title": chunk.source_title,
                 "file_path": str(source.file_path),
-                "tier": getattr(chunk, '_tier', '3'),
+                "tier": getattr(chunk, "_tier", "3"),
                 "page": chunk.page_start,
                 "specialty": source.specialty.value,
                 "original_chunk_id": chunk.id,
@@ -410,9 +465,7 @@ class LibraryToDeepDxBridge:
 
             points.append(
                 qdrant_models.PointStruct(
-                    id=point_id,
-                    vector=chunk.embedding,
-                    payload=payload
+                    id=point_id, vector=chunk.embedding, payload=payload
                 )
             )
 
@@ -422,7 +475,7 @@ class LibraryToDeepDxBridge:
         # Upsert in batches
         pushed = 0
         for i in range(0, len(points), QDRANT_BATCH_SIZE):
-            batch = points[i:i + QDRANT_BATCH_SIZE]
+            batch = points[i : i + QDRANT_BATCH_SIZE]
             try:
                 self._qdrant.upsert(collection_name=COLLECTION_NAME, points=batch)
                 pushed += len(batch)
@@ -457,7 +510,9 @@ class LibraryToDeepDxBridge:
             with self._target_db._get_conn() as conn:
                 cursor = conn.execute("SELECT id FROM sources")
                 existing_sources = {row[0] for row in cursor}
-            print(f"   → {len(existing_sources):,} sources already in target (use --force to re-process)")
+            print(
+                f"   → {len(existing_sources):,} sources already in target (use --force to re-process)"
+            )
 
         # Process each file
         for idx, file_info in enumerate(files, 1):
@@ -476,10 +531,12 @@ class LibraryToDeepDxBridge:
                 source, chunks = await self.process_file(file_info)
 
                 if not chunks:
-                    print(f"  ⏭️  No chunks generated (empty text)")
+                    print("  ⏭️  No chunks generated (empty text)")
                     continue
 
-                print(f"  📄 {len(chunks)} chunks from {file_info['cached_pages']} pages")
+                print(
+                    f"  📄 {len(chunks)} chunks from {file_info['cached_pages']} pages"
+                )
 
                 # Generate embeddings
                 embedded = await self.embed_chunks(chunks)
@@ -538,11 +595,18 @@ class LibraryToDeepDxBridge:
 # CLI
 # =============================================================================
 
+
 def main():
     parser = argparse.ArgumentParser(description="Sync Reference Library to Deep-DX")
-    parser.add_argument("--sample", type=int, default=0, help="Process only N files (for testing)")
-    parser.add_argument("--force", action="store_true", help="Re-process existing sources")
-    parser.add_argument("--skip-qdrant", action="store_true", help="Skip Qdrant sync (DB only)")
+    parser.add_argument(
+        "--sample", type=int, default=0, help="Process only N files (for testing)"
+    )
+    parser.add_argument(
+        "--force", action="store_true", help="Re-process existing sources"
+    )
+    parser.add_argument(
+        "--skip-qdrant", action="store_true", help="Skip Qdrant sync (DB only)"
+    )
     args = parser.parse_args()
 
     bridge = LibraryToDeepDxBridge(skip_qdrant=args.skip_qdrant)
@@ -551,4 +615,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

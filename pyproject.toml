@@ -119,9 +119,18 @@ visual = [
     "pillow>=10.0.0",
     "qdrant-client>=1.16.0",
 ]
+# Reference Library GUI dependencies
+gui = [
+    "customtkinter>=5.2.0",
+    "chromadb>=0.4.0",
+    "sentence-transformers>=2.2.0",
+    "fpdf2>=2.7.0",
+    "watchdog>=3.0.0",
+    "tqdm>=4.65.0",
+]
 # Full installation with all features
 full = [
-    "neurosynth[api,worker,visual]",
+    "neurosynth[api,worker,visual,gui]",
 ]
 # Development tools
 dev = [
@@ -138,9 +147,12 @@ dev = [
 
 [project.scripts]
 neurosynth = "neurosynth.cli:main"
+neuro-ref = "reference_library.ui.app:run_app"
+neuro-bridge = "bridges.library_to_deepdx:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+include = ["neurosynth*", "deep_dx*", "reference_library*", "bridges*"]
 
 [tool.black]
 line-length = 88
