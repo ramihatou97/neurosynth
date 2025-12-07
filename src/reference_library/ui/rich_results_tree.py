@@ -5,7 +5,7 @@ from typing import Callable, Optional
 from pathlib import Path
 from PIL import Image, ImageTk
 
-from src import config
+from reference_library import config
 from ..search.result_model import SearchResult, ChapterResult, MatchType
 from .styles import FONTS, PADDING, RICH_PREVIEW, RICH_PREVIEW_COLORS
 

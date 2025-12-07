@@ -6,7 +6,7 @@ import fitz  # PyMuPDF
 
 from ..search.result_model import ChapterMetadata, BookSeries, LibraryIndex
 from ..cache.database import Database
-from src import config
+from reference_library import config
 
 # Visual extraction imports (lazy loaded)
 _visual_imports_loaded = False

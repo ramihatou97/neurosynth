@@ -4,7 +4,7 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
-from src import config
+from reference_library import config
 
 from ..search.result_model import SearchResult
 

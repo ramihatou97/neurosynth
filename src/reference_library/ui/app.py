@@ -5,7 +5,7 @@ import threading
 from typing import Optional
 import asyncio
 
-from src import config
+from reference_library import config
 from ..cache.database import Database
 from ..search.pdf_searcher import PDFSearcher
 from ..search.result_model import SearchResult, SearchProgress, ChapterResult

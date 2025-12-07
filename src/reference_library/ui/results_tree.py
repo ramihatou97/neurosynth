@@ -4,7 +4,7 @@ from tkinter import ttk
 from typing import Callable, Optional
 from pathlib import Path
 
-from src import config
+from reference_library import config
 from ..search.result_model import SearchResult
 from .styles import FONTS, PADDING
 

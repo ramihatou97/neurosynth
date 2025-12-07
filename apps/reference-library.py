@@ -59,7 +59,7 @@ def check_dependencies():
 
 def check_api_key():
     """Check if Anthropic API key is set, with graceful degradation."""
-    from src import config
+    from reference_library import config
 
     if not config.AI_ENABLED:
         logger.warning(

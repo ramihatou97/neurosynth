@@ -16,7 +16,7 @@ from .semantic_searcher import SemanticSearcher
 from .neurosurgical_synonyms import expand_query, get_all_terms_for_query
 from ..cache.database import Database
 from ..utils.library_scanner import LibraryScanner
-from src import config
+from reference_library import config
 from .master_index import get_master_index
 from .query_intent_lean import get_intent_detector, QueryIntent
 from .section_detector import get_section_detector, MatchConfidence

@@ -8,7 +8,7 @@ chromadb = None
 SentenceTransformer = None
 SEMANTIC_AVAILABLE = None  # Determined on first use
 
-from src import config
+from reference_library import config
 from ..cache.database import Database
 
 
