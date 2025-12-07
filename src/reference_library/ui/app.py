@@ -51,6 +51,20 @@ class NeurosurgeryLibraryApp(ctk.CTk):
             database=self.database
         )
 
+        # Initialize auto-sync manager if enabled
+        self.auto_sync_manager = None
+        if config.get_auto_index_enabled() or config.get_auto_sync_enabled():
+            from reference_library.utils.auto_sync_manager import AutoSyncManager
+
+            self.auto_sync_manager = AutoSyncManager(
+                pdf_searcher=self.searcher,
+                database=self.database,
+                status_callback=self._on_auto_sync_status,
+                index_debounce_seconds=config.get_auto_index_debounce_seconds(),
+                sync_debounce_seconds=config.get_auto_sync_debounce_seconds()
+            )
+            self.auto_sync_manager.start()
+
         # State
         self.current_query = ""
         self.search_thread: Optional[threading.Thread] = None
@@ -290,6 +304,11 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         view_menu = tk.Menu(menubar, tearoff=0)
         view_menu.add_command(label="Show New Files Panel", command=lambda: self.new_files_panel.pack(side="left", fill="y", padx=(0, 5)))
         menubar.add_cascade(label="View", menu=view_menu)
+
+        # Settings menu
+        settings_menu = tk.Menu(menubar, tearoff=0)
+        settings_menu.add_command(label="Auto-Sync Configuration...", command=self._show_auto_sync_settings)
+        menubar.add_cascade(label="Settings", menu=settings_menu)
 
         self.config(menu=menubar)
 
@@ -666,13 +685,19 @@ class NeurosurgeryLibraryApp(ctk.CTk):
                     chapter_title=metadata.chapter_title,
                     page_count=metadata.page_count
                 )
-                # Update UI
-                self.after(0, lambda: self.new_files_panel.add_file(
-                    pdf_path,
-                    book_series=metadata.book_series,
-                    chapter_title=metadata.chapter_title,
-                    page_count=metadata.page_count
-                ))
+
+                # Queue for auto-indexing if enabled
+                if self.auto_sync_manager and config.get_auto_index_enabled():
+                    self.auto_sync_manager.queue_for_indexing(pdf_path)
+                else:
+                    # Original behavior: show in New Files panel
+                    self.after(0, lambda: self.new_files_panel.add_file(
+                        pdf_path,
+                        book_series=metadata.book_series,
+                        chapter_title=metadata.chapter_title,
+                        page_count=metadata.page_count
+                    ))
+
                 self.after(0, lambda: self._show_status(
                     f"New file detected: {pdf_path.name}",
                     "success"
@@ -711,7 +736,58 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         """Clean up on window close."""
         if self.file_watcher:
             self.file_watcher.stop()
+
+        # Stop auto-sync manager
+        if self.auto_sync_manager:
+            self.auto_sync_manager.stop()
+
         self.destroy()
+
+    # Auto-Sync Methods
+
+    def _on_auto_sync_status(self, message: str, level: str):
+        """Handle status updates from AutoSyncManager (thread-safe).
+
+        Args:
+            message: Status message to display
+            level: Message level ("info", "success", "error", "warning")
+        """
+        # Schedule GUI update on main thread
+        self.after(0, lambda: self._show_status(message, level))
+
+    def _show_auto_sync_settings(self):
+        """Show auto-sync configuration dialog."""
+        from reference_library.ui.auto_sync_dialog import AutoSyncDialog
+
+        dialog = AutoSyncDialog(self)
+        self.wait_window(dialog)
+
+        # Apply new settings if changed
+        if dialog.settings_changed:
+            self._apply_auto_sync_settings()
+
+    def _apply_auto_sync_settings(self):
+        """Apply auto-sync settings changes (restart manager if needed)."""
+        # Stop existing manager
+        if self.auto_sync_manager:
+            self.auto_sync_manager.stop()
+            self.auto_sync_manager = None
+
+        # Start new manager if enabled
+        if config.get_auto_index_enabled() or config.get_auto_sync_enabled():
+            from reference_library.utils.auto_sync_manager import AutoSyncManager
+
+            self.auto_sync_manager = AutoSyncManager(
+                pdf_searcher=self.searcher,
+                database=self.database,
+                status_callback=self._on_auto_sync_status,
+                index_debounce_seconds=config.get_auto_index_debounce_seconds(),
+                sync_debounce_seconds=config.get_auto_sync_debounce_seconds()
+            )
+            self.auto_sync_manager.start()
+            self._show_status("Auto-sync settings updated", "success")
+        else:
+            self._show_status("Auto-sync disabled", "info")
 
     # Semantic Index Methods
 

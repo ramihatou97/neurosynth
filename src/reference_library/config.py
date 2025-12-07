@@ -377,3 +377,98 @@ IMAGE_TYPE_COLORS = {
 # Ensure visual directories exist
 IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 THUMBS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Auto-Sync Configuration
+# Provides persistence for auto-indexing and auto-sync settings
+
+
+def get_auto_index_enabled() -> bool:
+    """Check if auto-indexing is enabled.
+
+    Returns:
+        True if auto-indexing is enabled, False otherwise (default: False)
+    """
+    config = _load_user_config()
+    return config.get("auto_index_enabled", False)
+
+
+def set_auto_index_enabled(enabled: bool) -> None:
+    """Enable/disable auto-indexing.
+
+    Args:
+        enabled: True to enable auto-indexing, False to disable
+    """
+    config = _load_user_config()
+    config["auto_index_enabled"] = enabled
+    _save_user_config(config)
+
+
+def get_auto_sync_enabled() -> bool:
+    """Check if auto-sync to Deep-DX is enabled.
+
+    Returns:
+        True if auto-sync is enabled, False otherwise (default: False)
+    """
+    config = _load_user_config()
+    return config.get("auto_sync_enabled", False)
+
+
+def set_auto_sync_enabled(enabled: bool) -> None:
+    """Enable/disable auto-sync to Deep-DX.
+
+    Args:
+        enabled: True to enable auto-sync, False to disable
+    """
+    config = _load_user_config()
+    config["auto_sync_enabled"] = enabled
+    _save_user_config(config)
+
+
+def get_auto_index_debounce_seconds() -> int:
+    """Get index debounce period in seconds.
+
+    The debounce period is how long to wait after the last new file
+    before starting a batch indexing operation. This allows multiple
+    files added rapidly to be batched together.
+
+    Returns:
+        Debounce period in seconds (default: 30)
+    """
+    config = _load_user_config()
+    return config.get("auto_index_debounce_seconds", 30)
+
+
+def set_auto_index_debounce_seconds(seconds: int) -> None:
+    """Set index debounce period.
+
+    Args:
+        seconds: Debounce period (5-300 seconds, will be clamped)
+    """
+    config = _load_user_config()
+    config["auto_index_debounce_seconds"] = max(5, min(300, seconds))
+    _save_user_config(config)
+
+
+def get_auto_sync_debounce_seconds() -> int:
+    """Get sync debounce period in seconds.
+
+    The debounce period is how long to wait after the last indexed file
+    before starting a batch sync operation to Deep-DX. This allows multiple
+    files indexed rapidly to be synced together.
+
+    Returns:
+        Debounce period in seconds (default: 60)
+    """
+    config = _load_user_config()
+    return config.get("auto_sync_debounce_seconds", 60)
+
+
+def set_auto_sync_debounce_seconds(seconds: int) -> None:
+    """Set sync debounce period.
+
+    Args:
+        seconds: Debounce period (10-600 seconds, will be clamped)
+    """
+    config = _load_user_config()
+    config["auto_sync_debounce_seconds"] = max(10, min(600, seconds))
+    _save_user_config(config)
