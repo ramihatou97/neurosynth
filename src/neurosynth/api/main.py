@@ -3,22 +3,46 @@
 Main entry point for the API service.
 """
 
+import logging
 from contextlib import asynccontextmanager
+from typing import Optional
 
+from ai.client import AsyncAIClient
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
 from neurosynth.api.deps import close_redis_pool, get_settings
 from neurosynth.api.routes import health_router, jobs_router
+
+logger = logging.getLogger(__name__)
+
+# Global AI client instance
+ai_client: Optional[AsyncAIClient] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan handler."""
-    # Startup
-    yield
-    # Shutdown
+    """Application lifespan handler - manage AI client and Redis pool."""
+    global ai_client
+
+    # Startup: Initialize persistent AI client
+    settings = get_settings()
+    logger.info("initializing_ai_client")
+    ai_client = AsyncAIClient(
+        voyage_api_key=settings.voyage_api_key,
+        anthropic_api_key=settings.anthropic_api_key,
+        timeout=60.0,
+    )
+    logger.info("ai_client_initialized")
+
+    yield  # Application runs
+
+    # Shutdown: Close connections
+    logger.info("shutting_down_ai_client")
+    if ai_client:
+        await ai_client.close()
+
     await close_redis_pool()
+    logger.info("shutdown_complete")
 
 
 def create_app() -> FastAPI:

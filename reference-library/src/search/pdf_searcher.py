@@ -11,11 +11,11 @@ import fitz  # PyMuPDF
 if TYPE_CHECKING:
     from src.search.study_package.report import StudyModeReport
 
+
 from src import config
 
 from ..cache.database import Database
 from ..logger import get_logger
-from ..utils.library_scanner import LibraryScanner
 from .intent_classifier import get_hybrid_classifier
 from .master_index import get_master_index
 from .neurosurgical_synonyms import expand_query
@@ -70,6 +70,9 @@ class PDFSearcher:
         database: Database,
         enable_query_expansion: bool = True,
     ):
+        # Lazy import to avoid circular import with library_scanner
+        from ..utils.library_scanner import LibraryScanner
+
         self.library_path = library_path.resolve()
         self.database = database
         self.scanner = LibraryScanner(library_path, database)

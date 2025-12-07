@@ -1,6 +1,5 @@
 """UI styles and theming for CustomTkinter."""
 
-
 # Font configurations
 FONTS = {
     "heading": ("Helvetica", 16, "bold"),

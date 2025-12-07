@@ -132,7 +132,7 @@ OUTPUT FORMAT (JSON List):
             return relevant_chunks
 
         except Exception as e:
-            print(f"⚠️ Critic Relevance Error: {e}")
+            logger.warning(f"⚠️ Critic Relevance Error: {e}")
             # Fallback: return top 3 chunks without filtering if critic fails
             return chunks[:3]
 
@@ -194,7 +194,7 @@ OUTPUT FORMAT (JSON):
                 raise
 
         except Exception as e:
-            print(f"⚠️ Critic Safety Error: {e}")
+            logger.warning(f"⚠️ Critic Safety Error: {e}")
             # Fail closed (assume unsafe if we can't verify)?
             # Or fail open but warn? For Phase 2, we return a warning.
             return {
@@ -249,7 +249,9 @@ OUTPUT FORMAT (JSON):
             }
 
             logger.debug(f"Critic checking safety for query: {query[:50]}...")
-            response = await client.post(ANTHROPIC_API_URL, headers=headers, json=payload)
+            response = await client.post(
+                ANTHROPIC_API_URL, headers=headers, json=payload
+            )
             response.raise_for_status()
             data = response.json()
 
@@ -332,7 +334,9 @@ OUTPUT FORMAT (JSON List):
                 "messages": [{"role": "user", "content": prompt}],
             }
 
-            response = await client.post(ANTHROPIC_API_URL, headers=headers, json=payload)
+            response = await client.post(
+                ANTHROPIC_API_URL, headers=headers, json=payload
+            )
             response.raise_for_status()
             data = response.json()
 

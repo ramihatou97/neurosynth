@@ -2,6 +2,7 @@
 .env
 .venv/
 venv/
+venv_colbert/
 __pycache__/
 *.pyc
 
@@ -70,4 +71,13 @@ additional*.ini
 *.db
 *.sqlite
 *.sqlite3
-venv_colbert/
+
+# Generated assets
+assets/
+assets/extracted_images/
+
+# Vector database storage
+data/qdrant_storage/
+
+# Extraction state
+extraction_state.json

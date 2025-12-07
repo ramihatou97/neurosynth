@@ -1,8 +1,7 @@
-from typing import List, Optional, Union
 import logging
+from typing import List, Optional, Union
 
-from ai.client import AIClient
-from ai.async_client import AsyncAIClient
+from ai.client import AIClient, AsyncAIClient
 from deep_dx.config import get_deepdx_settings
 from deep_dx.critic.critic import DeepDxCritic
 from index.precision_search import PrecisionSearchEngine
@@ -69,11 +68,12 @@ Output ONLY the synonyms separated by spaces. Do not explain."""
             query_embedding=query_embedding,
             topic=expanded_query,
             top_k=settings.retrieval_top_k,
-            include_images=False,
+            include_images=True,
         )
 
-        chunks = retrieval_result.chunks
-        if not chunks:
+        results = retrieval_result.results
+        images = retrieval_result.images
+        if not results:
             return {
                 "answer": "I do not have enough information to answer this question.",
                 "sources": [],
@@ -84,9 +84,11 @@ Output ONLY the synonyms separated by spaces. Do not explain."""
         # 3. Format Context
         context_texts = []
         sources_meta = []
-        for res in chunks:
+        for res in results:
             chunk = res.chunk
-            text = f"[Source: {chunk.source_title}, p.{chunk.page_start}]: {chunk.content}"
+            text = (
+                f"[Source: {chunk.source_title}, p.{chunk.page_start}]: {chunk.content}"
+            )
             context_texts.append(text)
             sources_meta.append(chunk.source_title)
 
@@ -134,6 +136,7 @@ INSTRUCTIONS:
             "sources": list(set(sources_meta)),
             "confidence": confidence,
             "context_used": context_texts,
+            "images": images,
         }
 
     def generate_answer(self, query: str) -> dict:
@@ -147,7 +150,7 @@ INSTRUCTIONS:
             - confidence: float
             - context_used: List[str]
         """
-        print(f"🧠 Synthesizing answer for: {query[:50]}...")
+        logger.info(f"🧠 Synthesizing answer for: {query[:50]}...")
 
         # 0. Query Expansion (Broad Domain Optimization)
         # We expand the query with synonyms to catch domain variations (e.g. VS vs Acoustic Neuroma)
@@ -164,9 +167,9 @@ Output ONLY the synonyms separated by spaces. Do not explain."""
             )
             if synonyms and len(synonyms) < 100:  # Sanity check
                 expanded_query = f"{query} {synonyms}"
-                print(f"  ✨ Expanded Query: {expanded_query}")
+                logger.debug(f"  ✨ Expanded Query: {expanded_query}")
         except Exception as e:
-            print(f"  ⚠️ Expansion failed: {e}")
+            logger.warning(f"  ⚠️ Expansion failed: {e}")
 
         # 1. Embed Query
         query_embedding = self.ai.get_embedding(
@@ -185,11 +188,12 @@ Output ONLY the synonyms separated by spaces. Do not explain."""
             query_embedding=query_embedding,
             topic=expanded_query,  # Use expanded for retrieval keywords
             top_k=settings.retrieval_top_k,
-            include_images=False,
+            include_images=True,
         )
 
-        chunks = retrieval_result.chunks
-        if not chunks:
+        results = retrieval_result.results
+        images = retrieval_result.images
+        if not results:
             return {
                 "answer": "I do not have enough information to answer this question.",
                 "sources": [],
@@ -200,7 +204,7 @@ Output ONLY the synonyms separated by spaces. Do not explain."""
         # 3. Format Context
         context_texts = []
         sources_meta = []
-        for res in chunks:
+        for res in results:
             # res is SearchResult(chunk=..., score=...)
             chunk = res.chunk
             text = (
@@ -236,7 +240,7 @@ INSTRUCTIONS:
         # 5. Critic Verification
         confidence = 1.0  # Default
         if self.critic:
-            print("  🕵️‍♀️ Critic reviewing answer...")
+            logger.info("  🕵️‍♀️ Critic reviewing answer...")
             safety_result = self.critic.check_safety(query, answer)
 
             if not safety_result.get("safe", True):
@@ -244,13 +248,14 @@ INSTRUCTIONS:
                 warning_msg = f"\n\n🚨 **SAFETY WARNING**: The System Critic flagged this answer as potentially unsafe: {'; '.join(issues)}"
                 answer += warning_msg
                 confidence = 0.0
-                print(f"  ⚠️ Answer flagged unsafe: {issues}")
+                logger.warning(f"  ⚠️ Answer flagged unsafe: {issues}")
             else:
-                print("  ✅ Critic approved safety.")
+                logger.info("  ✅ Critic approved safety.")
 
         return {
             "answer": answer,
             "sources": list(set(sources_meta)),
             "confidence": confidence,
             "context_used": context_texts,
+            "images": images,
         }

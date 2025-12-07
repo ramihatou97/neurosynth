@@ -140,6 +140,8 @@ class Chunk:
     image_ids: list[str] = field(default_factory=list)
     # For deduplication tracking
     also_in_sources: list[str] = field(default_factory=list)
+    # Dynamic metadata (e.g. NeuroLi enrichment)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

@@ -1,24 +1,46 @@
 """
-AI Client
+AI Client (Async)
 
-Simple, focused AI client for embeddings and synthesis.
+Production-ready async AI client for embeddings and synthesis.
 Uses Voyage AI for embeddings and Claude for synthesis.
+
+Features:
+- Async/await with httpx.AsyncClient
+- Connection pooling (20 keepalive, 100 max connections)
+- Automatic retry with exponential backoff
+- Structured logging with context
+- Context manager support for lifecycle
 """
 
 import os
 from typing import List, Optional
 
 import httpx
+import structlog
 from config import settings
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
+
+logger = structlog.get_logger(__name__)
 
 
-class AIClient:
+class AsyncAIClient:
     """
-    AI client for embeddings and text synthesis.
+    Production-ready async AI client with connection pooling and resilience.
 
     Uses:
     - Voyage AI for embeddings (high quality, reasonable cost)
     - Claude for synthesis (best for long-form medical content)
+
+    Features:
+    - Connection pooling for efficiency
+    - Automatic retry on transient failures
+    - Structured logging for observability
+    - Context manager for proper cleanup
     """
 
     VOYAGE_API_URL = "https://api.voyageai.com/v1/embeddings"
@@ -28,6 +50,7 @@ class AIClient:
         self,
         voyage_api_key: Optional[str] = None,
         anthropic_api_key: Optional[str] = None,
+        timeout: float = 60.0,
     ):
         self.voyage_key = (
             voyage_api_key or settings.voyage_api_key or os.getenv("VOYAGE_API_KEY")
@@ -37,8 +60,22 @@ class AIClient:
             or settings.anthropic_api_key
             or os.getenv("ANTHROPIC_API_KEY")
         )
+        self.timeout = timeout
 
         self._validate_keys()
+
+        # Persistent AsyncClient for connection pooling
+        self.client = httpx.AsyncClient(
+            timeout=self.timeout,
+            limits=httpx.Limits(max_keepalive_connections=20, max_connections=100),
+        )
+
+        logger.info(
+            "ai_client_initialized",
+            timeout=timeout,
+            has_voyage_key=bool(self.voyage_key),
+            has_anthropic_key=bool(self.anthropic_key),
+        )
 
     def _validate_keys(self):
         """Validate that required API keys are present"""
@@ -57,26 +94,31 @@ class AIClient:
     # Embeddings
     # ========================================================================
 
-    def get_embedding(self, text: str) -> list[float]:
+    async def get_embedding(
+        self, text: str, model: Optional[str] = None
+    ) -> list[float]:
         """
         Get embedding for a single text.
 
         Args:
             text: Text to embed
+            model: Voyage model to use (default from settings)
 
         Returns:
             Embedding vector
         """
-        embeddings = self.get_embeddings([text])
+        embeddings = await self.get_embeddings([text], model=model)
         return embeddings[0]
 
-    def get_embeddings(self, texts: list[str], model: str = None) -> list[list[float]]:
+    async def get_embeddings(
+        self, texts: list[str], model: Optional[str] = None
+    ) -> list[list[float]]:
         """
         Get embeddings for multiple texts.
 
         Args:
             texts: List of texts to embed
-            model: Voyage model to use (default: voyage-3-lite)
+            model: Voyage model to use (default: from settings)
 
         Returns:
             List of embedding vectors
@@ -89,59 +131,88 @@ class AIClient:
 
         for i in range(0, len(texts), batch_size):
             batch = texts[i : i + batch_size]
-            batch_embeddings = self._get_embeddings_batch(batch, model)
+            batch_embeddings = await self._get_embeddings_batch(batch, model)
             all_embeddings.extend(batch_embeddings)
 
         return all_embeddings
 
-    def _get_embeddings_batch(self, texts: list[str], model: str) -> list[list[float]]:
-        """Get embeddings for a batch of texts"""
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type(
+            (httpx.ConnectError, httpx.ReadTimeout, httpx.HTTPStatusError)
+        ),
+    )
+    async def _get_embeddings_batch(
+        self, texts: list[str], model: str
+    ) -> list[list[float]]:
+        """
+        Get embeddings for a batch of texts (with retry).
+
+        Includes automatic retry on transient failures.
+        """
         # Clean texts (Voyage has max length)
         cleaned = [self._truncate_text(t, max_chars=8000) for t in texts]
 
-        with httpx.Client(timeout=60.0) as client:
-            response = client.post(
-                self.VOYAGE_API_URL,
-                headers={
-                    "Authorization": f"Bearer {self.voyage_key}",
-                    "Content-Type": "application/json",
-                },
-                json={"model": model, "input": cleaned, "input_type": "document"},
-            )
-            response.raise_for_status()
-            data = response.json()
+        logger.info(
+            "requesting_embeddings",
+            provider="voyage",
+            batch_size=len(texts),
+            model=model,
+        )
+
+        response = await self.client.post(
+            self.VOYAGE_API_URL,
+            headers={
+                "Authorization": f"Bearer {self.voyage_key}",
+                "Content-Type": "application/json",
+            },
+            json={"model": model, "input": cleaned, "input_type": "document"},
+        )
+        response.raise_for_status()
+        data = response.json()
 
         # Extract embeddings in order
         embeddings = [None] * len(texts)
         for item in data["data"]:
             embeddings[item["index"]] = item["embedding"]
 
+        logger.info("embeddings_received", count=len(embeddings))
         return embeddings
 
     # ========================================================================
     # Synthesis
     # ========================================================================
 
-    def synthesize(
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type(
+            (httpx.ConnectError, httpx.ReadTimeout, httpx.HTTPStatusError)
+        ),
+    )
+    async def synthesize(
         self,
         prompt: str,
         system_prompt: Optional[str] = None,
         max_tokens: int = 4096,
         temperature: float = 0.3,
+        model: Optional[str] = None,
     ) -> str:
         """
-        Generate synthesized content using Claude.
+        Generate synthesized content using Claude (with retry).
 
         Args:
             prompt: The main prompt
             system_prompt: System instructions
             max_tokens: Maximum tokens in response
             temperature: Sampling temperature (lower = more focused)
+            model: Claude model to use (default from settings)
 
         Returns:
             Generated text
         """
-        model = settings.synthesis_model
+        model = model or settings.synthesis_model
 
         messages = [{"role": "user", "content": prompt}]
 
@@ -158,28 +229,40 @@ Guidelines:
 
         system = system_prompt or default_system
 
-        with httpx.Client(timeout=120.0) as client:
-            response = client.post(
-                self.ANTHROPIC_API_URL,
-                headers={
-                    "x-api-key": self.anthropic_key,
-                    "anthropic-version": "2023-06-01",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": model,
-                    "max_tokens": max_tokens,
-                    "temperature": temperature,
-                    "system": system,
-                    "messages": messages,
-                },
-            )
-            response.raise_for_status()
-            data = response.json()
+        logger.info(
+            "requesting_synthesis",
+            provider="anthropic",
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
 
-        return data["content"][0]["text"]
+        response = await self.client.post(
+            self.ANTHROPIC_API_URL,
+            headers={
+                "x-api-key": self.anthropic_key,
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": model,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "system": system,
+                "messages": messages,
+            },
+            timeout=120.0,  # Longer timeout for synthesis
+        )
+        response.raise_for_status()
+        data = response.json()
 
-    def synthesize_section(
+        text = data["content"][0]["text"]
+        tokens_used = data.get("usage", {}).get("output_tokens", 0)
+
+        logger.info("synthesis_complete", tokens_used=tokens_used)
+        return text
+
+    async def synthesize_section(
         self,
         topic: str,
         section_name: str,
@@ -250,7 +333,24 @@ Create a unified, coherent section that:
 
 Do not invent information not present in the sources."""
 
-        return self.synthesize(prompt, max_tokens=4096)
+        return await self.synthesize(prompt, max_tokens=4096)
+
+    # ========================================================================
+    # Lifecycle Management
+    # ========================================================================
+
+    async def close(self):
+        """Close the persistent HTTP client."""
+        await self.client.aclose()
+        logger.info("ai_client_closed")
+
+    async def __aenter__(self):
+        """Context manager entry."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit."""
+        await self.close()
 
     # ========================================================================
     # Utilities
@@ -261,3 +361,7 @@ Do not invent information not present in the sources."""
         if len(text) <= max_chars:
             return text
         return text[:max_chars]
+
+
+# Backward compatibility alias
+AIClient = AsyncAIClient

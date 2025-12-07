@@ -64,6 +64,10 @@ class Settings(BaseSettings):
         default=True,
         description="Enable image extraction from PDFs",
     )
+    colpali_enabled: bool = Field(
+        default=True,
+        description="Enable ColPali visual embedding generation during ingestion",
+    )
     min_image_size: int = Field(
         default=100,
         description="Minimum image dimension in pixels to extract",

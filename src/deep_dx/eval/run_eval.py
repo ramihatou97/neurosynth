@@ -19,9 +19,22 @@ async def run_evaluation():
     print("🚀 Starting Deep-DX Evaluation Phase...")
 
     # 1. Setup
-    settings = get_deepdx_settings()
-    db = Database(db_path=Path("neurosynth.db"))
-    ai_client = AIClient()
+    # Override Global Settings (which AIClient uses)
+    from config import settings as sys_settings
+
+    sys_settings.embedding_model = "voyage-large-2-instruct"
+    print(f"🔧 Configured Embedding Model: {sys_settings.embedding_model}")
+
+    get_deepdx_settings()  # Init deep settings too
+
+    # Use absolute path to ensure we hit the populated DB
+    db_path = Path("/Users/ramihatoum/neurosynth/neurosynth.db")
+    if not db_path.exists():
+        print(f"❌ Database not found at {db_path}")
+        return
+
+    db = Database(db_path=db_path)
+    ai_client = AIClient()  # Reads env vars
 
     # Initialize Critic
     try:
@@ -39,7 +52,9 @@ async def run_evaluation():
     synthesizer = DeepDxSynthesizer(search_engine, ai_client, critic=critic)
 
     # 2. Load Evaluation Dataset
-    eval_path = Path("src/deep_dx/eval/gold_standard_eval.json")
+    eval_path = Path(
+        "/Users/ramihatoum/neurosynth/src/deep_dx/eval/gold_standard_eval.json"
+    )
     if not eval_path.exists():
         print(f"❌ Eval dataset not found at {eval_path}")
         return
@@ -48,12 +63,12 @@ async def run_evaluation():
         data = json.load(f)
         queries = data.get("queries", [])
 
-    # Limit to first 10 for Optimization Cycle
-    # queries = queries[:10]
-    # Actually, let's run a strided sample to get diversity (every 10th)
-    queries = queries[::10]  # 10 queries total
+    # Set Evaluation Scope
+    # Run a meaningful subset (first 10) to test the pipeline without blocking for hours
+    # Once validated, we can remove the slice to run all 50+.
+    queries = queries[:10]
 
-    print(f"📋 Loaded {len(queries)} queries (Subset for Optimization).")
+    print(f"📋 Loaded {len(queries)} queries for Evaluation Run.")
 
     # 3. Run Evaluation Loop
     results = []

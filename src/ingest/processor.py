@@ -6,6 +6,7 @@ Handles complex medical textbook layouts.
 """
 
 import hashlib
+import logging
 import re
 from datetime import datetime
 from pathlib import Path
@@ -16,6 +17,8 @@ from config import settings
 from models import DocumentType, ProcessedDocument, Section, SourceMetadata, Specialty
 
 from .image_extractor import ImageExtractor
+
+logger = logging.getLogger(__name__)
 
 
 class DocumentProcessor:
@@ -111,6 +114,7 @@ class DocumentProcessor:
 
     def __init__(self):
         self.image_extractor = ImageExtractor()
+        self._colpali_client = None  # Lazy load
 
     def process(self, pdf_path: Path) -> ProcessedDocument:
         """
@@ -146,6 +150,10 @@ class DocumentProcessor:
 
             # Extract images with context
             images = self.image_extractor.extract_all(doc, doc_id, pdf_path)
+
+            # Generate embeddings for images (if ColPali enabled)
+            if images and self._should_embed_images():
+                images = self._embed_images(images)
 
             # Associate images with sections
             self._associate_images_with_sections(sections, images)
@@ -366,6 +374,56 @@ class DocumentProcessor:
                 return True, 1
 
         return False, 0
+
+    def _should_embed_images(self) -> bool:
+        """Check if image embedding is enabled."""
+        try:
+            from neurosynth.config import get_settings
+
+            ns_settings = get_settings()
+            return getattr(ns_settings, "colpali_enabled", True)
+        except ImportError:
+            # Fallback to regular settings if neurosynth.config not available
+            return getattr(settings, "colpali_enabled", True)
+
+    def _embed_images(self, images: list) -> list:
+        """Generate ColPali embeddings for extracted images."""
+        if not images:
+            return images
+
+        try:
+            from neurosynth.llm.colpali import get_colpali_client
+
+            # Get ColPali client
+            if self._colpali_client is None:
+                self._colpali_client = get_colpali_client()
+
+            # Get image paths
+            image_paths = [img.file_path for img in images]
+
+            logger.info(f"Generating ColPali embeddings for {len(images)} images...")
+
+            # Generate embeddings synchronously
+            embeddings = self._colpali_client._embed_images_sync(image_paths)
+
+            # Attach embeddings to images
+            for img, embedding in zip(images, embeddings):
+                img.embedding = embedding.tolist()
+
+            logger.info(f"Generated {len(embeddings)} visual embeddings")
+
+            return images
+
+        except ImportError as e:
+            logger.warning(
+                f"ColPali not available: {e}. Images saved without embeddings."
+            )
+            return images
+        except Exception as e:
+            logger.warning(
+                f"Image embedding failed: {e}. Images saved without embeddings."
+            )
+            return images
 
     def _associate_images_with_sections(
         self, sections: list[Section], images: list

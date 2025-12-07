@@ -1,0 +1,86 @@
+{
+  "name": "NeuroLi Medical Library",
+  "version": "1.0",
+  "root": "/Users/ramihatoum/Desktop/NeuroLi",
+  "total_documents": 1505,
+  "collections": [
+    {
+      "id": "01_COMPLETE_TEXTBOOKS",
+      "name": "01 Complete Textbooks",
+      "type": "complete_textbooks",
+      "document_count": 61
+    },
+    {
+      "id": "02_MULTI_CHAPTER_BOOKS",
+      "name": "02 Multi Chapter Books",
+      "type": "multi_chapter_books",
+      "document_count": 1129
+    },
+    {
+      "id": "03_SINGLE_CHAPTERS",
+      "name": "03 Single Chapters",
+      "type": "single_chapters",
+      "document_count": 0
+    },
+    {
+      "id": "04_EVIDENCE_BASE_STUDIES",
+      "name": "04 Evidence Base Studies",
+      "type": "evidence_studies",
+      "document_count": 157
+    },
+    {
+      "id": "05_EDUCATIONAL_MATERIALS",
+      "name": "05 Educational Materials",
+      "type": "educational_materials",
+      "document_count": 148
+    },
+    {
+      "id": "06_CLINICAL_GUIDELINES",
+      "name": "06 Clinical Guidelines",
+      "type": "clinical_guidelines",
+      "document_count": 10
+    }
+  ],
+  "color_system": {
+    "\ud83d\udd34": {
+      "name": "Vascular",
+      "hex": "#e74c3c"
+    },
+    "\ud83d\udfe0": {
+      "name": "Neuro-Oncology",
+      "hex": "#e67e22"
+    },
+    "\ud83d\udfe1": {
+      "name": "Trauma",
+      "hex": "#f39c12"
+    },
+    "\ud83d\udfe2": {
+      "name": "Spine",
+      "hex": "#27ae60"
+    },
+    "\ud83d\udd35": {
+      "name": "Functional",
+      "hex": "#3498db"
+    },
+    "\ud83d\udfe3": {
+      "name": "Pediatric",
+      "hex": "#9b59b6"
+    },
+    "\u26ab": {
+      "name": "Skull Base",
+      "hex": "#2c3e50"
+    },
+    "\u26aa": {
+      "name": "Anatomy/General",
+      "hex": "#95a5a6"
+    },
+    "\ud83d\udfe4": {
+      "name": "Peripheral Nerve",
+      "hex": "#8b4513"
+    },
+    "\ud83e\ude77": {
+      "name": "Infection",
+      "hex": "#ff69b4"
+    }
+  }
+}

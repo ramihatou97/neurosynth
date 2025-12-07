@@ -24,6 +24,7 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-info}
     volumes:
       - jobs-data:/data/jobs
+      - ./reference-library:/home/neurosynth/.reference-library:ro
     depends_on:
       redis:
         condition: service_healthy
@@ -77,6 +78,7 @@ services:
     volumes:
       - jobs-data:/data/jobs
       - worker-cache:/home/neurosynth/.neurosynth
+      - ./reference-library:/home/neurosynth/.reference-library
     depends_on:
       redis:
         condition: service_healthy
@@ -113,6 +115,20 @@ services:
       timeout: 5s
       start_period: 5s
       retries: 5
+    restart: unless-stopped
+    networks:
+      - neurosynth-net
+
+  # =============================================================================
+  # Qdrant - Vector Database (Deep-DX)
+  # =============================================================================
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: neurosynth-qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
     restart: unless-stopped
     networks:
       - neurosynth-net
@@ -201,6 +217,8 @@ volumes:
   worker-cache:
     driver: local
   redis-data:
+    driver: local
+  qdrant-data:
     driver: local
 
 # =============================================================================

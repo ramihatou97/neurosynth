@@ -641,12 +641,12 @@ class NeurosurgicalKeywords:
 class ImageFilterConfig:
     """Configuration for image filtering and classification."""
 
-    # Size thresholds
-    min_bytes: int = 1024  # 1KB minimum
-    min_dimension: int = 100  # Minimum width OR height in pixels
-    min_area: int = 15000  # Minimum width * height
-    max_aspect_ratio: float = 6.0  # Reject if > this
-    min_aspect_ratio: float = 0.167  # Reject if < this (1/6)
+    # Size thresholds - Relaxed for neuroanatomy line art
+    min_bytes: int = 500  # 500 bytes minimum (line art compresses well)
+    min_dimension: int = 70  # Minimum width OR height in pixels
+    min_area: int = 5000  # Minimum width * height (~70x70)
+    max_aspect_ratio: float = 8.0  # Reject if > this (panoramic views)
+    min_aspect_ratio: float = 0.125  # Reject if < this (1/8)
 
     # Quality thresholds
     min_confidence: float = 0.25  # Minimum classification confidence

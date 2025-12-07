@@ -2,9 +2,11 @@
 Configuration for Neurosurgical Chapter Synthesis Engine
 """
 
+import logging
 from pathlib import Path
 from typing import Optional
 
+import structlog
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
@@ -76,3 +78,17 @@ def ensure_directories():
     settings.processed_path.mkdir(parents=True, exist_ok=True)
     settings.output_path.mkdir(parents=True, exist_ok=True)
     settings.database_path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def configure_logging():
+    """Configure structured logging for observability."""
+    structlog.configure(
+        processors=[
+            structlog.processors.add_log_level,
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.dev.ConsoleRenderer(),  # Human-readable in dev
+        ],
+        wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
+        context_class=dict,
+        logger_factory=structlog.PrintLoggerFactory(),
+    )

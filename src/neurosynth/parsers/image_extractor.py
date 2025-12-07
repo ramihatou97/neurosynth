@@ -13,11 +13,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import fitz  # PyMuPDF
-from PIL import Image
-from rich.console import Console
-
 from neurosynth.config import get_settings
 from neurosynth.models.visual import ImageType, VisualElement
+from PIL import Image
+from rich.console import Console
 
 console = Console()
 
@@ -60,47 +59,48 @@ def _is_medical_image(
     area = width * height
 
     # Rule 1: Reject if BOTH dimensions are too small (tiny icons)
-    # Single dimension can be small for panoramic surgical views
-    if width < 150 and height < 150:
+    # Relaxed for neuroanatomy: narrow strips (spinal tracts) can be 70px wide
+    if width < 70 and height < 70:
         return ImageFilterResult(
             is_valid=False,
-            rejection_reason=f"Too small: {width}x{height}px (both dims < 150px)",
+            rejection_reason=f"Too small: {width}x{height}px (both dims < 70px)",
             confidence=0.95,
         )
 
     # Rule 2: Reject extreme aspect ratios (separator bars, banners, lines)
-    # Medical images rarely exceed 4:1 aspect ratio
-    if aspect_ratio > 6.0:
+    # Relaxed to 8:1 for panoramic surgical views and wide anatomical diagrams
+    if aspect_ratio > 8.0:
         return ImageFilterResult(
             is_valid=False,
-            rejection_reason=f"Horizontal bar: aspect ratio {aspect_ratio:.1f}:1 (> 6:1)",
+            rejection_reason=f"Horizontal bar: aspect ratio {aspect_ratio:.1f}:1 (> 8:1)",
             confidence=0.90,
         )
-    if aspect_ratio < (1 / 6):
+    if aspect_ratio < (1 / 8):
         return ImageFilterResult(
             is_valid=False,
-            rejection_reason=f"Vertical bar: aspect ratio 1:{1/aspect_ratio:.1f} (> 6:1)",
+            rejection_reason=f"Vertical bar: aspect ratio 1:{1/aspect_ratio:.1f} (> 8:1)",
             confidence=0.90,
         )
 
     # Rule 3: Reject very small total area (decorative elements)
-    # A meaningful figure should be at least ~170x170 equivalent
-    if area < 30_000:
+    # Relaxed to 5000 px² (~70x70) for neuroanatomy line art and small diagrams
+    if area < 5_000:
         return ImageFilterResult(
             is_valid=False,
-            rejection_reason=f"Small area: {width}x{height} = {area:,}px² (< 30,000)",
+            rejection_reason=f"Small area: {width}x{height} = {area:,}px² (< 5,000)",
             confidence=0.85,
         )
 
-    # Rule 4: Reject suspiciously small file sizes (solid color blocks, simple shapes)
-    # A real medical image with detail should be > 5KB
-    if file_size_bytes > 0 and file_size_bytes < 5_000:
-        # Exception: very small images that passed other checks might be valid thumbnails
-        if area > 50_000:
+    # Rule 4: DISABLED - Line art schematics compress very well
+    # Medical diagrams (Circle of Willis, neural pathways) may be <1KB
+    # Keeping only for truly empty/solid images
+    if file_size_bytes > 0 and file_size_bytes < 500:
+        # Only reject if suspiciously small for the area
+        if area > 100_000:
             return ImageFilterResult(
                 is_valid=False,
-                rejection_reason=f"Low complexity: {file_size_bytes:,} bytes for {area:,}px²",
-                confidence=0.80,
+                rejection_reason=f"Suspiciously low complexity: {file_size_bytes:,} bytes for {area:,}px²",
+                confidence=0.70,
             )
 
     # Rule 5: Reject typical logo dimensions (common publisher logo sizes)

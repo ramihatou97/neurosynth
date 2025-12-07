@@ -4,12 +4,15 @@ Search Engine
 Vector similarity search for finding relevant content.
 """
 
+import logging
 from dataclasses import dataclass
 from typing import List, Optional, Set, Tuple
 
 import numpy as np
 from config import settings
 from models import Chunk, ChunkType, ExtractedImage, ImageType, SearchResult
+
+logger = logging.getLogger(__name__)
 
 from .database import Database
 
@@ -115,6 +118,16 @@ class SearchEngine:
         # Load images with embeddings
         if self._image_cache is None:
             self._image_cache = self.db.get_all_images_with_embeddings()
+
+        # FALLBACK: If no embeddings exist, use source-based retrieval
+        if not self._image_cache and source_ids:
+            logger.info("No image embeddings found - using source-based retrieval")
+            fallback_images = []
+            for source_id in source_ids:
+                images = self.db.get_images_by_source(source_id)
+                for img in images[: top_k // len(source_ids) if source_ids else top_k]:
+                    fallback_images.append((img, 1.0))  # Dummy score
+            return fallback_images[:top_k]
 
         results = []
         query_vec = np.array(query_embedding)

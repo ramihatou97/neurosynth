@@ -17,9 +17,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml requirements.txt* ./
 COPY src/ ./src/
 
-# Install all dependencies
+# Install all dependencies with increased timeout and retries
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -e . && \
+    pip install --no-cache-dir --timeout=300 --retries=10 -e . && \
     pip install --no-cache-dir redis>=5.0.0
 
 # Runtime stage

@@ -29,8 +29,9 @@ class ImageExtractor:
     """
 
     # Minimum dimensions to consider an image meaningful
-    MIN_WIDTH = 100
-    MIN_HEIGHT = 100
+    # Relaxed for neuroanatomy: narrow strips (spinal tracts) can be 70px
+    MIN_WIDTH = 70
+    MIN_HEIGHT = 70
 
     # Keywords for image type classification (found in captions/surrounding text)
     TYPE_KEYWORDS = {
@@ -198,8 +199,9 @@ class ImageExtractor:
             return None
 
         # Filter out very thin images (likely lines/borders)
+        # Relaxed to 8:1 for panoramic surgical views
         aspect_ratio = width / height if height > 0 else 0
-        if aspect_ratio > 10 or aspect_ratio < 0.1:
+        if aspect_ratio > 8 or aspect_ratio < 0.125:
             return None
 
         # Generate image ID

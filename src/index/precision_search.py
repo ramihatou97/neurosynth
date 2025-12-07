@@ -160,7 +160,9 @@ class PrecisionRetrievalResult:
 # ColBERT Client (Imported from Deep-DX)
 # ═══════════════════════════════════════════════════════════════════════════
 
+from deep_dx.knowledge.metadata_manager import MetadataManager
 from deep_dx.retrieval.colbert_client import ColBERTClient
+from deep_dx.retrieval.qdrant_retriever import QdrantRetriever
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Precision Search Engine
@@ -172,7 +174,7 @@ class PrecisionSearchEngine:
     Enhanced search engine with ColBERT precision reranking.
 
     Architecture:
-        Query → Classify → Dense Search (top 100) → ColBERT Rerank (top 20) → Score
+        Query → Classify → Dense Search (Qdrant) → ColBERT Rerank (top 20) → Score
 
     Usage:
         engine = PrecisionSearchEngine(db)
@@ -182,6 +184,10 @@ class PrecisionSearchEngine:
     def __init__(self, db: Database, colbert_enabled: bool = True):
         self.db = db
         self.base_search = SearchEngine(db)
+
+        # Initialize Qdrant Retriever (The Showroom)
+        self.qdrant = QdrantRetriever()
+
         # Deep-DX ColBERT Client integration
         self.colbert_enabled = colbert_enabled
         self.colbert = None
@@ -192,6 +198,21 @@ class PrecisionSearchEngine:
             except Exception as e:
                 logger.warning(f"✗ ColBERT unavailable: {e}")
                 self.colbert = None
+
+        # Initialize Metadata Manager (NeuroLi Integration)
+        self.source_map = {}
+        try:
+            self.metadata_manager = MetadataManager()
+            logger.info("📚 NeuroLi Metadata Manager connected.")
+
+            # Build Source Map (Source ID -> Full Path String)
+            sources = self.db.get_all_sources()
+            for s in sources:
+                self.source_map[s.id] = str(s.file_path)
+            logger.info(f"🗺️  Mapped {len(self.source_map)} sources to full paths.")
+
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to init Metadata Manager or Source Map: {e}")
 
         # Initialize Hybrid Search (BM25)
         self.bm25 = None
@@ -241,17 +262,25 @@ class PrecisionSearchEngine:
         return re.compile(r"\b(" + "|".join(escaped) + r")\b", re.IGNORECASE)
 
     def classify_query(self, query: str) -> QueryType:
-        """Classify query type for routing"""
-        if self._negation_pattern.search(query):
+        """Classify query intent based on keywords and patterns"""
+        query_lower = query.lower()
+
+        # Check negation/contraindication
+        if any(term in query_lower for term in NEGATION_TERMS):
             return QueryType.CONTRAINDICATION
-        if self._spatial_pattern.search(query):
+
+        # Check spatial
+        if any(term in query_lower for term in SPATIAL_TERMS):
             return QueryType.SPATIAL
-        if self._procedural_pattern.search(query):
+
+        # Check procedural
+        if any(term in query_lower for term in PROCEDURAL_TERMS):
             return QueryType.PROCEDURAL
-        if self._conceptual_pattern.search(query):
-            return QueryType.CONCEPTUAL
-        if any(c in query.lower() for c in ["vs", "versus", "compare", "difference"]):
+
+        # Check comparative
+        if " vs " in query_lower or "versus" in query_lower or "compare" in query_lower:
             return QueryType.COMPARATIVE
+
         return QueryType.FACTUAL
 
     def search(
@@ -260,12 +289,20 @@ class PrecisionSearchEngine:
         query_embedding: list[float],
         top_k: int = 20,
         include_images: bool = True,
+        filter_subspecialty: Optional[str] = None,
     ) -> PrecisionRetrievalResult:
         """
         Execute precision search with ColBERT reranking.
-        Hybrid: Dense + BM25 -> ColBERT
+        Hybrid: Dense (Qdrant) + BM25 -> ColBERT
         """
         start_time = time.time()
+
+        # Activity Tracking (for background jobs)
+        try:
+            Path(".app_activity").touch()
+        except:
+            pass
+
         systems_used = ["dense"]
         warnings = []
 
@@ -275,10 +312,30 @@ class PrecisionSearchEngine:
         # Step 2: Retrieval (Hybrid)
         candidate_k = min(top_k * 5, 100)
 
-        # 2a. Dense Search
-        dense_results = self.base_search.search_chunks(
-            query_embedding=query_embedding, top_k=candidate_k, min_score=0.3
-        )
+        # 2a. Dense Search (Qdrant)
+        # Replacing legacy base_search.search_chunks with Qdrant retrieval
+        dense_results = []
+        if self.qdrant and self.qdrant.client:
+            try:
+                dense_results = self.qdrant.search(
+                    query_embedding=query_embedding, top_k=candidate_k, min_score=0.4
+                )
+                systems_used[0] = "dense_qdrant"
+            except Exception as e:
+                logger.warning(f"Qdrant search failed: {e}")
+                warnings.append(f"Qdrant search failed: {e}")
+
+        if not dense_results:  # Fallback to legacy if Qdrant down or failed
+            logger.warning(
+                "Qdrant unavailable or failed - falling back to legacy SQLite search"
+            )
+            dense_results = self.base_search.search_chunks(
+                query_embedding=query_embedding, top_k=candidate_k
+            )
+            if "dense_qdrant" in systems_used:
+                systems_used.remove("dense_qdrant")
+            systems_used.append("dense_sqlite_fallback")
+            warnings.append("Using legacy SQLite search (Qdrant unavailable/failed)")
 
         # 2b. Sparse Search (BM25)
         sparse_chunks = []
@@ -314,12 +371,77 @@ class PrecisionSearchEngine:
                     "sparse_score": 1.0,
                 }
 
-        final_candidates = list(candidates.values())
+        # Merging Hybrid Results (Simple: Concat for now, Reranker will sort)
+        candidate_chunks_with_scores = list(candidates.values())
+
+        # Deduplicate candidates (extract chunks from the dicts)
+        seen_ids = set()
+        unique_candidates = []
+        for cand_dict in candidate_chunks_with_scores:
+            chunk = cand_dict["chunk"]
+            if chunk.id not in seen_ids:
+                unique_candidates.append(chunk)
+                seen_ids.add(chunk.id)
+
+        # --- Metadata Enrichment & Filtering ---
+        if self.metadata_manager:
+            filtered_candidates = []
+            for chunk in unique_candidates:
+                # enrich
+                # Resolve full path from Source ID
+                full_path = self.source_map.get(chunk.source_id)
+
+                if full_path:
+                    meta = self.metadata_manager.resolve_metadata_from_path(full_path)
+                else:
+                    meta = self.metadata_manager.get_metadata("unknown")
+
+                chunk.metadata.update(meta)
+
+                # filter
+                if filter_subspecialty:
+                    # Check if metadata subspecialty matches requested
+                    # Note: metadata 'subspecialty' is Title Case (e.g. "Vascular")
+                    if meta.get("subspecialty") != filter_subspecialty:
+                        continue
+
+                filtered_candidates.append(chunk)
+            unique_candidates = filtered_candidates
+
+        # Re-create the candidate_chunks_with_scores structure for reranking
+        # This assumes unique_candidates now contains the filtered/enriched chunks
+        # We need to map them back to their original dense/sparse scores if they were in candidates
+        final_candidates_for_reranking = []
+        for chunk in unique_candidates:
+            if chunk.id in candidates:
+                # Use the original scores if the chunk was in the initial candidates pool
+                final_candidates_for_reranking.append(candidates[chunk.id])
+            else:
+                # This case should ideally not happen if unique_candidates are derived from candidates
+                # but as a fallback, create a new entry.
+                final_candidates_for_reranking.append(
+                    {
+                        "chunk": chunk,
+                        "dense_score": 0.0,  # Default if not found in original dense
+                        "sparse_score": 0.0,  # Default if not found in original sparse
+                    }
+                )
+
+        # Optimization: Cap reranking pool to top 50 to prevent CPU timeout
+        MAX_RERANK_POOL = 50
+        if len(final_candidates_for_reranking) > MAX_RERANK_POOL:
+            logger.info(
+                f"Capping rerank pool from {len(final_candidates_for_reranking)} to {MAX_RERANK_POOL}"
+            )
+            final_candidates_for_reranking = final_candidates_for_reranking[
+                :MAX_RERANK_POOL
+            ]
+
         logger.info(
-            f"Hybrid Pool: {len(dense_results)} dense + {len(sparse_chunks)} sparse -> {len(final_candidates)} unique candidates"
+            f"Hybrid Pool: {len(dense_results)} dense + {len(sparse_chunks)} sparse -> {len(final_candidates_for_reranking)} unique candidates (after metadata filter)"
         )
 
-        if not final_candidates:
+        if not final_candidates_for_reranking:
             return PrecisionRetrievalResult(
                 query=query,
                 query_type=query_type,
@@ -336,7 +458,7 @@ class PrecisionSearchEngine:
         # We rerank the merged pool
         if self.colbert_enabled and self.colbert:
             try:
-                documents = [c["chunk"].content for c in final_candidates]
+                documents = [c["chunk"].content for c in final_candidates_for_reranking]
 
                 # Call Deep-DX ColBERT Reranker
                 reranked = self.colbert.rerank(query, documents, k=top_k)
@@ -345,9 +467,12 @@ class PrecisionSearchEngine:
                 # Map back to results
                 precision_results = []
                 for r in reranked:
-                    idx = r.get("result_index")
-                    if idx is not None and idx < len(final_candidates):
-                        cand = final_candidates[idx]
+                    # Rerank result structure: {"document_index": int, "score": float}
+                    # Note: colbert_client.py uses 'document_index', NOT 'result_index'
+                    idx = r.get("document_index")
+
+                    if idx is not None and idx < len(final_candidates_for_reranking):
+                        cand = final_candidates_for_reranking[idx]
                         original_chunk = cand["chunk"]
 
                         precision_results.append(
@@ -377,7 +502,7 @@ class PrecisionSearchEngine:
                     final_score=r.score,
                     has_safety_content=self._has_safety_content(r.chunk.content),
                 )
-                for r in base_results[:top_k]
+                for r in dense_results[:top_k]
             ]
             if self.colbert_enabled:
                 warnings.append("ColBERT unavailable/failed - using dense scores only")

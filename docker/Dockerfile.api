@@ -37,8 +37,8 @@ RUN pip install --no-cache-dir --upgrade pip
 # Copy dependency files
 COPY pyproject.toml ./
 
-# Install API dependencies only
-RUN pip install --no-cache-dir \
+# Install API dependencies only with increased timeout and retries
+RUN pip install --no-cache-dir --timeout=300 --retries=10 \
     "fastapi>=0.109.0" \
     "uvicorn[standard]>=0.27.0" \
     "redis>=5.0.0" \

@@ -1,0 +1,63 @@
+{
+  "metadata": {
+    "total_queries": 100,
+    "generated": true
+  },
+  "statistics": {
+    "average_grade": 0,
+    "safety_flags": 0,
+    "total_queries": 10
+  },
+  "results": [
+    {
+      "id": "Q001",
+      "error": "shapes (1024,) and (512,) not aligned: 1024 (dim 0) != 512 (dim 0)",
+      "parsed_score": 0
+    },
+    {
+      "id": "Q002",
+      "error": "shapes (1024,) and (512,) not aligned: 1024 (dim 0) != 512 (dim 0)",
+      "parsed_score": 0
+    },
+    {
+      "id": "Q003",
+      "error": "shapes (1024,) and (512,) not aligned: 1024 (dim 0) != 512 (dim 0)",
+      "parsed_score": 0
+    },
+    {
+      "id": "Q004",
+      "error": "shapes (1024,) and (512,) not aligned: 1024 (dim 0) != 512 (dim 0)",
+      "parsed_score": 0
+    },
+    {
+      "id": "Q005",
+      "error": "shapes (1024,) and (512,) not aligned: 1024 (dim 0) != 512 (dim 0)",
+      "parsed_score": 0
+    },
+    {
+      "id": "Q006",
+      "error": "shapes (1024,) and (512,) not aligned: 1024 (dim 0) != 512 (dim 0)",
+      "parsed_score": 0
+    },
+    {
+      "id": "Q007",
+      "error": "shapes (1024,) and (512,) not aligned: 1024 (dim 0) != 512 (dim 0)",
+      "parsed_score": 0
+    },
+    {
+      "id": "Q008",
+      "error": "shapes (1024,) and (512,) not aligned: 1024 (dim 0) != 512 (dim 0)",
+      "parsed_score": 0
+    },
+    {
+      "id": "Q009",
+      "error": "shapes (1024,) and (512,) not aligned: 1024 (dim 0) != 512 (dim 0)",
+      "parsed_score": 0
+    },
+    {
+      "id": "Q010",
+      "error": "shapes (1024,) and (512,) not aligned: 1024 (dim 0) != 512 (dim 0)",
+      "parsed_score": 0
+    }
+  ]
+}
