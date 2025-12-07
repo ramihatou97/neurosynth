@@ -49,7 +49,7 @@ class AsyncAIClient:
         self,
         voyage_api_key: Optional[str] = None,
         anthropic_api_key: Optional[str] = None,
-        timeout: float = 120.0,
+        timeout: float = 600.0,  # 10 minutes per attempt for complex synthesis
     ):
         self.voyage_key = (
             voyage_api_key or settings.voyage_api_key or os.getenv("VOYAGE_API_KEY")
@@ -87,9 +87,9 @@ class AsyncAIClient:
     # ========================================================================
 
     @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_if_exception_type((httpx.ConnectError, httpx.ReadTimeout)),
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=2, min=4, max=120),
+        retry=retry_if_exception_type((httpx.ConnectError, httpx.TimeoutException)),
     )
     async def get_embedding(self, text: str, model: str = None) -> List[float]:
         """Get embedding for a single text (non-blocking)."""
@@ -97,9 +97,9 @@ class AsyncAIClient:
         return embeddings[0]
 
     @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_if_exception_type((httpx.ConnectError, httpx.ReadTimeout)),
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=2, min=4, max=120),
+        retry=retry_if_exception_type((httpx.ConnectError, httpx.TimeoutException)),
     )
     async def get_embeddings(
         self, texts: List[str], model: str = None
@@ -153,9 +153,9 @@ class AsyncAIClient:
     # ========================================================================
 
     @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_if_exception_type((httpx.ConnectError, httpx.ReadTimeout)),
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=2, min=4, max=120),
+        retry=retry_if_exception_type((httpx.ConnectError, httpx.TimeoutException)),
     )
     async def synthesize(
         self,
