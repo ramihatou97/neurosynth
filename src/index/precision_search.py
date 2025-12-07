@@ -32,6 +32,19 @@ logger = logging.getLogger(__name__)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Authority Ranking Configuration
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Authority-based ranking boosts high-trust sources (guidelines, textbooks)
+# Can be disabled by setting AUTHORITY_BOOST_ENABLED = False
+AUTHORITY_BOOST_ENABLED = True  # Set to False to disable authority ranking
+AUTHORITY_BOOST_FACTOR = 0.20  # 20% boost for highest authority (100 → +20%)
+AUTHORITY_MIN_SCORE = 80  # Baseline authority score
+AUTHORITY_MAX_SCORE = 100  # Maximum authority score
+AUTHORITY_SAFETY_BOOST = 0.05  # Extra 5% boost for guidelines on safety queries
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Query Classification
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -131,9 +144,12 @@ class PrecisionResult:
 
     chunk: Chunk
     dense_score: float
-    colbert_score: Optional[float] = None
+    colbert_score: float | None = None
     final_score: float = 0.0
     has_safety_content: bool = False
+    # Authority ranking fields (for debugging/logging)
+    authority_score: int = 80  # Authority score from metadata (80-100)
+    authority_boost_applied: float = 0.0  # How much boost was added to final_score
 
     @property
     def citation(self) -> str:
@@ -289,7 +305,7 @@ class PrecisionSearchEngine:
         query_embedding: list[float],
         top_k: int = 20,
         include_images: bool = True,
-        filter_subspecialty: Optional[str] = None,
+        filter_subspecialty: str | None = None,
     ) -> PrecisionRetrievalResult:
         """
         Execute precision search with ColBERT reranking.
@@ -475,15 +491,29 @@ class PrecisionSearchEngine:
                         cand = final_candidates_for_reranking[idx]
                         original_chunk = cand["chunk"]
 
+                        # Extract authority score from metadata (set during enrichment)
+                        authority_score = original_chunk.metadata.get(
+                            "authority_score", 80
+                        )
+
+                        # Apply authority boost to ColBERT score
+                        boosted_score = self._apply_authority_boost(
+                            base_score=r["score"],
+                            authority_score=authority_score,
+                            query_type=query_type,
+                        )
+
                         precision_results.append(
                             PrecisionResult(
                                 chunk=original_chunk,
                                 dense_score=cand["dense_score"],
                                 colbert_score=r["score"],
-                                final_score=r["score"],
+                                final_score=boosted_score,  # Authority-boosted score
                                 has_safety_content=self._has_safety_content(
                                     original_chunk.content
                                 ),
+                                authority_score=authority_score,
+                                authority_boost_applied=boosted_score - r["score"],
                             )
                         )
             except Exception as e:
@@ -494,18 +524,30 @@ class PrecisionSearchEngine:
 
         if not precision_results:
             # Fallback: use dense scores only
-            precision_results = [
-                PrecisionResult(
-                    chunk=r.chunk,
-                    dense_score=r.score,
-                    colbert_score=None,
-                    final_score=r.score,
-                    has_safety_content=self._has_safety_content(r.chunk.content),
+            precision_results = []
+            for r in dense_results[:top_k]:
+                authority_score = r.chunk.metadata.get("authority_score", 80)
+                boosted_score = self._apply_authority_boost(
+                    base_score=r.score,
+                    authority_score=authority_score,
+                    query_type=query_type,
                 )
-                for r in dense_results[:top_k]
-            ]
+                precision_results.append(
+                    PrecisionResult(
+                        chunk=r.chunk,
+                        dense_score=r.score,
+                        colbert_score=None,
+                        final_score=boosted_score,  # Authority-boosted score
+                        has_safety_content=self._has_safety_content(r.chunk.content),
+                        authority_score=authority_score,
+                        authority_boost_applied=boosted_score - r.score,
+                    )
+                )
             if self.colbert_enabled:
                 warnings.append("ColBERT unavailable/failed - using dense scores only")
+
+        # Re-sort by authority-boosted final_score (highest first)
+        precision_results.sort(key=lambda x: x.final_score, reverse=True)
 
         # Step 4: Safety check for contraindication queries
         if query_type == QueryType.CONTRAINDICATION:
@@ -600,11 +642,53 @@ class PrecisionSearchEngine:
         else:
             return ConfidenceLevel.INSUFFICIENT
 
+    def _apply_authority_boost(
+        self,
+        base_score: float,
+        authority_score: int,
+        query_type: QueryType | None = None,
+    ) -> float:
+        """Apply authority boost to search score.
+
+        Args:
+            base_score: Base similarity score (from ColBERT/dense search)
+            authority_score: Authority score from metadata (80-100)
+            query_type: Optional query type for extra safety boosting
+
+        Returns:
+            Boosted final score
+
+        Examples:
+            - Guideline (100) with base 0.85 → 0.85 * 1.20 = 1.02
+            - Textbook (95) with base 0.85 → 0.85 * 1.15 = 0.98
+            - Default (80) with base 0.85 → 0.85 * 1.00 = 0.85
+        """
+        if not AUTHORITY_BOOST_ENABLED:
+            return base_score
+
+        # Normalize authority score to 0-1 range
+        # 80 → 0.0, 90 → 0.5, 100 → 1.0
+        normalized_authority = (authority_score - AUTHORITY_MIN_SCORE) / (
+            AUTHORITY_MAX_SCORE - AUTHORITY_MIN_SCORE
+        )
+        normalized_authority = max(0.0, min(1.0, normalized_authority))
+
+        # Calculate boost multiplier (1.0 to 1.2 for 20% max boost)
+        boost_multiplier = 1.0 + (normalized_authority * AUTHORITY_BOOST_FACTOR)
+
+        # Extra boost for safety-critical queries (contraindications, dosing, complications)
+        if query_type in [QueryType.CONTRAINDICATION, QueryType.SAFETY]:
+            # Guidelines get extra 5% boost for safety queries
+            if authority_score >= 95:
+                boost_multiplier += AUTHORITY_SAFETY_BOOST
+
+        return base_score * boost_multiplier
+
     def retrieve_for_topic(
         self,
         query_embedding: list[float],
         topic: str,
-        chunk_types: Optional[list[Any]] = None,  # adapt type hint
+        chunk_types: list[Any] | None = None,  # adapt type hint
         top_k: int = None,
         include_images: bool = True,
     ) -> Any:  # Returns RetrievalResult
