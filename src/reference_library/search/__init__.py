@@ -1,17 +1,17 @@
 """PDF search engine components."""
 
-from src.search.pdf_searcher import PDFSearcher
-from src.search.result_model import (
+from reference_library.search.pdf_searcher import PDFSearcher
+from reference_library.search.result_model import (
     ChapterResult,
     MatchType,
     SearchResult,
     PageMatch,
     SearchProgress,
 )
-from src.search.search_strategy import SearchStrategy, get_strategy
+from reference_library.search.search_strategy import SearchStrategy, get_strategy
 
 # Study Package (BROAD mode enhancement)
-from src.search.study_package import (
+from reference_library.search.study_package import (
     enhance_broad_results,
     analyze_query,
     StudyModeReport,

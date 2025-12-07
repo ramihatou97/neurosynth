@@ -16,7 +16,7 @@ import logging
 from typing import Optional, Set, Tuple, List, Dict
 from dataclasses import dataclass, field
 
-from src.search.study_package.taxonomy import (
+from reference_library.search.study_package.taxonomy import (
     NEUROSURGICAL_REGIONS,
     KNOWLEDGE_CATEGORIES,
     PROCEDURE_TO_REGION,

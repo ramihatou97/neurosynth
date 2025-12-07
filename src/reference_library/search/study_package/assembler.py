@@ -15,10 +15,10 @@ import logging
 from typing import List, Dict, Set, Optional, Tuple, TYPE_CHECKING
 from dataclasses import dataclass, field
 
-from src.search.study_package.analyzer import QueryAnalyzer, QueryAnalysis, get_analyzer
-from src.search.study_package.taxonomy import KNOWLEDGE_CATEGORIES
-from src.search.study_package.report import StudyModeReport, TopicSource
-from src.search.result_model import ChapterResult, MatchType
+from reference_library.search.study_package.analyzer import QueryAnalyzer, QueryAnalysis, get_analyzer
+from reference_library.search.study_package.taxonomy import KNOWLEDGE_CATEGORIES
+from reference_library.search.study_package.report import StudyModeReport, TopicSource
+from reference_library.search.result_model import ChapterResult, MatchType
 
 if TYPE_CHECKING:
     from src.search.pdf_searcher import PDFSearcher

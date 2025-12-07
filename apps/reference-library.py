@@ -17,11 +17,8 @@ Requirements:
 import sys
 from pathlib import Path
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent))
-
 # Initialize logging before other imports
-from src.logger import get_logger, setup_logging
+from reference_library.logger import get_logger, setup_logging
 
 setup_logging()
 logger = get_logger("main")
@@ -83,21 +80,21 @@ def check_api_key():
 
 def check_library_path():
     """Check if library path is configured and valid."""
-    from src.config import LIBRARY_PATH, ensure_library_path
+    from reference_library.config import LIBRARY_PATH, ensure_library_path
 
     print(f"Library path: {LIBRARY_PATH}")
     if not LIBRARY_PATH.exists():
         print("Library path not found. Opening folder picker...")
         ensure_library_path()
-        from src.config import LIBRARY_PATH as updated_path
+        from reference_library.config import LIBRARY_PATH as updated_path
 
         print(f"Library path set to: {updated_path}")
 
 
 def migrate_category_system():
     """Migrate to hierarchical category system (one-time)."""
-    from src import config
-    from src.cache.database import Database
+    from reference_library import config
+    from reference_library.cache.database import Database
 
     # Check if migration marker exists
     migration_marker = config.DATA_DIR / ".category_migration_v2"
@@ -132,7 +129,7 @@ def main():
     check_api_key()
 
     # Import and run the app
-    from src.ui.app import run_app
+    from reference_library.ui.app import run_app
 
     logger.info("Application startup complete, launching UI")
     print("Starting application...")

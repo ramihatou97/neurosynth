@@ -23,18 +23,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
-
 from qdrant_client import QdrantClient
-from qdrant_client.http import models
+from qdrant_client.http import models as qdrant_models
 from qdrant_client.models import Distance, VectorParams
 
 # Import local modules
 try:
     from neurosynth.llm.voyage import VoyageClient
-    from models import ChunkType, DocumentType, Specialty, SourceMetadata, Chunk
-    from index.database import Database
+    from neurosynth.models import ChunkType, DocumentType, Specialty, SourceMetadata, Chunk
+    from neurosynth.index.database import Database
 except ImportError as e:
     print(f"Import error: {e}")
     print("Make sure you're running from the neurosynth root directory.")
@@ -412,7 +409,7 @@ class LibraryToDeepDxBridge:
             }
 
             points.append(
-                models.PointStruct(
+                qdrant_models.PointStruct(
                     id=point_id,
                     vector=chunk.embedding,
                     payload=payload

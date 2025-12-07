@@ -22,14 +22,14 @@ Usage:
     print(analysis.region_tags)  # {'spine', 'lumbar'}
 """
 
-from src.search.study_package.taxonomy import (
+from reference_library.search.study_package.taxonomy import (
     NEUROSURGICAL_REGIONS,
     KNOWLEDGE_CATEGORIES,
     PROCEDURE_TO_REGION,
     REGION_FOUNDATIONS,
 )
 
-from src.search.study_package.analyzer import (
+from reference_library.search.study_package.analyzer import (
     QueryAnalyzer,
     QueryAnalysis,
     get_analyzer,
@@ -37,14 +37,14 @@ from src.search.study_package.analyzer import (
     get_foundations_for_query,
 )
 
-from src.search.study_package.assembler import (
+from reference_library.search.study_package.assembler import (
     StudyPackageAssembler,
     StudyPackage,
     StudyPackageResult,
     enhance_broad_results,
 )
 
-from src.search.study_package.report import (
+from reference_library.search.study_package.report import (
     StudyModeReport,
     TopicSource,
 )
