@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS library_structure (
     file_size INTEGER,
     page_count INTEGER,
     file_checksum TEXT,
+    exam_frequency INTEGER DEFAULT 0,  -- Phase 3: Exam frequency for boosting high-yield topics
     last_scanned TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

@@ -23,6 +23,25 @@ class Database:
         with self._get_connection() as conn:
             conn.executescript(SCHEMA)
             conn.commit()
+            # Run migrations for existing databases
+            self._run_migrations(conn)
+
+    def _run_migrations(self, conn):
+        """Run database migrations for schema changes."""
+        # Phase 3: Add exam_frequency column if it doesn't exist
+        try:
+            cursor = conn.execute("PRAGMA table_info(library_structure)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if "exam_frequency" not in columns:
+                conn.execute("""
+                    ALTER TABLE library_structure
+                    ADD COLUMN exam_frequency INTEGER DEFAULT 0
+                """)
+                conn.commit()
+                print("✓ Added exam_frequency column to library_structure table")
+        except sqlite3.OperationalError as e:
+            # Column might already exist, ignore error
+            pass
 
     @contextmanager
     def _get_connection(self):

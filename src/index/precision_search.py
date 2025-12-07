@@ -43,6 +43,12 @@ AUTHORITY_MIN_SCORE = 80  # Baseline authority score
 AUTHORITY_MAX_SCORE = 100  # Maximum authority score
 AUTHORITY_SAFETY_BOOST = 0.05  # Extra 5% boost for guidelines on safety queries
 
+# Exam frequency boost (Phase 3)
+EXAM_BOOST_ENABLED = True  # Set to False to disable exam frequency ranking
+EXAM_BOOST_FACTOR = 0.15  # 15% max boost for highest exam frequency
+EXAM_MIN_FREQUENCY = 0  # Minimum exam frequency
+EXAM_MAX_FREQUENCY = 10  # Maximum exam frequency (capped)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Query Classification
@@ -150,6 +156,9 @@ class PrecisionResult:
     # Authority ranking fields (for debugging/logging)
     authority_score: int = 80  # Authority score from metadata (80-100)
     authority_boost_applied: float = 0.0  # How much boost was added to final_score
+    # Exam frequency fields (Phase 3 - for debugging/logging)
+    exam_frequency: int = 0  # Exam frequency from metadata (0-10+)
+    exam_boost_applied: float = 0.0  # How much exam boost was added to final_score
 
     @property
     def citation(self) -> str:
@@ -491,15 +500,25 @@ class PrecisionSearchEngine:
                         cand = final_candidates_for_reranking[idx]
                         original_chunk = cand["chunk"]
 
-                        # Extract authority score from metadata (set during enrichment)
+                        # Extract metadata (set during enrichment)
                         authority_score = original_chunk.metadata.get(
                             "authority_score", 80
                         )
+                        exam_frequency = original_chunk.metadata.get(
+                            "exam_frequency", 0
+                        )
 
                         # Apply authority boost to ColBERT score
-                        boosted_score = self._apply_authority_boost(
+                        authority_boosted = self._apply_authority_boost(
                             base_score=r["score"],
                             authority_score=authority_score,
+                            query_type=query_type,
+                        )
+
+                        # Apply exam boost (stacked on top of authority)
+                        final_boosted = self._apply_exam_boost(
+                            base_score=authority_boosted,
+                            exam_frequency=exam_frequency,
                             query_type=query_type,
                         )
 
@@ -508,12 +527,14 @@ class PrecisionSearchEngine:
                                 chunk=original_chunk,
                                 dense_score=cand["dense_score"],
                                 colbert_score=r["score"],
-                                final_score=boosted_score,  # Authority-boosted score
+                                final_score=final_boosted,  # Authority + exam boosted
                                 has_safety_content=self._has_safety_content(
                                     original_chunk.content
                                 ),
                                 authority_score=authority_score,
-                                authority_boost_applied=boosted_score - r["score"],
+                                authority_boost_applied=authority_boosted - r["score"],
+                                exam_frequency=exam_frequency,
+                                exam_boost_applied=final_boosted - authority_boosted,
                             )
                         )
             except Exception as e:
@@ -527,20 +548,33 @@ class PrecisionSearchEngine:
             precision_results = []
             for r in dense_results[:top_k]:
                 authority_score = r.chunk.metadata.get("authority_score", 80)
-                boosted_score = self._apply_authority_boost(
+                exam_frequency = r.chunk.metadata.get("exam_frequency", 0)
+
+                # Apply authority boost
+                authority_boosted = self._apply_authority_boost(
                     base_score=r.score,
                     authority_score=authority_score,
                     query_type=query_type,
                 )
+
+                # Apply exam boost (stacked on top of authority)
+                final_boosted = self._apply_exam_boost(
+                    base_score=authority_boosted,
+                    exam_frequency=exam_frequency,
+                    query_type=query_type,
+                )
+
                 precision_results.append(
                     PrecisionResult(
                         chunk=r.chunk,
                         dense_score=r.score,
                         colbert_score=None,
-                        final_score=boosted_score,  # Authority-boosted score
+                        final_score=final_boosted,  # Authority + exam boosted
                         has_safety_content=self._has_safety_content(r.chunk.content),
                         authority_score=authority_score,
-                        authority_boost_applied=boosted_score - r.score,
+                        authority_boost_applied=authority_boosted - r.score,
+                        exam_frequency=exam_frequency,
+                        exam_boost_applied=final_boosted - authority_boosted,
                     )
                 )
             if self.colbert_enabled:
@@ -681,6 +715,50 @@ class PrecisionSearchEngine:
             # Guidelines get extra 5% boost for safety queries
             if authority_score >= 95:
                 boost_multiplier += AUTHORITY_SAFETY_BOOST
+
+        return base_score * boost_multiplier
+
+    def _apply_exam_boost(
+        self,
+        base_score: float,
+        exam_frequency: int,
+        query_type: QueryType | None = None,
+    ) -> float:
+        """Apply exam frequency boost to search score.
+
+        Rationale: Topics appearing frequently in board exams are clinically
+        important foundational knowledge. Boost these in exam mode.
+
+        Args:
+            base_score: Base score (already authority-boosted)
+            exam_frequency: Number of times topic appears in exams (0-10+)
+            query_type: Query type to determine if boost applies
+
+        Returns:
+            Score after exam frequency boost
+
+        Examples:
+            - Exam freq 10, base 1.02 → 1.02 * 1.15 = 1.173 (full boost)
+            - Exam freq 5, base 1.02 → 1.02 * 1.075 = 1.095 (half boost)
+            - Exam freq 0, base 1.02 → 1.02 * 1.0 = 1.02 (no boost)
+        """
+        if not EXAM_BOOST_ENABLED:
+            return base_score
+
+        # Only boost for query types where exam frequency matters
+        # (Not procedural/spatial/contraindication - those need different signals)
+        if query_type and query_type not in [QueryType.FACTUAL, QueryType.CONCEPTUAL]:
+            return base_score
+
+        # Normalize exam frequency to 0-1 range
+        # 0 → 0.0, 5 → 0.5, 10+ → 1.0
+        normalized_frequency = (exam_frequency - EXAM_MIN_FREQUENCY) / (
+            EXAM_MAX_FREQUENCY - EXAM_MIN_FREQUENCY
+        )
+        normalized_frequency = max(0.0, min(1.0, normalized_frequency))
+
+        # Calculate boost multiplier (1.0 to 1.15)
+        boost_multiplier = 1.0 + (normalized_frequency * EXAM_BOOST_FACTOR)
 
         return base_score * boost_multiplier
 

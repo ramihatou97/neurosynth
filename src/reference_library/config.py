@@ -472,3 +472,28 @@ def set_auto_sync_debounce_seconds(seconds: int) -> None:
     config = _load_user_config()
     config["auto_sync_debounce_seconds"] = max(10, min(600, seconds))
     _save_user_config(config)
+
+
+# Exam Mode Configuration (Phase 3)
+# Enables exam frequency boosting for high-yield topics
+
+
+def get_exam_mode_enabled() -> bool:
+    """Check if exam mode is enabled.
+
+    Returns:
+        True if exam mode is enabled, False otherwise (default: False)
+    """
+    config = _load_user_config()
+    return config.get("exam_mode_enabled", False)
+
+
+def set_exam_mode_enabled(enabled: bool) -> None:
+    """Enable/disable exam mode.
+
+    Args:
+        enabled: True to enable exam mode, False to disable
+    """
+    config = _load_user_config()
+    config["exam_mode_enabled"] = enabled
+    _save_user_config(config)

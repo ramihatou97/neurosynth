@@ -81,6 +81,18 @@ class SearchPanel(ctk.CTkFrame):
         # Set default display
         self.strategy_var.set("⚖️ Standard")
 
+        # Exam mode toggle (Phase 3)
+        self.exam_mode_var = ctk.BooleanVar(value=config.get_exam_mode_enabled())
+        self.exam_mode_checkbox = ctk.CTkCheckBox(
+            search_frame,
+            text="🎓 Exam Mode",
+            variable=self.exam_mode_var,
+            command=self._on_exam_mode_toggle,
+            font=FONTS["small"],
+            width=100
+        )
+        self.exam_mode_checkbox.pack(side="left", padx=(0, PADDING["small"]))
+
         # Search button
         self.search_btn = ctk.CTkButton(
             search_frame,
@@ -161,6 +173,18 @@ class SearchPanel(ctk.CTkFrame):
         desc = descriptions.get(value, "")
         if desc:
             self._show_strategy_hint(desc)
+
+    def _on_exam_mode_toggle(self):
+        """Handle exam mode toggle change - persist setting."""
+        enabled = self.exam_mode_var.get()
+        config.set_exam_mode_enabled(enabled)
+        # Show brief notification
+        status = "enabled" if enabled else "disabled"
+        self._show_strategy_hint(f"Exam Mode {status} - {'High-yield topics boosted' if enabled else 'Standard ranking'}")
+
+    def is_exam_mode_enabled(self) -> bool:
+        """Check if exam mode is currently enabled."""
+        return self.exam_mode_var.get()
 
     def _show_strategy_hint(self, text: str):
         """Show a temporary hint below the search bar."""
