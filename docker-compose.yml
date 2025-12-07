@@ -24,7 +24,7 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-info}
     volumes:
       - jobs-data:/data/jobs
-      - ./reference-library:/home/neurosynth/.reference-library:ro
+      - ./data:/data:ro
     depends_on:
       redis:
         condition: service_healthy
@@ -78,7 +78,7 @@ services:
     volumes:
       - jobs-data:/data/jobs
       - worker-cache:/home/neurosynth/.neurosynth
-      - ./reference-library:/home/neurosynth/.reference-library
+      - ./data:/data
     depends_on:
       redis:
         condition: service_healthy

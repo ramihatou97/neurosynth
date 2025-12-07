@@ -6,14 +6,19 @@ venv_colbert/
 __pycache__/
 *.pyc
 
-# Data (potentially large/sensitive)
+# Data (potentially large/sensitive - keep structure, ignore contents)
 data/sources/
 data/processed/
 data/output/
+data/qdrant/
+data/chroma/
+data/images/
+data/thumbs/
+!data/.gitkeep
 
-# Reference Library data (user-specific)
-reference-library/data/
-reference-library/venv/
+# Old Reference Library directories (stale code - now consolidated in src/reference_library/)
+reference-library/
+reference-library.old/
 
 # Test artifacts
 test_pipeline/

@@ -50,6 +50,7 @@ RUN pip install --no-cache-dir --timeout=300 --retries=10 \
 # Copy application code
 COPY src/neurosynth/api ./src/neurosynth/api
 COPY src/neurosynth/__init__.py ./src/neurosynth/
+COPY apps/ ./apps/
 
 # Create non-root user
 RUN groupadd -r neurosynth --gid=1000 && \
