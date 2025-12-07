@@ -1,15 +1,25 @@
-# NeuroSynth
+# NeuroSynth Monorepo
 
-**Neurosurgical Knowledge Synthesis System** - Transform multiple reference sources into comprehensive, deduplicated chapters with zero information loss.
+**Neurosurgical Knowledge Synthesis System** - A unified repository containing the core synthesis engine, reference library GUI, Deep-DX diagnostic knowledge base, and ETL bridges.
 
 ## Overview
 
-NeuroSynth is a CLI tool that processes neurosurgical reference documents (PDF, EPUB, DOCX, TXT) and synthesizes them into well-structured academic chapters using AI. It handles:
+This monorepo consolidates three previously separate tools into a unified codebase:
+
+1. **NeuroSynth CLI & API** - Core synthesis engine that processes neurosurgical reference documents (PDF, EPUB, DOCX, TXT) and synthesizes them into well-structured academic chapters using AI
+2. **Reference Library** - Desktop GUI application for searching and managing neurosurgical PDF references with semantic search
+3. **Deep-DX** - Diagnostic knowledge synthesis module with vector search
+4. **ETL Bridges** - Data synchronization between Reference Library and Deep-DX
+
+### Core Features
 
 - Multi-document parsing and semantic analysis
 - AI-powered deduplication and conflict detection
 - Knowledge synthesis and outline generation
 - Academic output generation (LaTeX/PDF and Markdown)
+- Desktop GUI for PDF library management
+- Semantic and visual search capabilities
+- Vector-based knowledge retrieval
 
 ## Prerequisites
 
@@ -23,7 +33,30 @@ NeuroSynth is a CLI tool that processes neurosurgical reference documents (PDF, 
   - [Google Gemini](https://makersuite.google.com/app/apikey) - for extraction
   - [Voyage AI](https://www.voyageai.com/) - for embeddings
 
+## Monorepo Structure
+
+```
+neurosynth/                      # Root
+├── src/
+│   ├── neurosynth/              # Core synthesis engine
+│   ├── deep_dx/                 # Deep diagnostic module
+│   ├── reference_library/       # Reference Library GUI
+│   └── bridges/                 # ETL scripts
+├── apps/                        # Entry points
+│   ├── reference-library.py     # GUI launcher
+│   ├── api.py                   # FastAPI app
+│   └── worker.py                # Worker service
+├── data/                        # Centralized data
+│   ├── library.db               # Reference Library cache
+│   ├── neurosynth.db            # Deep-DX database
+│   └── qdrant/                  # Vector storage
+├── tests/                       # All tests
+└── docker-compose.yml           # Multi-service deployment
+```
+
 ## Installation
+
+### Core Installation (CLI only)
 
 ```bash
 # Clone the repository
@@ -34,12 +67,35 @@ cd neurosynth
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# Install dependencies
+# Install core dependencies
 pip install -e .
 
 # Configure API keys
 cp .env.example .env
 # Edit .env with your API keys
+```
+
+### Full Installation (All Components)
+
+```bash
+# Install all components including GUI, API, worker, and visual processing
+pip install -e ".[full]"
+```
+
+### Component-Specific Installation
+
+```bash
+# API service only
+pip install -e ".[api]"
+
+# Reference Library GUI only
+pip install -e ".[gui]"
+
+# Worker service only
+pip install -e ".[worker]"
+
+# Visual processing (ColPali) only
+pip install -e ".[visual]"
 ```
 
 ## Quick Start
@@ -86,6 +142,62 @@ neurosynth synthesize --format markdown
 # Full pipeline with custom output
 neurosynth run "Topic Name" --sources ./docs/ --output result.pdf
 ```
+
+## Additional Components
+
+### Reference Library GUI
+
+Desktop application for searching and managing your neurosurgical PDF library:
+
+```bash
+# Launch the Reference Library GUI
+python apps/reference-library.py
+
+# Or if installed with GUI dependencies:
+neuro-ref
+```
+
+**Features:**
+- Semantic search across PDF content
+- Visual search using ColPali embeddings
+- Automatic PDF indexing and caching
+- Category-based organization
+- Export search results to PDF
+
+### ETL Bridge (Reference Library → Deep-DX)
+
+Sync data from Reference Library to the Deep-DX knowledge base:
+
+```bash
+# Run the bridge sync
+python -m bridges.library_to_deepdx
+
+# Or if installed with entry point:
+neuro-bridge
+```
+
+**What it does:**
+- Extracts PDF text from Reference Library cache (library.db)
+- Aggregates pages into semantic chunks
+- Generates embeddings using Voyage AI
+- Loads into Deep-DX database (neurosynth.db) and Qdrant vector store
+
+### API Service (Production Deployment)
+
+Run the FastAPI service for programmatic access:
+
+```bash
+# Development mode
+uvicorn neurosynth.api.main:app --reload
+
+# Production mode (with Docker)
+docker-compose up -d api worker
+```
+
+**Endpoints:**
+- `POST /synthesize` - Create synthesis job
+- `GET /status/{job_id}` - Check job status
+- `GET /health` - Health check
 
 ## Configuration
 
