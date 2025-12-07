@@ -5,8 +5,11 @@ import os
 from pathlib import Path
 
 # Paths
-# Adjusted for location in src/config.py (parent is src, parent.parent is root)
-PROJECT_ROOT = Path(__file__).parent.parent
+# Adjusted for location in src/reference_library/config.py
+# __file__.parent = src/reference_library/
+# __file__.parent.parent = src/
+# __file__.parent.parent.parent = repo root
+PROJECT_ROOT = Path(__file__).parent.parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 TEMPLATES_DIR = PROJECT_ROOT / "templates"
 USER_CONFIG_FILE = DATA_DIR / "user_config.json"

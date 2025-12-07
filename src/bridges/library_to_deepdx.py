@@ -42,10 +42,10 @@ except ImportError as e:
 # =============================================================================
 
 # Source: Reference Library database
-SOURCE_DB_PATH = Path("reference-library/data/library.db")
+SOURCE_DB_PATH = Path("data/library.db")
 
 # Target: Deep-DX database
-TARGET_DB_PATH = Path("neurosynth.db")
+TARGET_DB_PATH = Path("data/neurosynth.db")
 
 # Vector store
 QDRANT_URL = "http://localhost:6333"

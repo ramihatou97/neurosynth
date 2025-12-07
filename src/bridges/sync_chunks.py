@@ -18,7 +18,7 @@ except ImportError:
 
 # --- CONFIGURATION ---
 # Using the main 18MB database which contains sources and chunks
-REF_DB_PATH = "/Users/ramihatoum/neurosynth/neurosynth.db"
+REF_DB_PATH = "data/neurosynth.db"
 QDRANT_URL = "http://localhost:6333"
 COLLECTION_NAME = "deep_dx_collection"
 
