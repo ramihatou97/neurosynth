@@ -202,9 +202,9 @@ def ensure_library_path() -> Path:
 # Initialize library path (may be updated by ensure_library_path())
 LIBRARY_PATH = _get_library_path()
 
-# NeuroSynth Integration (parent directory since we're now inside neurosynth/)
-NEUROSYNTH_PATH = PROJECT_ROOT.parent
-NEUROSYNTH_VENV = NEUROSYNTH_PATH / "venv"
+# NeuroSynth Integration (now in same monorepo)
+NEUROSYNTH_PATH = PROJECT_ROOT
+NEUROSYNTH_VENV = PROJECT_ROOT / "venv"
 
 # Database
 DATABASE_PATH = DATA_DIR / "library.db"
