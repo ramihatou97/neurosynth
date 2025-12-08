@@ -1,28 +1,36 @@
 """PDF text extraction and search engine with semantic search support."""
+
 import os
 import re
 from pathlib import Path
-from typing import Generator, Optional, Callable, Dict, List, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, Dict, Generator, List, Optional, Tuple
+
 import fitz  # PyMuPDF
 
 if TYPE_CHECKING:
     from reference_library.search.study_package.report import StudyModeReport
 
-from .result_model import (
-    SearchResult, PageMatch, SearchProgress, ChapterMetadata,
-    MatchLocation, MatchType, ChapterResult
-)
-from .semantic_searcher import SemanticSearcher
-from .neurosurgical_synonyms import expand_query, get_all_terms_for_query
-from ..cache.database import Database
-from ..utils.library_scanner import LibraryScanner
 from reference_library import config
-from .master_index import get_master_index
-from .query_intent_lean import get_intent_detector, QueryIntent
-from .section_detector import get_section_detector, MatchConfidence
-from .search_strategy import SearchStrategy, STRATEGIES, get_strategy
-from .intent_classifier import get_hybrid_classifier, HybridIntentClassifier
+
+from ..cache.database import Database
 from ..logger import get_logger
+from ..utils.library_scanner import LibraryScanner
+from .intent_classifier import HybridIntentClassifier, get_hybrid_classifier
+from .master_index import get_master_index
+from .neurosurgical_synonyms import expand_query, get_all_terms_for_query
+from .query_intent_lean import QueryIntent, get_intent_detector
+from .result_model import (
+    ChapterMetadata,
+    ChapterResult,
+    MatchLocation,
+    MatchType,
+    PageMatch,
+    SearchProgress,
+    SearchResult,
+)
+from .search_strategy import STRATEGIES, SearchStrategy, get_strategy
+from .section_detector import MatchConfidence, get_section_detector
+from .semantic_searcher import SemanticSearcher
 
 # Prevent tokenizers deadlock when forking
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -33,30 +41,35 @@ logger = get_logger("search.pdf_searcher")
 # Patterns for detecting document structure
 SECTION_HEADER_PATTERNS = [
     # Numbered sections: "1. Introduction", "2.1 Methods", "III. Results"
-    r'^(?:\d+\.)+\s+[A-Z]',
-    r'^[IVX]+\.\s+[A-Z]',
+    r"^(?:\d+\.)+\s+[A-Z]",
+    r"^[IVX]+\.\s+[A-Z]",
     # All-caps headers: "INTRODUCTION", "METHODS"
-    r'^[A-Z][A-Z\s]{4,}$',
+    r"^[A-Z][A-Z\s]{4,}$",
     # Bold-style headers (often extracted with special chars)
-    r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,4}\s*$',
+    r"^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,4}\s*$",
 ]
 
 FOOTNOTE_PATTERNS = [
     # Numbered references: "1.", "23.", "[1]", "(1)"
-    r'^\s*\[\d+\]',
-    r'^\s*\(\d+\)',
-    r'^\s*\d+\.\s+[A-Z][a-z]+\s+[A-Z]',  # "1. Author Name..."
+    r"^\s*\[\d+\]",
+    r"^\s*\(\d+\)",
+    r"^\s*\d+\.\s+[A-Z][a-z]+\s+[A-Z]",  # "1. Author Name..."
     # Reference section markers
-    r'(?i)^references?\s*$',
-    r'(?i)^bibliography\s*$',
-    r'(?i)^notes?\s*$',
+    r"(?i)^references?\s*$",
+    r"(?i)^bibliography\s*$",
+    r"(?i)^notes?\s*$",
 ]
 
 
 class PDFSearcher:
     """On-demand PDF text search using PyMuPDF with optional semantic search."""
 
-    def __init__(self, library_path: Path, database: Database, enable_query_expansion: bool = True):
+    def __init__(
+        self,
+        library_path: Path,
+        database: Database,
+        enable_query_expansion: bool = True,
+    ):
         self.library_path = library_path.resolve()
         self.database = database
         self.scanner = LibraryScanner(library_path, database)
@@ -73,7 +86,7 @@ class PDFSearcher:
         self._active_strategy: Optional[SearchStrategy] = None
 
         # Study Mode report (populated after BROAD mode search)
-        self._last_study_report: Optional['StudyModeReport'] = None
+        self._last_study_report: Optional["StudyModeReport"] = None
 
     @property
     def semantic(self) -> SemanticSearcher:
@@ -114,7 +127,10 @@ class PDFSearcher:
         This ensures STRICT mode disables expansion even when instance default is True.
         """
         if self._active_strategy is not None:
-            return self._active_strategy.expand_synonyms or self._active_strategy.expand_orthographic
+            return (
+                self._active_strategy.expand_synonyms
+                or self._active_strategy.expand_orthographic
+            )
         return self.enable_query_expansion
 
     def cancel(self):
@@ -146,7 +162,7 @@ class PDFSearcher:
         query: str,
         mode: str = "keyword",
         progress_callback: Optional[Callable[[SearchProgress], None]] = None,
-        category_filter: Optional[str] = None
+        category_filter: Optional[str] = None,
     ) -> Generator[SearchResult, None, None]:
         """
         Search entire library for query with page-level deduplication.
@@ -179,7 +195,9 @@ class PDFSearcher:
             )
 
             if progress_callback:
-                semantic_progress = SearchProgress(total_pdfs=0, searched_pdfs=0, total_matches=0)
+                semantic_progress = SearchProgress(
+                    total_pdfs=0, searched_pdfs=0, total_matches=0
+                )
                 semantic_progress.current_file = "Semantic search..."
                 progress_callback(semantic_progress)
 
@@ -215,7 +233,8 @@ class PDFSearcher:
                         match_count=1,
                         match_locations=[MatchLocation.SEMANTIC],
                         is_title_match=is_title,
-                        relevance_score=MatchLocation.SEMANTIC.relevance_score + (30 if is_title else 0)
+                        relevance_score=MatchLocation.SEMANTIC.relevance_score
+                        + (30 if is_title else 0),
                     )
                     all_results.append(result)
 
@@ -224,7 +243,9 @@ class PDFSearcher:
                         progress_callback(semantic_progress)
 
                 except Exception as e:
-                    logger.warning("Error processing semantic hit: %s: %s", type(e).__name__, e)
+                    logger.warning(
+                        "Error processing semantic hit: %s: %s", type(e).__name__, e
+                    )
 
             if mode == "semantic":
                 # Sort and yield semantic results
@@ -250,7 +271,9 @@ class PDFSearcher:
                     progress_callback(progress)
 
                 if idx % 100 == 0:
-                    logger.debug("Processing PDF %d/%d: %s", idx, total_pdfs, pdf_path.name)
+                    logger.debug(
+                        "Processing PDF %d/%d: %s", idx, total_pdfs, pdf_path.name
+                    )
 
                 try:
                     metadata = self.scanner.get_pdf_metadata(pdf_path)
@@ -279,11 +302,11 @@ class PDFSearcher:
                             chapter_number=metadata.chapter_number,
                             chapter_title=metadata.chapter_title,
                             page_number=page_num,
-                            match_text=page_data['best_match_text'],
-                            context=page_data['best_context'],
-                            match_count=page_data['match_count'],
-                            match_locations=page_data['locations'],
-                            is_title_match=page_data['is_title_match'],
+                            match_text=page_data["best_match_text"],
+                            context=page_data["best_context"],
+                            match_count=page_data["match_count"],
+                            match_locations=page_data["locations"],
+                            is_title_match=page_data["is_title_match"],
                         )
                         all_results.append(result)
                         progress.total_matches = len(all_results)
@@ -337,7 +360,9 @@ class PDFSearcher:
 
         # Load strategy configuration and store for strategy-aware methods
         strat = get_strategy(strategy)
-        self._active_strategy = strat  # FIX 0.2: Store for _should_expand_query() and _check_title_match()
+        self._active_strategy = (
+            strat  # FIX 0.2: Store for _should_expand_query() and _check_title_match()
+        )
 
         # 1. Detect Intent (using hybrid classifier if AI enabled)
         if strat.use_intent_detection:
@@ -345,11 +370,17 @@ class PDFSearcher:
             hybrid_result = hybrid_classifier.classify(
                 query,
                 use_ai=strat.use_ai_intent,
-                confidence_threshold=strat.intent_confidence_threshold
+                confidence_threshold=strat.intent_confidence_threshold,
             )
-            intent_result = self.intent_detector.detect(query)  # Still use lean for sections
-            logger.debug("Intent: %s (source: %s, confidence: %.2f)",
-                        hybrid_result.intent.name, hybrid_result.source, hybrid_result.confidence)
+            intent_result = self.intent_detector.detect(
+                query
+            )  # Still use lean for sections
+            logger.debug(
+                "Intent: %s (source: %s, confidence: %.2f)",
+                hybrid_result.intent.name,
+                hybrid_result.source,
+                hybrid_result.confidence,
+            )
         else:
             intent_result = self.intent_detector.detect(query)
             logger.debug("Intent detection disabled (STRICT mode)")
@@ -360,7 +391,11 @@ class PDFSearcher:
         if index_matches:
             top_match = index_matches[0]
             primary_sources = set(top_match.primary_sources)
-            logger.debug("Master Index Match: '%s' (Auth: %d)", top_match.term, top_match.authority)
+            logger.debug(
+                "Master Index Match: '%s' (Auth: %d)",
+                top_match.term,
+                top_match.authority,
+            )
 
         # 3. STRATEGY: Query Expansion (STANDARD/BROAD only)
         search_terms = [intent_result.cleaned_query]
@@ -369,11 +404,13 @@ class PDFSearcher:
                 intent_result.cleaned_query,
                 expand_synonyms=strat.expand_synonyms,
                 expand_orthographic=strat.expand_orthographic,
-                max_expansions=strat.max_expansions
+                max_expansions=strat.max_expansions,
             )
             search_terms = expanded
             if len(expanded) > 1:
-                logger.debug("Query expansion: %s -> %s", intent_result.cleaned_query, expanded)
+                logger.debug(
+                    "Query expansion: %s -> %s", intent_result.cleaned_query, expanded
+                )
 
         # Collect chapter-level results
         chapter_results: dict[str, ChapterResult] = {}  # pdf_path -> ChapterResult
@@ -385,7 +422,9 @@ class PDFSearcher:
         # FAST MODE: Check if text cache exists FOR THIS LIBRARY - if not, use title-only search
         has_text_cache = self.database.has_page_cache_for_library(self.library_path)
         if not has_text_cache:
-            logger.info("FAST MODE: No text cache for current library - using title-only search")
+            logger.info(
+                "FAST MODE: No text cache for current library - using title-only search"
+            )
 
         logger.debug("Knowledge search across %d PDFs for: '%s'", total_pdfs, query)
 
@@ -431,7 +470,7 @@ class PDFSearcher:
                             authority_score=authority_boost,
                             index_source="Title Match (Fast)",
                             authority_weight=strat.authority_boost_weight,
-                            section_weight=strat.section_boost_weight
+                            section_weight=strat.section_boost_weight,
                         )
                         chapter_results[str(pdf_path)] = chapter_result
                         progress.total_matches += 1
@@ -458,8 +497,14 @@ class PDFSearcher:
                     progress_callback(progress)
 
                 # Log candidates being processed
-                logger.debug("Candidate PDF %d: %s (dedicated=%s, primary=%s, auth=%d)",
-                            idx, pdf_path.name, is_dedicated, is_primary_source, authority_boost)
+                logger.debug(
+                    "Candidate PDF %d: %s (dedicated=%s, primary=%s, auth=%d)",
+                    idx,
+                    pdf_path.name,
+                    is_dedicated,
+                    is_primary_source,
+                    authority_boost,
+                )
 
                 if is_dedicated:
                     # DEDICATED CHAPTER - include ALL pages
@@ -471,7 +516,9 @@ class PDFSearcher:
                         preview_context = next(iter(cached_pages.values()), "")[:200]
                     else:
                         page_count = 1  # Default - will be updated when opened
-                        preview_context = f"Dedicated chapter on {intent_result.cleaned_query}"
+                        preview_context = (
+                            f"Dedicated chapter on {intent_result.cleaned_query}"
+                        )
 
                     chapter_result = ChapterResult(
                         pdf_path=pdf_path,
@@ -489,7 +536,7 @@ class PDFSearcher:
                         index_source="Title Match",
                         # Strategy weights for scoring
                         authority_weight=strat.authority_boost_weight,
-                        section_weight=strat.section_boost_weight
+                        section_weight=strat.section_boost_weight,
                     )
                     chapter_results[str(pdf_path)] = chapter_result
                     progress.total_matches += 1
@@ -511,47 +558,62 @@ class PDFSearcher:
                     # Search using all expanded terms (STRATEGY: Query Expansion)
                     page_matches = {}
                     for term in search_terms:
-                        term_matches = self.search_pdf_aggregated(term, pdf_path, metadata.chapter_title)
+                        term_matches = self.search_pdf_aggregated(
+                            term, pdf_path, metadata.chapter_title
+                        )
                         # Merge matches (avoid duplicates)
                         for page_num, page_data in term_matches.items():
                             if page_num not in page_matches:
                                 page_matches[page_num] = page_data
                             else:
                                 # Merge match counts and locations
-                                page_matches[page_num]['match_count'] += page_data['match_count']
-                                page_matches[page_num]['locations'].extend(page_data['locations'])
+                                page_matches[page_num]["match_count"] += page_data[
+                                    "match_count"
+                                ]
+                                page_matches[page_num]["locations"].extend(
+                                    page_data["locations"]
+                                )
 
                     if page_matches:
                         # Analyze sections on matched pages
                         matched_sections = []
                         matched_pages_set = set()
-                        
+
                         # Get all cached text for section detection
-                        cached_pages = self.database.get_all_cached_pages(pdf_path, checksum)
-                        
+                        cached_pages = self.database.get_all_cached_pages(
+                            pdf_path, checksum
+                        )
+
                         # Identify pages with matches
                         pages_with_hits = sorted(page_matches.keys())
-                        
+
                         # Run section detector on pages with hits
                         for page_num in pages_with_hits:
                             text = cached_pages.get(page_num - 1, "")
                             if not text:
                                 # print(f"[DEBUG] No text for page {page_num} in {pdf_path.name}")
                                 continue
-                                
-                            sections = self.section_detector.detect_section_headers(text, page_num)
-                            
+
+                            sections = self.section_detector.detect_section_headers(
+                                text, page_num
+                            )
+
                             # Filter sections by intent
                             for section in sections:
                                 # Check if section type matches intent
                                 # e.g. Intent=TECHNIQUE, Section="Technique"
-                                if section.section_type.upper() == intent_result.intent.name:
+                                if (
+                                    section.section_type.upper()
+                                    == intent_result.intent.name
+                                ):
                                     matched_sections.append(section)
-                                    
+
                                     # Get safe extraction window (Zero Data Loss)
                                     # We need all sections on page to calculate window
-                                    start, end = self.section_detector.get_safe_extraction_window(
-                                        section, sections, page_count
+                                    start, end = (
+                                        self.section_detector.get_safe_extraction_window(
+                                            section, sections, page_count
+                                        )
                                     )
                                     # Add pages to set
                                     for p in range(start, end + 1):
@@ -566,24 +628,28 @@ class PDFSearcher:
                             match_type = MatchType.REFERENCE
                             # Fallback: just use pages with keyword hits
                             # Or apply fallback window around best hit?
-                            # For REFERENCE, usually just the page is enough, 
+                            # For REFERENCE, usually just the page is enough,
                             # but let's add context window (-1, +1)
                             for p in pages_with_hits:
                                 matched_pages_set.add(p)
-                                if p > 1: matched_pages_set.add(p - 1)
-                                if p < page_count: matched_pages_set.add(p + 1)
+                                if p > 1:
+                                    matched_pages_set.add(p - 1)
+                                if p < page_count:
+                                    matched_pages_set.add(p + 1)
                             final_matched_pages = sorted(list(matched_pages_set))
 
                         # Get best context for preview
                         best_context = ""
                         best_score = 0
                         for page_data in page_matches.values():
-                            for loc in page_data['locations']:
+                            for loc in page_data["locations"]:
                                 if loc.relevance_score > best_score:
                                     best_score = loc.relevance_score
-                                    best_context = page_data['best_context']
+                                    best_context = page_data["best_context"]
 
-                        total_occurrences = sum(p['match_count'] for p in page_matches.values())
+                        total_occurrences = sum(
+                            p["match_count"] for p in page_matches.values()
+                        )
 
                         chapter_result = ChapterResult(
                             pdf_path=pdf_path,
@@ -601,7 +667,7 @@ class PDFSearcher:
                             index_source="Master Index" if authority_boost > 70 else "",
                             # Strategy weights for scoring
                             authority_weight=strat.authority_boost_weight,
-                            section_weight=strat.section_boost_weight
+                            section_weight=strat.section_boost_weight,
                         )
                         chapter_results[str(pdf_path)] = chapter_result
                         progress.total_matches += 1
@@ -615,28 +681,42 @@ class PDFSearcher:
             progress_callback(progress)
 
         # Log search statistics
-        logger.info("Scanned %d PDFs, processed %d candidates, found %d matches",
-                    total_pdfs, progress.candidates_processed, progress.total_matches)
+        logger.info(
+            "Scanned %d PDFs, processed %d candidates, found %d matches",
+            total_pdfs,
+            progress.candidates_processed,
+            progress.total_matches,
+        )
 
         # Sort by relevance (DEDICATED first, then SECTION, then REFERENCE)
         sorted_results = sorted(
-            chapter_results.values(),
-            key=lambda r: r.relevance_score,
-            reverse=True
+            chapter_results.values(), key=lambda r: r.relevance_score, reverse=True
         )
 
         # STRATEGY: Apply min_relevance_score filter
         if strat.min_relevance_score > 0:
-            filtered_results = [r for r in sorted_results if r.relevance_score >= strat.min_relevance_score]
-            logger.debug("Score filter: %d -> %d results (min=%.1f)",
-                        len(sorted_results), len(filtered_results), strat.min_relevance_score)
+            filtered_results = [
+                r
+                for r in sorted_results
+                if r.relevance_score >= strat.min_relevance_score
+            ]
+            logger.debug(
+                "Score filter: %d -> %d results (min=%.1f)",
+                len(sorted_results),
+                len(filtered_results),
+                strat.min_relevance_score,
+            )
             sorted_results = filtered_results
 
         # STRATEGY: Apply max_results limit
         if strat.max_results > 0 and len(sorted_results) > strat.max_results:
-            logger.debug("Result limit: %d -> %d results (max=%d)",
-                        len(sorted_results), strat.max_results, strat.max_results)
-            sorted_results = sorted_results[:strat.max_results]
+            logger.debug(
+                "Result limit: %d -> %d results (max=%d)",
+                len(sorted_results),
+                strat.max_results,
+                strat.max_results,
+            )
+            sorted_results = sorted_results[: strat.max_results]
 
         # Update progress with final filtered count
         progress.total_matches = len(sorted_results)
@@ -644,13 +724,24 @@ class PDFSearcher:
             progress_callback(progress)
 
         # Log detailed breakdown
-        dedicated = sum(1 for r in sorted_results if r.match_type == MatchType.DEDICATED_CHAPTER)
-        sections = sum(1 for r in sorted_results if r.match_type == MatchType.RELATED_SECTION)
+        dedicated = sum(
+            1 for r in sorted_results if r.match_type == MatchType.DEDICATED_CHAPTER
+        )
+        sections = sum(
+            1 for r in sorted_results if r.match_type == MatchType.RELATED_SECTION
+        )
         refs = sum(1 for r in sorted_results if r.match_type == MatchType.REFERENCE)
         unique_series = set(r.book_series for r in sorted_results)
 
-        logger.info("Strategy '%s': %d results (dedicated=%d, sections=%d, refs=%d) from %d series",
-                    strat.name, len(sorted_results), dedicated, sections, refs, len(unique_series))
+        logger.info(
+            "Strategy '%s': %d results (dedicated=%d, sections=%d, refs=%d) from %d series",
+            strat.name,
+            len(sorted_results),
+            dedicated,
+            sections,
+            refs,
+            len(unique_series),
+        )
 
         # =====================================================================
         # STUDY MODE ENHANCEMENT (BROAD mode only)
@@ -673,7 +764,8 @@ class PDFSearcher:
 
                 # Log study mode results
                 foundational_count = sum(
-                    1 for r in enhanced_results
+                    1
+                    for r in enhanced_results
                     if r.match_type == MatchType.FOUNDATIONAL
                 )
                 logger.info(
@@ -700,7 +792,6 @@ class PDFSearcher:
                 break
             yield result
 
-
     def _get_pdf_page_count(self, pdf_path: Path, checksum: str = None) -> int:
         """Get total page count for a PDF from cache or by opening file."""
         # Try cache first (ignore checksum for speed - path is unique enough)
@@ -722,7 +813,9 @@ class PDFSearcher:
 
         for page_num in sorted(cached_pages.keys()):
             text = cached_pages[page_num]
-            matches = self._find_matches_with_location(query, text, page_num + 1, page_num == 0)
+            matches = self._find_matches_with_location(
+                query, text, page_num + 1, page_num == 0
+            )
             if matches:
                 return matches[0].context
         return ""
@@ -759,7 +852,9 @@ class PDFSearcher:
                 page_count = len(doc)
                 for i in range(page_count):
                     if self._cancelled:
-                        logger.debug("Extraction cancelled at page %d of %s", i, pdf_path.name)
+                        logger.debug(
+                            "Extraction cancelled at page %d of %s", i, pdf_path.name
+                        )
                         break
                     try:
                         page = doc[i]
@@ -767,7 +862,12 @@ class PDFSearcher:
                         if text.strip():
                             pages[i] = text
                     except Exception as page_err:
-                        logger.warning("Error extracting page %d from %s: %s", i, pdf_path.name, page_err)
+                        logger.warning(
+                            "Error extracting page %d from %s: %s",
+                            i,
+                            pdf_path.name,
+                            page_err,
+                        )
                         continue
             finally:
                 doc.close()
@@ -822,15 +922,17 @@ class PDFSearcher:
                     # Aggregate matches for this page
                     locations = [m.location for m in page_matches]
                     # Use the most relevant match's context as primary
-                    best_match = max(page_matches, key=lambda m: m.location.relevance_score)
+                    best_match = max(
+                        page_matches, key=lambda m: m.location.relevance_score
+                    )
 
                     page_results[page_num + 1] = {
-                        'matches': page_matches,
-                        'locations': list(set(locations)),  # Unique locations
-                        'best_context': best_match.context,
-                        'best_match_text': best_match.match_text,
-                        'match_count': len(page_matches),
-                        'is_title_match': title_match and page_num == 0,
+                        "matches": page_matches,
+                        "locations": list(set(locations)),  # Unique locations
+                        "best_context": best_match.context,
+                        "best_match_text": best_match.match_text,
+                        "match_count": len(page_matches),
+                        "is_title_match": title_match and page_num == 0,
                     }
 
             return page_results
@@ -908,7 +1010,7 @@ class PDFSearcher:
                     return False
                 # Check if words appear in order within title (limited gap)
                 # Pattern: word1.{0,30}word2 (max 30 chars between words)
-                pattern = r'.{0,30}'.join(re.escape(w) for w in q_words)
+                pattern = r".{0,30}".join(re.escape(w) for w in q_words)
                 if re.search(pattern, t_lower):
                     return True
             return False
@@ -919,6 +1021,7 @@ class PDFSearcher:
 
         # FIX 0.8: Also check orthographic variants (disc/disk, tumour/tumor)
         from .neurosurgical_synonyms import get_orthographic_expansion
+
         for variant in get_orthographic_expansion(query):
             variant_lower = variant.lower().strip()
             if variant_lower != query_lower:  # Skip original (already checked)
@@ -947,8 +1050,9 @@ class PDFSearcher:
         title_lower = chapter_title.lower()
 
         # Determine if we're in STRICT mode
-        is_strict = (self._active_strategy is not None and
-                     self._active_strategy.name == "strict")
+        is_strict = (
+            self._active_strategy is not None and self._active_strategy.name == "strict"
+        )
 
         # FIX 0.7: STRICT mode requires phrase match for multi-word queries
         if is_strict and len(query_lower.split()) >= 2:
@@ -978,16 +1082,28 @@ class PDFSearcher:
             # FIX 0.9: REQUIRE all other query words to match (anatomical region)
             for word in query_words:
                 # Common surgical suffixes
-                for suffix in ['ectomy', 'otomy', 'plasty', 'pexy', 'rraphy', 'ation', 'ion', 'ing', 'ed']:
+                for suffix in [
+                    "ectomy",
+                    "otomy",
+                    "plasty",
+                    "pexy",
+                    "rraphy",
+                    "ation",
+                    "ion",
+                    "ing",
+                    "ed",
+                ]:
                     if word.endswith(suffix) and len(word) > len(suffix) + 2:
-                        root = word[:-len(suffix)]
+                        root = word[: -len(suffix)]
                         if len(root) >= 3 and root in title_lower:
                             # Found root match - now check other words
                             other_words = [w for w in query_words if w != word]
                             # FIX 0.9: MUST have other words AND they MUST all match
                             # This prevents "lumbar discectomy" → root "disc" → matching "Thoracic Disc"
                             # because "lumbar" must also be in the title
-                            if other_words and all(w in title_lower for w in other_words):
+                            if other_words and all(
+                                w in title_lower for w in other_words
+                            ):
                                 return True
                             # Single-word query with root match (e.g., just "discectomy")
                             # Don't match based on root alone - too imprecise
@@ -1023,8 +1139,8 @@ class PDFSearcher:
             MatchLocation indicating the document structure context
         """
         # Get the line containing the match
-        line_start = text.rfind('\n', 0, match_start) + 1
-        line_end = text.find('\n', match_start)
+        line_start = text.rfind("\n", 0, match_start) + 1
+        line_end = text.find("\n", match_start)
         if line_end == -1:
             line_end = len(text)
         line = text[line_start:line_end].strip()
@@ -1080,17 +1196,17 @@ class PDFSearcher:
 
                 match_text = match.group()
                 context = self._extract_context(text, start_pos, len(match_text))
-                location = self._detect_match_location(
-                    text, start_pos, is_first_page
-                )
+                location = self._detect_match_location(text, start_pos, is_first_page)
 
-                matches.append(PageMatch(
-                    page_number=page_number,
-                    match_text=match_text,
-                    context=context,
-                    start_pos=start_pos,
-                    location=location
-                ))
+                matches.append(
+                    PageMatch(
+                        page_number=page_number,
+                        match_text=match_text,
+                        context=context,
+                        start_pos=start_pos,
+                        location=location,
+                    )
+                )
 
         return matches
 
@@ -1105,7 +1221,7 @@ class PDFSearcher:
         context = text[context_start:context_end]
 
         # Clean up context (normalize whitespace, remove excessive newlines)
-        context = ' '.join(context.split())
+        context = " ".join(context.split())
 
         # Add ellipsis if truncated
         if context_start > 0:
@@ -1134,7 +1250,9 @@ class PDFSearcher:
                     text = doc[page_number - 1].get_text()
 
                     # Cache it
-                    self.database.cache_pdf_text(pdf_path, page_number - 1, text, checksum)
+                    self.database.cache_pdf_text(
+                        pdf_path, page_number - 1, text, checksum
+                    )
                     return text
 
         except ValueError as e:
@@ -1142,7 +1260,12 @@ class PDFSearcher:
         except (fitz.FileDataError, OSError) as e:
             logger.warning("Error reading PDF %s: %s", pdf_path.name, e)
         except Exception as e:
-            logger.warning("Error extracting page %d from %s: %s", page_number, pdf_path.name, type(e).__name__)
+            logger.warning(
+                "Error extracting page %d from %s: %s",
+                page_number,
+                pdf_path.name,
+                type(e).__name__,
+            )
 
         return ""
 
@@ -1166,20 +1289,20 @@ class PDFSearcher:
             return self._extract_context(text, match.start(), len(match.group()))
 
         # If query not found literally, return start of text
-        return text[:config.CONTEXT_WINDOW_SIZE] + "..."
+        return text[: config.CONTEXT_WINDOW_SIZE] + "..."
 
     def index_pdf_semantic(self, pdf_path: Path) -> int:
         """
         Build semantic index for a single PDF.
-        
+
         Args:
             pdf_path: Path to PDF file
-            
+
         Returns:
             Number of pages indexed
         """
         import time
-        
+
         if not self.semantic.enabled:
             return 0
 
@@ -1200,19 +1323,22 @@ class PDFSearcher:
                 self.database.cache_pdf_text_batch(pdf_path, cached_pages, checksum)
 
             # Batch encode all pages at once (more efficient, fewer GIL holds)
-            batch_count = self.semantic.index_pages_batch(pdf_path, cached_pages, checksum)
+            batch_count = self.semantic.index_pages_batch(
+                pdf_path, cached_pages, checksum
+            )
             return batch_count
 
         except (ValueError, fitz.FileDataError, OSError) as e:
             logger.warning("Error indexing %s: %s", pdf_path.name, e)
             return 0
         except Exception as e:
-            logger.warning("Unexpected error indexing %s: %s", pdf_path.name, type(e).__name__)
+            logger.warning(
+                "Unexpected error indexing %s: %s", pdf_path.name, type(e).__name__
+            )
             return 0
 
     def index_library_semantic(
-        self,
-        progress_callback: Optional[Callable[[int, int], None]] = None
+        self, progress_callback: Optional[Callable[[int, int], None]] = None
     ) -> int:
         """
         Build semantic index for entire library.
@@ -1252,7 +1378,7 @@ class PDFSearcher:
     def index_library_parallel(
         self,
         max_workers: int = 4,
-        progress_callback: Optional[Callable[[int, int, str], None]] = None
+        progress_callback: Optional[Callable[[int, int, str], None]] = None,
     ) -> int:
         """
         Build semantic index using multiple CPU cores.
@@ -1281,17 +1407,19 @@ class PDFSearcher:
         # Lazy import to avoid tkinter/multiprocessing conflicts at module load
         import multiprocessing
         from concurrent.futures import ProcessPoolExecutor, as_completed
+
         from ..utils.parallel_workers import extract_text_worker
 
         # Use spawn context on macOS to avoid tokenizers/fork deadlock
         mp_context = multiprocessing.get_context("spawn")
 
         # Submit all extraction jobs to process pool
-        with ProcessPoolExecutor(max_workers=max_workers, mp_context=mp_context) as executor:
+        with ProcessPoolExecutor(
+            max_workers=max_workers, mp_context=mp_context
+        ) as executor:
             # Map futures back to their paths
             future_to_path = {
-                executor.submit(extract_text_worker, p): p
-                for p in pdf_paths
+                executor.submit(extract_text_worker, p): p for p in pdf_paths
             }
 
             # Process results as they complete
@@ -1310,7 +1438,11 @@ class PDFSearcher:
                     result = future.result()
 
                     if result["error"]:
-                        logger.warning("Worker error extracting %s: %s", pdf_path.name, result['error'])
+                        logger.warning(
+                            "Worker error extracting %s: %s",
+                            pdf_path.name,
+                            result["error"],
+                        )
                         continue
 
                     # Validate path is within library
@@ -1325,7 +1457,9 @@ class PDFSearcher:
 
                     # Index each page in semantic search
                     for page_num, text in pages.items():
-                        if self.semantic.index_page(pdf_path, page_num + 1, text, checksum):
+                        if self.semantic.index_page(
+                            pdf_path, page_num + 1, text, checksum
+                        ):
                             indexed_pages += 1
 
                     if progress_callback:
@@ -1334,6 +1468,11 @@ class PDFSearcher:
                 except ValueError as e:
                     logger.warning("Invalid path %s: %s", pdf_path.name, e)
                 except Exception as e:
-                    logger.warning("Error processing %s: %s: %s", pdf_path.name, type(e).__name__, e)
+                    logger.warning(
+                        "Error processing %s: %s: %s",
+                        pdf_path.name,
+                        type(e).__name__,
+                        e,
+                    )
 
         return indexed_pages

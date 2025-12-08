@@ -10,7 +10,6 @@ from deep_dx.critic.critic import DeepDxCritic
 from deep_dx.engine.synthesizer import DeepDxSynthesizer
 from index.database import Database
 from index.precision_search import PrecisionSearchEngine
-
 from src.deep_dx.config import get_deepdx_settings
 
 

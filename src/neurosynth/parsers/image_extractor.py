@@ -13,10 +13,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import fitz  # PyMuPDF
-from neurosynth.config import get_settings
-from neurosynth.models.visual import ImageType, VisualElement
 from PIL import Image
 from rich.console import Console
+
+from neurosynth.config import get_settings
+from neurosynth.models.visual import ImageType, VisualElement
 
 console = Console()
 

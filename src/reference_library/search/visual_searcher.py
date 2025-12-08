@@ -1,6 +1,8 @@
 """Visual similarity search using ColPali embeddings and Qdrant vector store."""
+
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
 from reference_library import config
 
 # Visual search availability check
@@ -11,6 +13,7 @@ try:
         get_colpali_client,
         get_qdrant_store,
     )
+
     if NEUROSYNTH_AVAILABLE:
         VISUAL_SEARCH_AVAILABLE = True
 except ImportError:
@@ -30,9 +33,9 @@ class VisualSearcher:
         self.database = database
         self.collection_name = collection_name or config.QDRANT_COLLECTION
         self.enabled = (
-            VISUAL_SEARCH_AVAILABLE and
-            config.VISUAL_SEARCH_ENABLED and
-            config.COLPALI_ENABLED
+            VISUAL_SEARCH_AVAILABLE
+            and config.VISUAL_SEARCH_ENABLED
+            and config.COLPALI_ENABLED
         )
 
         self.colpali = None
@@ -67,10 +70,7 @@ class VisualSearcher:
             self.enabled = False
 
     def embed_image(
-        self,
-        image_path: str,
-        figure_id: str,
-        metadata: Optional[Dict[str, Any]] = None
+        self, image_path: str, figure_id: str, metadata: Optional[Dict[str, Any]] = None
     ) -> bool:
         """Generate embedding for a single image and store in Qdrant.
 
@@ -107,9 +107,7 @@ class VisualSearcher:
 
             # Store in Qdrant
             self.qdrant.upsert(
-                ids=[figure_id],
-                embeddings=[embedding],
-                metadatas=[store_metadata]
+                ids=[figure_id], embeddings=[embedding], metadatas=[store_metadata]
             )
 
             # Track in database (figure_id used as both element_id and point_id for Qdrant)
@@ -124,7 +122,7 @@ class VisualSearcher:
         self,
         figures: List[Dict[str, Any]],
         on_progress: Optional[callable] = None,
-        batch_size: int = 16
+        batch_size: int = 16,
     ) -> int:
         """Batch embed multiple images.
 
@@ -144,7 +142,7 @@ class VisualSearcher:
 
         # Process in batches for efficiency
         for i in range(0, total, batch_size):
-            batch = figures[i:i + batch_size]
+            batch = figures[i : i + batch_size]
 
             for fig in batch:
                 figure_id = fig.get("id")
@@ -178,7 +176,7 @@ class VisualSearcher:
         self,
         query_image_path: str,
         n_results: int = 20,
-        image_types: Optional[List[str]] = None
+        image_types: Optional[List[str]] = None,
     ) -> List[Dict[str, Any]]:
         """Search for similar images using visual similarity.
 
@@ -208,23 +206,23 @@ class VisualSearcher:
 
             # Search Qdrant
             results = self.qdrant.search(
-                query_embedding,
-                limit=n_results,
-                filter=filter_dict
+                query_embedding, limit=n_results, filter=filter_dict
             )
 
             # Transform results
             clean_results = []
             for result in results:
-                clean_results.append({
-                    "figure_id": result.id,
-                    "image_path": result.payload.get("image_path", ""),
-                    "pdf_path": Path(result.payload.get("pdf_path", "")),
-                    "page_number": result.payload.get("page_number", 0),
-                    "image_type": result.payload.get("image_type", "unknown"),
-                    "caption": result.payload.get("caption", ""),
-                    "score": result.score
-                })
+                clean_results.append(
+                    {
+                        "figure_id": result.id,
+                        "image_path": result.payload.get("image_path", ""),
+                        "pdf_path": Path(result.payload.get("pdf_path", "")),
+                        "page_number": result.payload.get("page_number", 0),
+                        "image_type": result.payload.get("image_type", "unknown"),
+                        "caption": result.payload.get("caption", ""),
+                        "score": result.score,
+                    }
+                )
 
             return clean_results
 
@@ -233,10 +231,7 @@ class VisualSearcher:
             return []
 
     def search_by_text(
-        self,
-        query: str,
-        n_results: int = 20,
-        image_types: Optional[List[str]] = None
+        self, query: str, n_results: int = 20, image_types: Optional[List[str]] = None
     ) -> List[Dict[str, Any]]:
         """Search for images using text query (if ColPali supports text-to-image).
 
@@ -253,7 +248,7 @@ class VisualSearcher:
 
         try:
             # ColPali can embed text queries for cross-modal search
-            if hasattr(self.colpali, 'embed_text'):
+            if hasattr(self.colpali, "embed_text"):
                 query_embedding = self.colpali.embed_text(query)
             else:
                 # Fallback: use image embedding model on rendered text
@@ -267,23 +262,23 @@ class VisualSearcher:
 
             # Search Qdrant
             results = self.qdrant.search(
-                query_embedding,
-                limit=n_results,
-                filter=filter_dict
+                query_embedding, limit=n_results, filter=filter_dict
             )
 
             # Transform results
             clean_results = []
             for result in results:
-                clean_results.append({
-                    "figure_id": result.id,
-                    "image_path": result.payload.get("image_path", ""),
-                    "pdf_path": Path(result.payload.get("pdf_path", "")),
-                    "page_number": result.payload.get("page_number", 0),
-                    "image_type": result.payload.get("image_type", "unknown"),
-                    "caption": result.payload.get("caption", ""),
-                    "score": result.score
-                })
+                clean_results.append(
+                    {
+                        "figure_id": result.id,
+                        "image_path": result.payload.get("image_path", ""),
+                        "pdf_path": Path(result.payload.get("pdf_path", "")),
+                        "page_number": result.payload.get("page_number", 0),
+                        "image_type": result.payload.get("image_type", "unknown"),
+                        "caption": result.payload.get("caption", ""),
+                        "score": result.score,
+                    }
+                )
 
             return clean_results
 
@@ -315,7 +310,9 @@ class VisualSearcher:
             print(f"Error clearing visual index: {e}")
 
 
-def get_visual_searcher(database, collection_name: str = None) -> Optional[VisualSearcher]:
+def get_visual_searcher(
+    database, collection_name: str = None
+) -> Optional[VisualSearcher]:
     """Factory function to get a VisualSearcher if available.
 
     Args:

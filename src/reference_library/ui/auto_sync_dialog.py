@@ -3,11 +3,13 @@
 Provides GUI settings for automated PDF indexing and Deep-DX synchronization.
 """
 
-import customtkinter as ctk
 import tkinter as tk
 from tkinter import messagebox
 
+import customtkinter as ctk
+
 from reference_library import config
+
 from .styles import FONTS, PADDING
 
 
@@ -52,9 +54,7 @@ class AutoSyncDialog(ctk.CTkToplevel):
         """Set up the dialog UI."""
         # Title
         title_label = ctk.CTkLabel(
-            self,
-            text="⚙️ Auto-Sync Configuration",
-            font=FONTS["heading"]
+            self, text="⚙️ Auto-Sync Configuration", font=FONTS["heading"]
         )
         title_label.pack(pady=(PADDING["large"], PADDING["medium"]))
 
@@ -63,13 +63,15 @@ class AutoSyncDialog(ctk.CTkToplevel):
             self,
             text="Configure automated PDF indexing and Deep-DX synchronization",
             font=FONTS["small"],
-            text_color="gray60"
+            text_color="gray60",
         )
         subtitle.pack(pady=(0, PADDING["large"]))
 
         # Content container
         content = ctk.CTkFrame(self)
-        content.pack(fill="both", expand=True, padx=PADDING["large"], pady=(0, PADDING["medium"]))
+        content.pack(
+            fill="both", expand=True, padx=PADDING["large"], pady=(0, PADDING["medium"])
+        )
 
         # Auto-Index Section
         self._create_index_section(content)
@@ -100,7 +102,7 @@ class AutoSyncDialog(ctk.CTkToplevel):
             ),
             font=FONTS["small"],
             text_color="gray60",
-            justify="left"
+            justify="left",
         )
         help_text.pack(anchor="w", padx=PADDING["small"])
 
@@ -118,7 +120,7 @@ class AutoSyncDialog(ctk.CTkToplevel):
             text="Enable Auto-Indexing",
             variable=self.auto_index_enabled,
             command=self._on_index_toggle,
-            font=FONTS["body_bold"]
+            font=FONTS["body_bold"],
         )
         index_toggle.pack(anchor="w", padx=PADDING["medium"], pady=PADDING["small"])
 
@@ -127,18 +129,22 @@ class AutoSyncDialog(ctk.CTkToplevel):
             index_frame,
             text="Automatically index new PDFs when added to the library",
             font=FONTS["small"],
-            text_color="gray60"
+            text_color="gray60",
         )
         index_desc.pack(anchor="w", padx=(PADDING["large"] + 20, PADDING["medium"]))
 
         # Debounce slider
         debounce_frame = ctk.CTkFrame(index_frame, fg_color="transparent")
-        debounce_frame.pack(fill="x", padx=(PADDING["large"] + 20, PADDING["medium"]), pady=PADDING["small"])
+        debounce_frame.pack(
+            fill="x",
+            padx=(PADDING["large"] + 20, PADDING["medium"]),
+            pady=PADDING["small"],
+        )
 
         self.index_debounce_label = ctk.CTkLabel(
             debounce_frame,
             text=f"Index debounce: {self.index_debounce.get()}s",
-            font=FONTS["small"]
+            font=FONTS["small"],
         )
         self.index_debounce_label.pack(anchor="w")
 
@@ -147,7 +153,7 @@ class AutoSyncDialog(ctk.CTkToplevel):
             from_=5,
             to=300,
             variable=self.index_debounce,
-            command=self._on_index_debounce_changed
+            command=self._on_index_debounce_changed,
         )
         index_slider.pack(fill="x", pady=PADDING["small"])
 
@@ -155,7 +161,7 @@ class AutoSyncDialog(ctk.CTkToplevel):
             debounce_frame,
             text="5s (fast) ← → 300s (fewer API calls)",
             font=("Arial", 9),
-            text_color="gray50"
+            text_color="gray50",
         )
         slider_hint.pack(anchor="w")
 
@@ -170,7 +176,7 @@ class AutoSyncDialog(ctk.CTkToplevel):
             text="Enable Auto-Sync to Deep-DX",
             variable=self.auto_sync_enabled,
             command=self._on_sync_toggle,
-            font=FONTS["body_bold"]
+            font=FONTS["body_bold"],
         )
         sync_toggle.pack(anchor="w", padx=PADDING["medium"], pady=PADDING["small"])
 
@@ -179,18 +185,22 @@ class AutoSyncDialog(ctk.CTkToplevel):
             sync_frame,
             text="Automatically sync indexed PDFs to Deep-DX search engine",
             font=FONTS["small"],
-            text_color="gray60"
+            text_color="gray60",
         )
         sync_desc.pack(anchor="w", padx=(PADDING["large"] + 20, PADDING["medium"]))
 
         # Debounce slider
         debounce_frame = ctk.CTkFrame(sync_frame, fg_color="transparent")
-        debounce_frame.pack(fill="x", padx=(PADDING["large"] + 20, PADDING["medium"]), pady=PADDING["small"])
+        debounce_frame.pack(
+            fill="x",
+            padx=(PADDING["large"] + 20, PADDING["medium"]),
+            pady=PADDING["small"],
+        )
 
         self.sync_debounce_label = ctk.CTkLabel(
             debounce_frame,
             text=f"Sync debounce: {self.sync_debounce.get()}s",
-            font=FONTS["small"]
+            font=FONTS["small"],
         )
         self.sync_debounce_label.pack(anchor="w")
 
@@ -199,7 +209,7 @@ class AutoSyncDialog(ctk.CTkToplevel):
             from_=10,
             to=600,
             variable=self.sync_debounce,
-            command=self._on_sync_debounce_changed
+            command=self._on_sync_debounce_changed,
         )
         sync_slider.pack(fill="x", pady=PADDING["small"])
 
@@ -207,7 +217,7 @@ class AutoSyncDialog(ctk.CTkToplevel):
             debounce_frame,
             text="10s (fast) ← → 600s (fewer operations)",
             font=("Arial", 9),
-            text_color="gray50"
+            text_color="gray50",
         )
         slider_hint.pack(anchor="w")
 
@@ -223,16 +233,13 @@ class AutoSyncDialog(ctk.CTkToplevel):
             command=self.destroy,
             width=100,
             fg_color="gray40",
-            hover_color="gray50"
+            hover_color="gray50",
         )
         cancel_btn.pack(side="right", padx=(PADDING["small"], 0))
 
         # Save button
         save_btn = ctk.CTkButton(
-            button_frame,
-            text="Save Settings",
-            command=self._on_save,
-            width=120
+            button_frame, text="Save Settings", command=self._on_save, width=120
         )
         save_btn.pack(side="right", padx=PADDING["small"])
 
@@ -248,7 +255,7 @@ class AutoSyncDialog(ctk.CTkToplevel):
                 "Invalid Configuration",
                 "Auto-sync requires auto-indexing to be enabled.\n\n"
                 "Auto-sync has been disabled.",
-                parent=self
+                parent=self,
             )
             self.auto_sync_enabled.set(False)
 
@@ -263,7 +270,7 @@ class AutoSyncDialog(ctk.CTkToplevel):
                 "Auto-Index Enabled",
                 "Auto-indexing has been automatically enabled\n"
                 "because it's required for auto-sync.",
-                parent=self
+                parent=self,
             )
 
     def _on_index_debounce_changed(self, value):
@@ -290,7 +297,7 @@ class AutoSyncDialog(ctk.CTkToplevel):
                 "Invalid Configuration",
                 "Auto-sync requires auto-indexing to be enabled.\n\n"
                 "Please enable auto-indexing or disable auto-sync.",
-                parent=self
+                parent=self,
             )
             return
 
@@ -316,9 +323,10 @@ class AutoSyncDialog(ctk.CTkToplevel):
 
         messagebox.showinfo(
             "Settings Saved",
-            "Auto-sync settings saved successfully!\n\n" + "\n".join(status) +
-            "\n\nSettings will take effect after restarting the application.",
-            parent=self
+            "Auto-sync settings saved successfully!\n\n"
+            + "\n".join(status)
+            + "\n\nSettings will take effect after restarting the application.",
+            parent=self,
         )
 
         self.destroy()

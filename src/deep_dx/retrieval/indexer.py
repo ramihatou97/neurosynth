@@ -10,8 +10,9 @@ from typing import Dict, List, Tuple
 import faiss
 import numpy as np
 import pymupdf
-from deep_dx.config import get_deepdx_settings
 from sentence_transformers import SentenceTransformer
+
+from deep_dx.config import get_deepdx_settings
 
 
 class DeepDxIndexer:

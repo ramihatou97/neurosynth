@@ -13,7 +13,7 @@ cursor.execute("PRAGMA table_info(pdf_text_cache)")
 columns = [col[1] for col in cursor.fetchall()]
 # Assuming columns likely include 'file_path' or 'filename' and 'content' or 'text'
 
-if 'file_path' in columns and 'content' in columns:
+if "file_path" in columns and "content" in columns:
     cursor.execute("SELECT file_path, length(content) FROM pdf_text_cache")
     for row in cursor.fetchall():
         path = Path(row[0]).name

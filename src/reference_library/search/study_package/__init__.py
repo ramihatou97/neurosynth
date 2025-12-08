@@ -7,46 +7,43 @@ Enhances BROAD mode search to include foundational knowledge
 
 Usage:
     from reference_library.search.study_package import enhance_broad_results, analyze_query
-    
+
     # In BROAD mode search:
     enhanced_results, report = enhance_broad_results(
         searcher, query, direct_results, semantic_results
     )
-    
+
     # Check for library gaps
     if report.has_gaps:
         print(f"Missing topics: {report.missing_topics}")
-    
+
     # Or analyze query alone:
     analysis = analyze_query("lumbar discectomy")
     print(analysis.region_tags)  # {'spine', 'lumbar'}
 """
 
-from reference_library.search.study_package.taxonomy import (
-    NEUROSURGICAL_REGIONS,
-    KNOWLEDGE_CATEGORIES,
-    PROCEDURE_TO_REGION,
-    REGION_FOUNDATIONS,
-)
-
 from reference_library.search.study_package.analyzer import (
-    QueryAnalyzer,
     QueryAnalysis,
-    get_analyzer,
+    QueryAnalyzer,
     analyze_query,
+    get_analyzer,
     get_foundations_for_query,
 )
-
 from reference_library.search.study_package.assembler import (
-    StudyPackageAssembler,
     StudyPackage,
+    StudyPackageAssembler,
     StudyPackageResult,
     enhance_broad_results,
 )
-
 from reference_library.search.study_package.report import (
     StudyModeReport,
     TopicSource,
+)
+from reference_library.search.study_package.taxonomy import (
+    KNOWLEDGE_CATEGORIES,
+    NEUROSURGICAL_REGIONS,
+    PROCEDURE_TO_REGION,
+    REGION_FOUNDATIONS,
 )
 
 __all__ = [
@@ -70,4 +67,3 @@ __all__ = [
     "StudyModeReport",
     "TopicSource",
 ]
-

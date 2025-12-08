@@ -3,6 +3,7 @@
 These functions must be at module level (not inside classes) for pickling.
 They run in separate Python processes for true parallelism.
 """
+
 import io
 from pathlib import Path
 
@@ -18,12 +19,7 @@ def extract_text_worker(pdf_path: str) -> dict:
     Returns:
         Dict with keys: path, pages, page_count, error
     """
-    result = {
-        "path": pdf_path,
-        "pages": {},
-        "page_count": 0,
-        "error": None
-    }
+    result = {"path": pdf_path, "pages": {}, "page_count": 0, "error": None}
 
     try:
         # Import inside function to avoid pickling issues
@@ -43,10 +39,7 @@ def extract_text_worker(pdf_path: str) -> dict:
 
 
 def extract_figures_worker(
-    pdf_path: str,
-    output_dir: str,
-    min_size: int = 50,
-    max_size: int = 2048
+    pdf_path: str, output_dir: str, min_size: int = 50, max_size: int = 2048
 ) -> dict:
     """
     Worker that extracts figures from a PDF in a separate process.
@@ -61,11 +54,7 @@ def extract_figures_worker(
     Returns:
         Dict with keys: path, figures, error
     """
-    result = {
-        "path": pdf_path,
-        "figures": [],
-        "error": None
-    }
+    result = {"path": pdf_path, "figures": [], "error": None}
 
     try:
         # Import inside function to avoid pickling issues
@@ -105,8 +94,8 @@ def extract_figures_worker(
                     continue
 
                 # Convert non-RGB modes
-                if pil_img.mode not in ('RGB', 'L'):
-                    pil_img = pil_img.convert('RGB')
+                if pil_img.mode not in ("RGB", "L"):
+                    pil_img = pil_img.convert("RGB")
 
                 # Resize if too large
                 if w > max_size or h > max_size:
@@ -126,13 +115,15 @@ def extract_figures_worker(
 
                 pil_img.save(fpath, "PNG")
 
-                result["figures"].append({
-                    "path": str(fpath),
-                    "page": page_num + 1,
-                    "width": w,
-                    "height": h,
-                    "xref": xref
-                })
+                result["figures"].append(
+                    {
+                        "path": str(fpath),
+                        "page": page_num + 1,
+                        "width": w,
+                        "height": h,
+                        "xref": xref,
+                    }
+                )
 
         doc.close()
 
@@ -143,9 +134,7 @@ def extract_figures_worker(
 
 
 def extract_figures_snapshot_worker(
-    pdf_path: str,
-    output_dir: str,
-    zoom: float = 3.0
+    pdf_path: str, output_dir: str, zoom: float = 3.0
 ) -> dict:
     """
     Worker that extracts figures using the "snapshot" approach.
@@ -161,16 +150,18 @@ def extract_figures_snapshot_worker(
     """
     import re
 
-    result = {
-        "path": pdf_path,
-        "figures": [],
-        "error": None
-    }
+    result = {"path": pdf_path, "figures": [], "error": None}
 
     # Figure caption patterns
     figure_patterns = [
-        re.compile(r"^(Figure|Fig\.?)\s*(\d+(?:\.\d+)?)[:\.\-]?\s*(.*)$", re.IGNORECASE | re.MULTILINE),
-        re.compile(r"^(Plate|Image|Panel)\s*(\d+(?:\.\d+)?)[:\.\-]?\s*(.*)$", re.IGNORECASE | re.MULTILINE),
+        re.compile(
+            r"^(Figure|Fig\.?)\s*(\d+(?:\.\d+)?)[:\.\-]?\s*(.*)$",
+            re.IGNORECASE | re.MULTILINE,
+        ),
+        re.compile(
+            r"^(Plate|Image|Panel)\s*(\d+(?:\.\d+)?)[:\.\-]?\s*(.*)$",
+            re.IGNORECASE | re.MULTILINE,
+        ),
     ]
 
     try:
@@ -207,7 +198,7 @@ def extract_figures_snapshot_worker(
                         page_rect.x0,
                         max(0, cap_rect.y0 - 400),  # Up to 400pt above caption
                         page_rect.x1,
-                        cap_rect.y0  # Stop at caption top
+                        cap_rect.y0,  # Stop at caption top
                     )
 
                     # Render to pixmap
@@ -229,15 +220,17 @@ def extract_figures_snapshot_worker(
 
                     pix.save(str(fpath))
 
-                    result["figures"].append({
-                        "path": str(fpath),
-                        "page": page_num + 1,
-                        "width": pix.width,
-                        "height": pix.height,
-                        "figure_number": fig_num,
-                        "caption": caption_text[:500],
-                        "method": "snapshot"
-                    })
+                    result["figures"].append(
+                        {
+                            "path": str(fpath),
+                            "page": page_num + 1,
+                            "width": pix.width,
+                            "height": pix.height,
+                            "figure_number": fig_num,
+                            "caption": caption_text[:500],
+                            "method": "snapshot",
+                        }
+                    )
 
         doc.close()
 

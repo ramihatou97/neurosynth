@@ -1,9 +1,10 @@
 """Threading utilities for background task management."""
+
 import threading
-from typing import Callable, Optional, Any
-from concurrent.futures import ThreadPoolExecutor, Future
-from queue import Queue, Empty
 import time
+from concurrent.futures import Future, ThreadPoolExecutor
+from queue import Empty, Queue
+from typing import Any, Callable, Optional
 
 
 class BackgroundTaskManager:

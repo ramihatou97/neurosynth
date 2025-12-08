@@ -1,10 +1,13 @@
 """Panel for displaying newly detected PDFs in the library."""
-import customtkinter as ctk
+
+from datetime import datetime
 from pathlib import Path
 from typing import Callable, Optional
-from datetime import datetime
+
+import customtkinter as ctk
 
 from reference_library import config
+
 from .styles import FONTS, PADDING
 
 
@@ -16,7 +19,7 @@ class NewFilesPanel(ctk.CTkFrame):
         parent,
         on_index_file: Callable[[Path], None],
         on_index_all: Callable[[], None],
-        **kwargs
+        **kwargs,
     ):
         super().__init__(parent, **kwargs)
         self.on_index_file = on_index_file
@@ -32,9 +35,7 @@ class NewFilesPanel(ctk.CTkFrame):
         header_frame.pack(fill="x", padx=PADDING["small"], pady=PADDING["small"])
 
         self.header_label = ctk.CTkLabel(
-            header_frame,
-            text="New Files",
-            font=FONTS["subheading"]
+            header_frame, text="New Files", font=FONTS["subheading"]
         )
         self.header_label.pack(side="left")
 
@@ -46,7 +47,7 @@ class NewFilesPanel(ctk.CTkFrame):
             fg_color="#e74c3c",
             corner_radius=10,
             width=24,
-            height=24
+            height=24,
         )
         self.count_badge.pack(side="left", padx=PADDING["small"])
 
@@ -59,17 +60,17 @@ class NewFilesPanel(ctk.CTkFrame):
             height=24,
             font=FONTS["small"],
             fg_color="#27ae60",
-            hover_color="#1e8449"
+            hover_color="#1e8449",
         )
         self.index_all_btn.pack(side="right")
 
         # Scrollable frame for file list
         self.scroll_frame = ctk.CTkScrollableFrame(
-            self,
-            fg_color="transparent",
-            height=300
+            self, fg_color="transparent", height=300
         )
-        self.scroll_frame.pack(fill="both", expand=True, padx=PADDING["small"], pady=PADDING["small"])
+        self.scroll_frame.pack(
+            fill="both", expand=True, padx=PADDING["small"], pady=PADDING["small"]
+        )
 
         # Empty state message
         self.empty_label = ctk.CTkLabel(
@@ -77,12 +78,18 @@ class NewFilesPanel(ctk.CTkFrame):
             text="No new files detected.\nAdd PDFs to your library folder\nand they'll appear here.",
             font=FONTS["small"],
             text_color="gray",
-            justify="center"
+            justify="center",
         )
         self.empty_label.pack(pady=PADDING["large"])
 
-    def add_file(self, pdf_path: Path, book_series: str = "", chapter_title: str = "",
-                 page_count: int = 0, first_seen: Optional[datetime] = None):
+    def add_file(
+        self,
+        pdf_path: Path,
+        book_series: str = "",
+        chapter_title: str = "",
+        page_count: int = 0,
+        first_seen: Optional[datetime] = None,
+    ):
         """Add a new file to the panel."""
         path_str = str(pdf_path)
 
@@ -99,18 +106,21 @@ class NewFilesPanel(ctk.CTkFrame):
 
         # File info
         info_frame = ctk.CTkFrame(file_frame, fg_color="transparent")
-        info_frame.pack(side="left", fill="x", expand=True, padx=PADDING["small"], pady=PADDING["small"])
+        info_frame.pack(
+            side="left",
+            fill="x",
+            expand=True,
+            padx=PADDING["small"],
+            pady=PADDING["small"],
+        )
 
         # Filename
         name = chapter_title or pdf_path.stem
         if len(name) > 40:
             name = name[:37] + "..."
-        ctk.CTkLabel(
-            info_frame,
-            text=name,
-            font=FONTS["body"],
-            anchor="w"
-        ).pack(fill="x")
+        ctk.CTkLabel(info_frame, text=name, font=FONTS["body"], anchor="w").pack(
+            fill="x"
+        )
 
         # Series and metadata
         meta_parts = []
@@ -130,7 +140,7 @@ class NewFilesPanel(ctk.CTkFrame):
                 text=" | ".join(meta_parts),
                 font=FONTS["small"],
                 text_color="gray",
-                anchor="w"
+                anchor="w",
             ).pack(fill="x")
 
         # Index button
@@ -144,7 +154,7 @@ class NewFilesPanel(ctk.CTkFrame):
             command=index_this_file,
             width=60,
             height=28,
-            font=FONTS["small"]
+            font=FONTS["small"],
         ).pack(side="right", padx=PADDING["small"], pady=PADDING["small"])
 
         self.file_frames[path_str] = file_frame
@@ -195,19 +205,19 @@ class NewFilesPanel(ctk.CTkFrame):
         """Load unindexed files from database."""
         self.clear()
         for file_info in unindexed_files:
-            pdf_path = Path(file_info['pdf_path'])
+            pdf_path = Path(file_info["pdf_path"])
             if pdf_path.exists():
                 first_seen = None
-                if file_info.get('first_seen'):
+                if file_info.get("first_seen"):
                     try:
-                        first_seen = datetime.fromisoformat(file_info['first_seen'])
+                        first_seen = datetime.fromisoformat(file_info["first_seen"])
                     except (ValueError, TypeError):
                         pass
 
                 self.add_file(
                     pdf_path=pdf_path,
-                    book_series=file_info.get('book_series', ''),
-                    chapter_title=file_info.get('chapter_title', ''),
-                    page_count=file_info.get('page_count', 0),
-                    first_seen=first_seen
+                    book_series=file_info.get("book_series", ""),
+                    chapter_title=file_info.get("chapter_title", ""),
+                    page_count=file_info.get("page_count", 0),
+                    first_seen=first_seen,
                 )

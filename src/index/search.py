@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import List, Optional, Set, Tuple
 
 import numpy as np
+
 from config import settings
 from models import Chunk, ChunkType, ExtractedImage, ImageType, SearchResult
 

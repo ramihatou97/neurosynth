@@ -10,15 +10,19 @@ Assembles comprehensive search results for BROAD mode by combining:
 This is the main integration point for enhancing BROAD mode.
 """
 
-import re
 import logging
-from typing import List, Dict, Set, Optional, Tuple, TYPE_CHECKING
+import re
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
 
-from reference_library.search.study_package.analyzer import QueryAnalyzer, QueryAnalysis, get_analyzer
-from reference_library.search.study_package.taxonomy import KNOWLEDGE_CATEGORIES
-from reference_library.search.study_package.report import StudyModeReport, TopicSource
 from reference_library.search.result_model import ChapterResult, MatchType
+from reference_library.search.study_package.analyzer import (
+    QueryAnalysis,
+    QueryAnalyzer,
+    get_analyzer,
+)
+from reference_library.search.study_package.report import StudyModeReport, TopicSource
+from reference_library.search.study_package.taxonomy import KNOWLEDGE_CATEGORIES
 
 if TYPE_CHECKING:
     from reference_library.search.pdf_searcher import PDFSearcher
@@ -29,6 +33,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class StudyPackageResult:
     """A result in the study package with category metadata."""
+
     title: str
     source: str
     page_number: int
@@ -69,6 +74,7 @@ class StudyPackageResult:
 @dataclass
 class StudyPackage:
     """Complete study package for a query."""
+
     query: str
     analysis: QueryAnalysis
     report: StudyModeReport
@@ -87,7 +93,11 @@ class StudyPackage:
 
     @property
     def total_count(self) -> int:
-        return len(self.direct_results) + len(self.foundational_results) + len(self.semantic_results)
+        return (
+            len(self.direct_results)
+            + len(self.foundational_results)
+            + len(self.semantic_results)
+        )
 
     def get_by_category(self, category: str) -> List[StudyPackageResult]:
         """Get results filtered by knowledge category."""
@@ -126,7 +136,7 @@ class StudyPackageAssembler:
 
     def __init__(
         self,
-        searcher: Optional['PDFSearcher'] = None,
+        searcher: Optional["PDFSearcher"] = None,
         analyzer: Optional[QueryAnalyzer] = None,
         categories: Optional[Dict] = None,
     ):
@@ -167,7 +177,10 @@ class StudyPackageAssembler:
         analysis = self.analyzer.analyze(query)
         logger.info(
             "Study package: query='%s' -> region=%s, subregion=%s, confidence=%.2f",
-            query, analysis.primary_region, analysis.subregion, analysis.confidence
+            query,
+            analysis.primary_region,
+            analysis.subregion,
+            analysis.confidence,
         )
 
         # Initialize report
@@ -187,7 +200,9 @@ class StudyPackageAssembler:
 
         # Process direct results first (highest priority)
         for result in direct_results:
-            processed = self._process_chapter_result(result, analysis, MatchType.DEDICATED_CHAPTER)
+            processed = self._process_chapter_result(
+                result, analysis, MatchType.DEDICATED_CHAPTER
+            )
             if processed and processed.title.lower() not in seen_titles:
                 seen_titles.add(processed.title.lower())
                 package.direct_results.append(processed)
@@ -213,14 +228,18 @@ class StudyPackageAssembler:
         # Process semantic results (excluding duplicates)
         if semantic_results:
             for result in semantic_results:
-                processed = self._process_chapter_result(result, analysis, MatchType.SEMANTIC)
+                processed = self._process_chapter_result(
+                    result, analysis, MatchType.SEMANTIC
+                )
                 if processed and processed.title.lower() not in seen_titles:
                     seen_titles.add(processed.title.lower())
                     package.semantic_results.append(processed)
 
         # Sort each category
         package.direct_results.sort(key=lambda x: -x.relevance_score)
-        package.foundational_results.sort(key=lambda x: (x.priority, -x.relevance_score))
+        package.foundational_results.sort(
+            key=lambda x: (x.priority, -x.relevance_score)
+        )
         package.semantic_results.sort(key=lambda x: -x.relevance_score)
 
         logger.info(
@@ -353,7 +372,13 @@ class StudyPackageAssembler:
         results: List[StudyPackageResult] = []
 
         # Priority order for categories
-        category_order = ["anatomy", "biomechanics", "pathophysiology", "diagnostic", "approaches"]
+        category_order = [
+            "anatomy",
+            "biomechanics",
+            "pathophysiology",
+            "diagnostic",
+            "approaches",
+        ]
 
         for category in category_order:
             if len(results) >= max_total:
@@ -375,12 +400,20 @@ class StudyPackageAssembler:
                         continue
 
                     for sr in search_results[:3]:  # Top 3 per search
-                        title = sr.chapter_title.lower() if hasattr(sr, 'chapter_title') else ""
+                        title = (
+                            sr.chapter_title.lower()
+                            if hasattr(sr, "chapter_title")
+                            else ""
+                        )
                         if title and title not in seen_titles:
                             seen_titles.add(title)
 
                             # Track as matched topic
-                            report.matched_topics[term] = sr.chapter_title if hasattr(sr, 'chapter_title') else title
+                            report.matched_topics[term] = (
+                                sr.chapter_title
+                                if hasattr(sr, "chapter_title")
+                                else title
+                            )
 
                             # Create a new ChapterResult with FOUNDATIONAL match type
                             foundational_result = ChapterResult(
@@ -404,12 +437,16 @@ class StudyPackageAssembler:
                             processed = StudyPackageResult(
                                 title=sr.chapter_title,
                                 source=sr.book_title,
-                                page_number=sr.matched_pages[0] if sr.matched_pages else 0,
+                                page_number=(
+                                    sr.matched_pages[0] if sr.matched_pages else 0
+                                ),
                                 relevance_score=MatchType.FOUNDATIONAL.relevance_score,
                                 category=category,
                                 match_type=MatchType.FOUNDATIONAL,
                                 region_match=True,
-                                priority=self._get_priority(category, MatchType.FOUNDATIONAL),
+                                priority=self._get_priority(
+                                    category, MatchType.FOUNDATIONAL
+                                ),
                                 original_result=foundational_result,
                             )
                             results.append(processed)
@@ -473,8 +510,9 @@ class StudyPackageAssembler:
 # INTEGRATION HELPER
 # =============================================================================
 
+
 def enhance_broad_results(
-    searcher: 'PDFSearcher',
+    searcher: "PDFSearcher",
     query: str,
     direct_results: List[ChapterResult],
     semantic_results: Optional[List[ChapterResult]] = None,

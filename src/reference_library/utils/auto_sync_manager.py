@@ -80,7 +80,9 @@ class AutoSyncManager:
         self._sync_timer: Optional[threading.Timer] = None
 
         # Thread pool for background operations
-        self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="auto-sync")
+        self._executor = ThreadPoolExecutor(
+            max_workers=2, thread_name_prefix="auto-sync"
+        )
 
         # Shutdown flag
         self._shutdown = False
@@ -144,7 +146,9 @@ class AutoSyncManager:
 
         with self._index_lock:
             self._index_queue.add(pdf_path)
-            logger.debug(f"Queued for indexing: {pdf_path.name} (queue size: {len(self._index_queue)})")
+            logger.debug(
+                f"Queued for indexing: {pdf_path.name} (queue size: {len(self._index_queue)})"
+            )
             self._reset_index_timer()
 
     def queue_for_sync(self, pdf_path: Path) -> None:
@@ -164,7 +168,9 @@ class AutoSyncManager:
 
         with self._sync_lock:
             self._sync_queue.add(pdf_path)
-            logger.debug(f"Queued for sync: {pdf_path.name} (queue size: {len(self._sync_queue)})")
+            logger.debug(
+                f"Queued for sync: {pdf_path.name} (queue size: {len(self._sync_queue)})"
+            )
             self._reset_sync_timer()
 
     def get_stats(self) -> dict:
@@ -192,7 +198,7 @@ class AutoSyncManager:
         # Start new timer
         self._index_timer = threading.Timer(
             self.index_debounce_seconds,
-            lambda: self._executor.submit(self._run_index_batch)
+            lambda: self._executor.submit(self._run_index_batch),
         )
         self._index_timer.start()
         logger.debug(f"Index timer reset ({self.index_debounce_seconds}s)")
@@ -212,7 +218,7 @@ class AutoSyncManager:
         # Start new timer
         self._sync_timer = threading.Timer(
             self.sync_debounce_seconds,
-            lambda: self._executor.submit(self._run_sync_batch)
+            lambda: self._executor.submit(self._run_sync_batch),
         )
         self._sync_timer.start()
         logger.debug(f"Sync timer reset ({self.sync_debounce_seconds}s)")
@@ -235,7 +241,9 @@ class AutoSyncManager:
         # Snapshot queue atomically
         with self._index_lock:
             if not self._index_queue:
-                logger.debug("Index batch triggered but queue is empty (race condition)")
+                logger.debug(
+                    "Index batch triggered but queue is empty (race condition)"
+                )
                 return
 
             batch = list(self._index_queue)
@@ -280,12 +288,11 @@ class AutoSyncManager:
         if successful > 0:
             self.status_callback(
                 f"Auto-indexed {successful} PDF{'s' if successful != 1 else ''}",
-                "success"
+                "success",
             )
         elif batch:
             self.status_callback(
-                f"Index batch completed with errors (see logs)",
-                "warning"
+                f"Index batch completed with errors (see logs)", "warning"
             )
 
         logger.info(f"Index batch complete ({successful}/{len(batch)} successful)")
@@ -338,7 +345,7 @@ class AutoSyncManager:
 
             self.status_callback(
                 f"Synced {len(batch)} PDF{'s' if len(batch) != 1 else ''} to Deep-DX",
-                "success"
+                "success",
             )
 
             logger.info(f"Sync batch complete ({len(batch)} files)")
@@ -348,10 +355,7 @@ class AutoSyncManager:
             self._stats["sync_errors"].append(error_msg)
             logger.error(f"Sync failed: {e}", exc_info=True)
 
-            self.status_callback(
-                f"Sync failed: {str(e)[:100]}",
-                "error"
-            )
+            self.status_callback(f"Sync failed: {str(e)[:100]}", "error")
 
         finally:
             loop.close()

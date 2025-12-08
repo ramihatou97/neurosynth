@@ -11,14 +11,14 @@ Analyzes search queries to extract:
 Universal design - works for any neurosurgical topic.
 """
 
-import re
 import logging
-from typing import Optional, Set, Tuple, List, Dict
+import re
 from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Set, Tuple
 
 from reference_library.search.study_package.taxonomy import (
-    NEUROSURGICAL_REGIONS,
     KNOWLEDGE_CATEGORIES,
+    NEUROSURGICAL_REGIONS,
     PROCEDURE_TO_REGION,
     REGION_FOUNDATIONS,
 )
@@ -29,20 +29,21 @@ logger = logging.getLogger(__name__)
 @dataclass
 class QueryAnalysis:
     """Result of query analysis."""
+
     original_query: str
-    
+
     # Detected components
     primary_region: Optional[str] = None
     subregion: Optional[str] = None
     domain: Optional[str] = None  # oncology, vascular, functional
-    
+
     # Detected categories
     detected_categories: Set[str] = field(default_factory=set)
-    
+
     # Confidence metrics
     confidence: float = 0.0
     match_count: int = 0
-    
+
     @property
     def region_tags(self) -> Set[str]:
         """Get all applicable region tags for foundation lookup."""
@@ -54,7 +55,7 @@ class QueryAnalysis:
         if self.domain:
             tags.add(self.domain)
         return tags
-    
+
     @property
     def foundation_keys(self) -> List[str]:
         """Get ordered list of keys for foundation lookup."""
@@ -67,7 +68,7 @@ class QueryAnalysis:
         if self.domain:
             keys.append(self.domain)
         return keys
-    
+
     def __repr__(self):
         return (
             f"QueryAnalysis(region={self.primary_region}, "
@@ -79,19 +80,19 @@ class QueryAnalysis:
 class QueryAnalyzer:
     """
     Analyzes neurosurgical search queries to extract region and domain.
-    
+
     Universal design principles:
     1. Pattern-based detection (not hardcoded topic lists)
     2. Hierarchical matching (spine → lumbar → L4-L5)
     3. Procedure-to-region inference
     4. Multi-signal confidence scoring
-    
+
     Usage:
         analyzer = QueryAnalyzer()
         analysis = analyzer.analyze("lumbar discectomy")
         print(analysis.region_tags)  # {'spine', 'lumbar'}
     """
-    
+
     def __init__(
         self,
         regions: Optional[Dict] = None,
@@ -100,7 +101,7 @@ class QueryAnalyzer:
     ):
         """
         Initialize analyzer with taxonomy data.
-        
+
         Args:
             regions: Regional taxonomy (default: NEUROSURGICAL_REGIONS)
             categories: Knowledge categories (default: KNOWLEDGE_CATEGORIES)
@@ -109,10 +110,10 @@ class QueryAnalyzer:
         self.regions = regions or NEUROSURGICAL_REGIONS
         self.categories = categories or KNOWLEDGE_CATEGORIES
         self.procedure_map = procedure_map or PROCEDURE_TO_REGION
-        
+
         # Pre-compile patterns for efficiency
         self._compile_patterns()
-    
+
     def _compile_patterns(self) -> None:
         """Pre-compile regex patterns for region and category detection."""
         # Compile region keyword patterns
@@ -121,27 +122,27 @@ class QueryAnalyzer:
             keywords = data.get("keywords", [])
             if keywords:
                 # Create pattern that matches any keyword
-                pattern = r'\b(' + '|'.join(re.escape(k) for k in keywords) + r')'
+                pattern = r"\b(" + "|".join(re.escape(k) for k in keywords) + r")"
                 self._region_keywords[region] = re.compile(pattern, re.IGNORECASE)
-        
+
         # Compile subregion patterns
         self._subregion_keywords: Dict[str, Dict] = {}
         for region, data in self.regions.items():
             for subregion, subdata in data.get("subregions", {}).items():
                 keywords = subdata.get("keywords", [])
                 if keywords:
-                    pattern = r'\b(' + '|'.join(re.escape(k) for k in keywords) + r')'
+                    pattern = r"\b(" + "|".join(re.escape(k) for k in keywords) + r")"
                     self._subregion_keywords[subregion] = {
                         "pattern": re.compile(pattern, re.IGNORECASE),
                         "parent": region,
                     }
-        
+
         # Compile category patterns
         self._category_patterns: Dict[str, re.Pattern] = {}
         for category, data in self.categories.items():
             patterns = data.get("patterns", [])
             if patterns:
-                combined = '|'.join(patterns)
+                combined = "|".join(patterns)
                 self._category_patterns[category] = re.compile(combined, re.IGNORECASE)
 
     def analyze(self, query: str) -> QueryAnalysis:
@@ -214,7 +215,9 @@ class QueryAnalyzer:
 
         return best_region, best_count
 
-    def _detect_subregion(self, query: str, parent_region: Optional[str]) -> Optional[str]:
+    def _detect_subregion(
+        self, query: str, parent_region: Optional[str]
+    ) -> Optional[str]:
         """Detect subregion within the primary region."""
         for subregion, data in self._subregion_keywords.items():
             # Only match subregions of the detected parent (or if no parent detected)
@@ -230,9 +233,23 @@ class QueryAnalyzer:
         """Detect cross-cutting domain (oncology, vascular, functional)."""
         # Check for explicit domain indicators
         domain_indicators = {
-            "oncology": ["tumor", "cancer", "neoplasm", "glioma", "meningioma", "schwannoma", "metastas"],
+            "oncology": [
+                "tumor",
+                "cancer",
+                "neoplasm",
+                "glioma",
+                "meningioma",
+                "schwannoma",
+                "metastas",
+            ],
             "vascular": ["aneurysm", "avm", "hemorrhage", "stroke", "ischemi"],
-            "functional": ["dbs", "stimulat", "epilepsy", "seizure", "movement disorder"],
+            "functional": [
+                "dbs",
+                "stimulat",
+                "epilepsy",
+                "seizure",
+                "movement disorder",
+            ],
         }
 
         for domain, indicators in domain_indicators.items():
@@ -264,8 +281,14 @@ class QueryAnalyzer:
 
         # Default: procedure queries imply surgical_technique
         procedure_indicators = [
-            "surgery", "technique", "approach", "procedure",
-            "ectomy", "otomy", "plasty", "pexy"
+            "surgery",
+            "technique",
+            "approach",
+            "procedure",
+            "ectomy",
+            "otomy",
+            "plasty",
+            "pexy",
         ]
         if any(ind in query for ind in procedure_indicators):
             categories.add("surgical_technique")
@@ -361,4 +384,3 @@ def get_foundations_for_query(query: str) -> Dict[str, List[str]]:
     analyzer = get_analyzer()
     analysis = analyzer.analyze(query)
     return analyzer.get_foundation_terms(analysis)
-

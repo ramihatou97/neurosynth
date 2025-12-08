@@ -1,9 +1,11 @@
 """Dialog for starting chapter synthesis."""
-import customtkinter as ctk
-from typing import Optional, List
 
-from .styles import FONTS, PADDING
+from typing import List, Optional
+
+import customtkinter as ctk
+
 from ..search.result_model import SearchResult
+from .styles import FONTS, PADDING
 
 
 class SynthesisDialog(ctk.CTkToplevel):
@@ -14,7 +16,7 @@ class SynthesisDialog(ctk.CTkToplevel):
         parent,
         initial_topic: str = "",
         title: str = "Synthesize Chapter",
-        selected_results: Optional[List[SearchResult]] = None
+        selected_results: Optional[List[SearchResult]] = None,
     ):
         super().__init__(parent)
         self.title(title)
@@ -36,6 +38,7 @@ class SynthesisDialog(ctk.CTkToplevel):
         except Exception as e:
             print(f"ERROR: Failed to create synthesis dialog: {e}")
             import traceback
+
             traceback.print_exc()
             self._setup_failed = True
             self._show_error_ui(str(e))
@@ -50,24 +53,19 @@ class SynthesisDialog(ctk.CTkToplevel):
         """Show error message when dialog fails to initialize."""
         try:
             ctk.CTkLabel(
-                self,
-                text="Dialog Error",
-                font=("Helvetica", 14, "bold")
+                self, text="Dialog Error", font=("Helvetica", 14, "bold")
             ).pack(pady=20)
 
             ctk.CTkLabel(
                 self,
                 text=f"Could not create synthesis dialog:\n{error_msg}",
                 font=("Helvetica", 11),
-                wraplength=400
+                wraplength=400,
             ).pack(pady=10, padx=20)
 
-            ctk.CTkButton(
-                self,
-                text="Close",
-                command=self.destroy,
-                width=100
-            ).pack(pady=20)
+            ctk.CTkButton(self, text="Close", command=self.destroy, width=100).pack(
+                pady=20
+            )
         except Exception:
             # If even error UI fails, just close
             self.after(100, self.destroy)
@@ -75,17 +73,13 @@ class SynthesisDialog(ctk.CTkToplevel):
     def _setup_ui(self, initial_topic: str):
         """Set up the dialog UI."""
         # Topic Section
-        ctk.CTkLabel(
-            self,
-            text="Chapter Topic:",
-            font=FONTS["body_bold"]
-        ).pack(anchor="w", padx=PADDING["medium"], pady=(PADDING["medium"], PADDING["small"]))
-
-        self.topic_entry = ctk.CTkEntry(
-            self,
-            width=300,
-            font=FONTS["body"]
+        ctk.CTkLabel(self, text="Chapter Topic:", font=FONTS["body_bold"]).pack(
+            anchor="w",
+            padx=PADDING["medium"],
+            pady=(PADDING["medium"], PADDING["small"]),
         )
+
+        self.topic_entry = ctk.CTkEntry(self, width=300, font=FONTS["body"])
         self.topic_entry.pack(fill="x", padx=PADDING["medium"])
         self.topic_entry.insert(0, initial_topic)
         self.topic_entry.focus_set()
@@ -94,11 +88,11 @@ class SynthesisDialog(ctk.CTkToplevel):
         recommended_type, recommendation_text = self._analyze_selection()
 
         # Type Section
-        ctk.CTkLabel(
-            self,
-            text="Chapter Type:",
-            font=FONTS["body_bold"]
-        ).pack(anchor="w", padx=PADDING["medium"], pady=(PADDING["medium"], PADDING["small"]))
+        ctk.CTkLabel(self, text="Chapter Type:", font=FONTS["body_bold"]).pack(
+            anchor="w",
+            padx=PADDING["medium"],
+            pady=(PADDING["medium"], PADDING["small"]),
+        )
 
         # Show recommendation if available
         if recommendation_text:
@@ -106,7 +100,7 @@ class SynthesisDialog(ctk.CTkToplevel):
                 self,
                 text=f"💡 {recommendation_text}",
                 font=FONTS["small"],
-                text_color="#95a5a6"
+                text_color="#95a5a6",
             ).pack(anchor="w", padx=PADDING["medium"], pady=(0, PADDING["small"]))
 
         self.type_var = ctk.StringVar(value=recommended_type)
@@ -116,7 +110,7 @@ class SynthesisDialog(ctk.CTkToplevel):
             text="Surgical",
             variable=self.type_var,
             value="procedural",
-            font=FONTS["body"]
+            font=FONTS["body"],
         ).pack(anchor="w", padx=PADDING["medium"], pady=PADDING["small"])
 
         ctk.CTkRadioButton(
@@ -124,12 +118,14 @@ class SynthesisDialog(ctk.CTkToplevel):
             text="Clinical",
             variable=self.type_var,
             value="theoretical",
-            font=FONTS["body"]
+            font=FONTS["body"],
         ).pack(anchor="w", padx=PADDING["medium"], pady=PADDING["small"])
 
         # Buttons
         btn_frame = ctk.CTkFrame(self, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=PADDING["medium"], pady=PADDING["large"], side="bottom")
+        btn_frame.pack(
+            fill="x", padx=PADDING["medium"], pady=PADDING["large"], side="bottom"
+        )
 
         ctk.CTkButton(
             btn_frame,
@@ -138,7 +134,7 @@ class SynthesisDialog(ctk.CTkToplevel):
             fg_color="transparent",
             border_width=1,
             text_color=("gray10", "gray90"),
-            width=100
+            width=100,
         ).pack(side="right", padx=(PADDING["small"], 0))
 
         ctk.CTkButton(
@@ -147,7 +143,7 @@ class SynthesisDialog(ctk.CTkToplevel):
             command=self._on_submit,
             width=100,
             fg_color="#27ae60",
-            hover_color="#219a52"
+            hover_color="#219a52",
         ).pack(side="right")
 
         self.bind("<Return>", lambda e: self._on_submit())
@@ -173,7 +169,7 @@ class SynthesisDialog(ctk.CTkToplevel):
         topic = self.topic_entry.get().strip()
         if not topic:
             return
-            
+
         template_type = self.type_var.get()
         self.result = (topic, template_type)
         self.destroy()

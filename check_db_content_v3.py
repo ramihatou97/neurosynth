@@ -8,11 +8,13 @@ cursor = conn.cursor()
 print(f"{'Filename':<40} | {'Total Content Length':<20} | {'Page Count'}")
 print("-" * 80)
 
-cursor.execute("""
+cursor.execute(
+    """
     SELECT pdf_path, sum(length(text_content)), count(page_number) 
     FROM pdf_text_cache 
     GROUP BY pdf_path
-""")
+"""
+)
 
 for row in cursor.fetchall():
     path = Path(row[0]).name

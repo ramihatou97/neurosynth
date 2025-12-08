@@ -1,27 +1,29 @@
 """Main application window for the Neurosurgery Reference Library."""
-import customtkinter as ctk
-from pathlib import Path
-import threading
-from typing import Optional
+
 import asyncio
+import threading
+from pathlib import Path
+from typing import Optional
+
+import customtkinter as ctk
 
 from reference_library import config
-from ..cache.database import Database
-from ..search.pdf_searcher import PDFSearcher
-from ..search.result_model import SearchResult, SearchProgress, ChapterResult
-from ..search.master_index import get_master_index
 
-from ..utils.library_scanner import LibraryScanner
-from ..utils.file_watcher import FileWatcher
+from ..cache.database import Database
 from ..integration.neurosynth_bridge import NeuroSynthBridge
-from .search_panel import SearchPanel
+from ..search.master_index import get_master_index
+from ..search.pdf_searcher import PDFSearcher
+from ..search.result_model import ChapterResult, SearchProgress, SearchResult
+from ..utils.file_watcher import FileWatcher
+from ..utils.library_scanner import LibraryScanner
+from .analytics_dialog import AnalyticsDialog
+from .new_files_panel import NewFilesPanel
+from .preview_panel import PreviewPanel
 from .results_tree import ResultsTree
 from .rich_results_tree import RichResultsTree
-from .preview_panel import PreviewPanel
-from .new_files_panel import NewFilesPanel
-from .synthesis_dialog import SynthesisDialog
-from .analytics_dialog import AnalyticsDialog
+from .search_panel import SearchPanel
 from .styles import FONTS, PADDING
+from .synthesis_dialog import SynthesisDialog
 
 
 class NeurosurgeryLibraryApp(ctk.CTk):
@@ -41,14 +43,16 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         # Initialize components
         self.database = Database(config.DATABASE_PATH)
         self.searcher = PDFSearcher(config.LIBRARY_PATH, self.database)
-        self.semantic_searcher = self.searcher.semantic  # Reference to SemanticSearcher for indexing
+        self.semantic_searcher = (
+            self.searcher.semantic
+        )  # Reference to SemanticSearcher for indexing
 
         self.scanner = LibraryScanner(config.LIBRARY_PATH, self.database)
         self.file_watcher: Optional[FileWatcher] = None
         self.neurosynth = NeuroSynthBridge(
             neurosynth_path=config.NEUROSYNTH_PATH,
             neurosynth_venv=config.NEUROSYNTH_VENV,
-            database=self.database
+            database=self.database,
         )
 
         # Initialize auto-sync manager if enabled
@@ -61,7 +65,7 @@ class NeurosurgeryLibraryApp(ctk.CTk):
                 database=self.database,
                 status_callback=self._on_auto_sync_status,
                 index_debounce_seconds=config.get_auto_index_debounce_seconds(),
-                sync_debounce_seconds=config.get_auto_sync_debounce_seconds()
+                sync_debounce_seconds=config.get_auto_sync_debounce_seconds(),
             )
             self.auto_sync_manager.start()
 
@@ -75,7 +79,6 @@ class NeurosurgeryLibraryApp(ctk.CTk):
 
         # Batch and throttle settings
         self.RESULT_BATCH_SIZE = 50
-
 
         # Set up UI
         self._setup_ui()
@@ -98,26 +101,32 @@ class NeurosurgeryLibraryApp(ctk.CTk):
             self,
             on_search=self._start_search,
             on_cancel=self._cancel_search,
-            database=self.database
+            database=self.database,
         )
         self.search_panel.pack(fill="x", padx=PADDING["small"], pady=PADDING["small"])
 
         # Main content area with three columns
         content_frame = ctk.CTkFrame(self, fg_color="transparent")
-        content_frame.pack(fill="both", expand=True, padx=PADDING["small"], pady=PADDING["small"])
+        content_frame.pack(
+            fill="both", expand=True, padx=PADDING["small"], pady=PADDING["small"]
+        )
 
         # New Files panel (left sidebar) - collapsible
         self.new_files_panel = NewFilesPanel(
             content_frame,
             on_index_file=self._index_single_file,
-            on_index_all=self._index_all_new_files
+            on_index_all=self._index_all_new_files,
         )
         self.new_files_panel.pack(side="left", fill="y", padx=(0, PADDING["small"]))
         self.new_files_panel.configure(width=280)
 
         # Results tree (center) - Use RichResultsTree for inline thumbnails and expandable context
         # Set use_rich_tree=True to enable rich preview mode
-        use_rich_tree = config.USE_RICH_RESULTS_TREE if hasattr(config, 'USE_RICH_RESULTS_TREE') else True
+        use_rich_tree = (
+            config.USE_RICH_RESULTS_TREE
+            if hasattr(config, "USE_RICH_RESULTS_TREE")
+            else True
+        )
 
         if use_rich_tree:
             self.results_tree = RichResultsTree(
@@ -126,7 +135,7 @@ class NeurosurgeryLibraryApp(ctk.CTk):
                 on_selection_change=self._on_selection_change,
                 on_extract_images=self._extract_images_from_result,
                 on_index_text=self._index_text_from_result,
-                database=self.database
+                database=self.database,
             )
         else:
             self.results_tree = ResultsTree(
@@ -135,40 +144,38 @@ class NeurosurgeryLibraryApp(ctk.CTk):
                 on_selection_change=self._on_selection_change,
                 on_extract_images=self._extract_images_from_result,
                 on_index_text=self._index_text_from_result,
-                database=self.database
+                database=self.database,
             )
-        self.results_tree.pack(side="left", fill="both", expand=True, padx=(0, PADDING["small"]))
+        self.results_tree.pack(
+            side="left", fill="both", expand=True, padx=(0, PADDING["small"])
+        )
 
         # Preview panel (right)
         self.preview_panel = PreviewPanel(content_frame, database=self.database)
-        self.preview_panel.pack(side="right", fill="both", expand=False, ipadx=PADDING["medium"])
+        self.preview_panel.pack(
+            side="right", fill="both", expand=False, ipadx=PADDING["medium"]
+        )
         self.preview_panel.configure(width=400)
 
         # Status bar at bottom
         self.status_frame = ctk.CTkFrame(self)
-        self.status_frame.pack(fill="x", side="bottom", padx=PADDING["small"], pady=PADDING["small"])
+        self.status_frame.pack(
+            fill="x", side="bottom", padx=PADDING["small"], pady=PADDING["small"]
+        )
 
         self.status_label = ctk.CTkLabel(
-            self.status_frame,
-            text="Ready",
-            font=FONTS["small"],
-            anchor="w"
+            self.status_frame, text="Ready", font=FONTS["small"], anchor="w"
         )
         self.status_label.pack(side="left", fill="x", expand=True)
 
         self.progress_label = ctk.CTkLabel(
-            self.status_frame,
-            text="",
-            font=FONTS["small"]
+            self.status_frame, text="", font=FONTS["small"]
         )
         self.progress_label.pack(side="right")
 
         # Synthesis progress bar (hidden by default)
         self.synthesis_progress = ctk.CTkProgressBar(
-            self.status_frame,
-            width=150,
-            height=12,
-            mode="indeterminate"
+            self.status_frame, width=150, height=12, mode="indeterminate"
         )
         # Don't pack yet - shown only during synthesis
 
@@ -180,7 +187,7 @@ class NeurosurgeryLibraryApp(ctk.CTk):
             width=100,
             height=24,
             font=FONTS["small"],
-            state="disabled"
+            state="disabled",
         )
         self.export_btn.pack(side="right", padx=PADDING["small"])
 
@@ -194,11 +201,9 @@ class NeurosurgeryLibraryApp(ctk.CTk):
             font=FONTS["small"],
             state="disabled",
             fg_color="#27ae60",
-            hover_color="#219a52"
+            hover_color="#219a52",
         )
         self.synthesize_btn.pack(side="right", padx=PADDING["small"])
-
-
 
         # Smart selection dropdown
         self.smart_select_var = ctk.StringVar(value="Smart Select")
@@ -212,7 +217,7 @@ class NeurosurgeryLibraryApp(ctk.CTk):
             font=FONTS["small"],
             fg_color="#3498db",
             button_color="#2980b9",
-            button_hover_color="#1a5276"
+            button_hover_color="#1a5276",
         )
         self.smart_select_menu.pack(side="right", padx=PADDING["small"])
         self.smart_select_menu.set("Smart Select")
@@ -226,7 +231,7 @@ class NeurosurgeryLibraryApp(ctk.CTk):
             height=24,
             font=FONTS["small"],
             fg_color="#9b59b6",
-            hover_color="#8e44ad"
+            hover_color="#8e44ad",
         )
         self.index_btn.pack(side="right", padx=PADDING["small"])
 
@@ -239,7 +244,7 @@ class NeurosurgeryLibraryApp(ctk.CTk):
             height=24,
             font=FONTS["small"],
             fg_color="#e67e22",
-            hover_color="#d35400"
+            hover_color="#d35400",
         )
         self.extract_btn.pack(side="right", padx=PADDING["small"])
 
@@ -252,7 +257,7 @@ class NeurosurgeryLibraryApp(ctk.CTk):
             height=24,
             font=FONTS["small"],
             fg_color="#34495e",
-            hover_color="#2c3e50"
+            hover_color="#2c3e50",
         )
         self.analytics_btn.pack(side="right", padx=PADDING["small"])
 
@@ -265,7 +270,7 @@ class NeurosurgeryLibraryApp(ctk.CTk):
             height=24,
             font=FONTS["small"],
             fg_color="#3498db",
-            hover_color="#2980b9"
+            hover_color="#2980b9",
         )
         self.sync_btn.pack(side="right", padx=PADDING["small"])
 
@@ -278,7 +283,7 @@ class NeurosurgeryLibraryApp(ctk.CTk):
             height=24,
             font=FONTS["small"],
             fg_color="#34495e",
-            hover_color="#2c3e50"
+            hover_color="#2c3e50",
         )
         self.settings_btn.pack(side="right", padx=PADDING["small"])
 
@@ -292,7 +297,9 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         # File menu
         file_menu = tk.Menu(menubar, tearoff=0)
         file_menu.add_command(label="Change Library...", command=self._change_library)
-        file_menu.add_command(label="Show Library Info", command=self._show_library_info)
+        file_menu.add_command(
+            label="Show Library Info", command=self._show_library_info
+        )
         file_menu.add_separator()
         file_menu.add_command(label="Lock Library Path", command=self._lock_library)
         file_menu.add_command(label="Unlock Library Path", command=self._unlock_library)
@@ -302,12 +309,19 @@ class NeurosurgeryLibraryApp(ctk.CTk):
 
         # View menu
         view_menu = tk.Menu(menubar, tearoff=0)
-        view_menu.add_command(label="Show New Files Panel", command=lambda: self.new_files_panel.pack(side="left", fill="y", padx=(0, 5)))
+        view_menu.add_command(
+            label="Show New Files Panel",
+            command=lambda: self.new_files_panel.pack(
+                side="left", fill="y", padx=(0, 5)
+            ),
+        )
         menubar.add_cascade(label="View", menu=view_menu)
 
         # Settings menu
         settings_menu = tk.Menu(menubar, tearoff=0)
-        settings_menu.add_command(label="Auto-Sync Configuration...", command=self._show_auto_sync_settings)
+        settings_menu.add_command(
+            label="Auto-Sync Configuration...", command=self._show_auto_sync_settings
+        )
         menubar.add_cascade(label="Settings", menu=settings_menu)
 
         self.config(menu=menubar)
@@ -321,7 +335,7 @@ class NeurosurgeryLibraryApp(ctk.CTk):
             if not messagebox.askyesno(
                 "Library Locked",
                 f"Current library is locked to:\n{config.LIBRARY_PATH}\n\n"
-                "Do you want to change it anyway?"
+                "Do you want to change it anyway?",
             ):
                 return
 
@@ -332,7 +346,7 @@ class NeurosurgeryLibraryApp(ctk.CTk):
             messagebox.showinfo(
                 "Library Changed",
                 f"Library changed to:\n{new_path}\n\n"
-                "Please restart the application for changes to take effect."
+                "Please restart the application for changes to take effect.",
             )
 
     def _show_library_info(self):
@@ -358,7 +372,7 @@ class NeurosurgeryLibraryApp(ctk.CTk):
             f"Expected folder structure:\n"
             f"  📁 Book chapters/\n"
             f"    📁 Series folders...\n"
-            f"  📁 Entire books/"
+            f"  📁 Entire books/",
         )
 
     def _lock_library(self):
@@ -374,10 +388,7 @@ class NeurosurgeryLibraryApp(ctk.CTk):
     def _verify_library(self):
         """Verify the reference library exists."""
         if not config.LIBRARY_PATH.exists():
-            self._show_status(
-                f"Library not found at: {config.LIBRARY_PATH}",
-                "error"
-            )
+            self._show_status(f"Library not found at: {config.LIBRARY_PATH}", "error")
         else:
             # Use database count (fast) instead of filesystem scan (slow)
             tracked = len(self.database.get_all_tracked_paths())
@@ -415,9 +426,7 @@ class NeurosurgeryLibraryApp(ctk.CTk):
 
         # Start search in background thread
         self.search_thread = threading.Thread(
-            target=self._search_thread,
-            args=(query, strategy),
-            daemon=True
+            target=self._search_thread, args=(query, strategy), daemon=True
         )
         self.search_thread.start()
 
@@ -428,9 +437,7 @@ class NeurosurgeryLibraryApp(ctk.CTk):
 
             # Use chapter-level search for knowledge retrieval
             for chapter_result in self.searcher.search_library_chapters(
-                query,
-                strategy=strategy,
-                progress_callback=self._on_search_progress
+                query, strategy=strategy, progress_callback=self._on_search_progress
             ):
                 batch.append(chapter_result)
                 self.pending_results.append(chapter_result)
@@ -500,10 +507,15 @@ class NeurosurgeryLibraryApp(ctk.CTk):
 
         # Show appropriate message based on result type
         if chapter_count > 0:
-            dedicated = sum(1 for c in self.results_tree.chapter_results.values()
-                          if c.match_type.name == "DEDICATED_CHAPTER")
+            dedicated = sum(
+                1
+                for c in self.results_tree.chapter_results.values()
+                if c.match_type.name == "DEDICATED_CHAPTER"
+            )
             if dedicated > 0:
-                self._show_status(f"Found {chapter_count} chapters ({dedicated} dedicated to topic)")
+                self._show_status(
+                    f"Found {chapter_count} chapters ({dedicated} dedicated to topic)"
+                )
             else:
                 self._show_status(f"Found {chapter_count} chapters with references")
         else:
@@ -516,7 +528,9 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         if result_count < 10 and self.current_query:
             try:
                 master_index = get_master_index()
-                related_terms = master_index.get_related_terms(self.current_query, max_terms=5)
+                related_terms = master_index.get_related_terms(
+                    self.current_query, max_terms=5
+                )
                 if related_terms:
                     self.search_panel.show_related_terms(related_terms)
             except Exception:
@@ -527,7 +541,7 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         self.database.save_search_history(
             self.current_query,
             result_count,
-            search_mode=search_strategy  # Use strategy name instead of removed mode
+            search_mode=search_strategy,  # Use strategy name instead of removed mode
         )
 
     def _cancel_search(self):
@@ -546,8 +560,6 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         """Handle result selection in tree."""
         self.preview_panel.show_result(result)
 
-
-
     def _export_index(self):
         """Export search results as index."""
         from ..export.html_exporter import HTMLExporter
@@ -565,9 +577,9 @@ class NeurosurgeryLibraryApp(ctk.CTk):
             filetypes=[
                 ("HTML files", "*.html"),
                 ("PDF files", "*.pdf"),
-                ("All files", "*.*")
+                ("All files", "*.*"),
             ],
-            initialfile=f"index_{self.current_query.replace(' ', '_')}"
+            initialfile=f"index_{self.current_query.replace(' ', '_')}",
         )
 
         if not save_path:
@@ -607,7 +619,7 @@ class NeurosurgeryLibraryApp(ctk.CTk):
             "info": ("gray", None),
             "success": ("#27ae60", None),
             "warning": ("#f39c12", None),
-            "error": ("#e74c3c", None)
+            "error": ("#e74c3c", None),
         }
         text_color, bg_color = colors.get(level, colors["info"])
         self.status_label.configure(text_color=text_color)
@@ -625,18 +637,20 @@ class NeurosurgeryLibraryApp(ctk.CTk):
 
     def _sync_library(self, force: bool = False):
         """Sync library on startup to detect new files."""
+
         def _do_sync():
             try:
                 # Progress callback for real-time updates
                 def on_progress(current: int, total: int):
-                    self.after(0, lambda c=current, t=total: self._show_status(
-                        f"Scanning library: {c}/{t} PDFs processed"
-                    ))
+                    self.after(
+                        0,
+                        lambda c=current, t=total: self._show_status(
+                            f"Scanning library: {c}/{t} PDFs processed"
+                        ),
+                    )
 
                 result = self.scanner.sync_library(
-                    max_workers=8,
-                    progress_callback=on_progress,
-                    force=force
+                    max_workers=8, progress_callback=on_progress, force=force
                 )
                 self.after(0, lambda: self._on_sync_complete(result))
             except Exception as e:
@@ -650,10 +664,9 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         unindexed = self.database.get_unindexed_files()
         self.new_files_panel.load_from_database(unindexed)
 
-        if result['new_files'] > 0:
+        if result["new_files"] > 0:
             self._show_status(
-                f"Library synced: {result['new_files']} new files detected",
-                "success"
+                f"Library synced: {result['new_files']} new files detected", "success"
             )
         else:
             self._show_status(f"Library synced: {result['total_files']} files")
@@ -667,12 +680,13 @@ class NeurosurgeryLibraryApp(ctk.CTk):
             library_path=config.LIBRARY_PATH,
             on_new_file=self._on_new_file_detected,
             on_modified_file=self._on_file_modified,
-            on_deleted_file=self._on_file_deleted
+            on_deleted_file=self._on_file_deleted,
         )
         self.file_watcher.start()
 
     def _on_new_file_detected(self, pdf_path: Path):
         """Handle new file detected by watcher."""
+
         def _process():
             try:
                 metadata = self.scanner.get_pdf_metadata(pdf_path)
@@ -683,7 +697,7 @@ class NeurosurgeryLibraryApp(ctk.CTk):
                     file_size=pdf_path.stat().st_size,
                     book_series=metadata.book_series,
                     chapter_title=metadata.chapter_title,
-                    page_count=metadata.page_count
+                    page_count=metadata.page_count,
                 )
 
                 # Queue for auto-indexing if enabled
@@ -691,17 +705,22 @@ class NeurosurgeryLibraryApp(ctk.CTk):
                     self.auto_sync_manager.queue_for_indexing(pdf_path)
                 else:
                     # Original behavior: show in New Files panel
-                    self.after(0, lambda: self.new_files_panel.add_file(
-                        pdf_path,
-                        book_series=metadata.book_series,
-                        chapter_title=metadata.chapter_title,
-                        page_count=metadata.page_count
-                    ))
+                    self.after(
+                        0,
+                        lambda: self.new_files_panel.add_file(
+                            pdf_path,
+                            book_series=metadata.book_series,
+                            chapter_title=metadata.chapter_title,
+                            page_count=metadata.page_count,
+                        ),
+                    )
 
-                self.after(0, lambda: self._show_status(
-                    f"New file detected: {pdf_path.name}",
-                    "success"
-                ))
+                self.after(
+                    0,
+                    lambda: self._show_status(
+                        f"New file detected: {pdf_path.name}", "success"
+                    ),
+                )
             except Exception as e:
                 print(f"Error processing new file: {e}")
 
@@ -726,7 +745,7 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         """Index all new files."""
         unindexed = self.database.get_unindexed_files()
         for file_info in unindexed:
-            pdf_path = Path(file_info['pdf_path'])
+            pdf_path = Path(file_info["pdf_path"])
             self.database.mark_file_indexed(pdf_path)
 
         count = len(unindexed)
@@ -782,7 +801,7 @@ class NeurosurgeryLibraryApp(ctk.CTk):
                 database=self.database,
                 status_callback=self._on_auto_sync_status,
                 index_debounce_seconds=config.get_auto_index_debounce_seconds(),
-                sync_debounce_seconds=config.get_auto_sync_debounce_seconds()
+                sync_debounce_seconds=config.get_auto_sync_debounce_seconds(),
             )
             self.auto_sync_manager.start()
             self._show_status("Auto-sync settings updated", "success")
@@ -800,14 +819,19 @@ class NeurosurgeryLibraryApp(ctk.CTk):
             import time
 
             def text_progress(current, total):
-                self.after(0, lambda c=current, t=total: self._show_status(
-                    f"Text indexing: {c}/{t} PDFs"
-                ))
+                self.after(
+                    0,
+                    lambda c=current, t=total: self._show_status(
+                        f"Text indexing: {c}/{t} PDFs"
+                    ),
+                )
                 # Yield to UI thread every PDF to prevent freezing
                 time.sleep(0.01)
 
             # Use sequential indexing (runs in background thread to keep UI responsive)
-            text_count = self.searcher.index_library_semantic(progress_callback=text_progress)
+            text_count = self.searcher.index_library_semantic(
+                progress_callback=text_progress
+            )
             self.after(0, lambda: self._on_text_index_complete(text_count))
 
         threading.Thread(target=_do_index, daemon=True).start()
@@ -820,10 +844,14 @@ class NeurosurgeryLibraryApp(ctk.CTk):
     def _extract_figures_slow(self):
         """Extract figures from PDFs in parallel (4 concurrent)."""
         from concurrent.futures import ThreadPoolExecutor, as_completed
+
         from ..utils.neurosynth_imports import NEUROSYNTH_AVAILABLE
 
         if not NEUROSYNTH_AVAILABLE:
-            self._show_status("Figure extraction unavailable (install NeuroSynth dependencies)", "error")
+            self._show_status(
+                "Figure extraction unavailable (install NeuroSynth dependencies)",
+                "error",
+            )
             return
 
         # Reset cancellation flag for new extraction
@@ -854,8 +882,7 @@ class NeurosurgeryLibraryApp(ctk.CTk):
             with ThreadPoolExecutor(max_workers=4) as executor:
                 # Submit all tasks
                 future_to_path = {
-                    executor.submit(extract_single_pdf, pdf): pdf
-                    for pdf in pdfs
+                    executor.submit(extract_single_pdf, pdf): pdf for pdf in pdfs
                 }
 
                 # Process results as they complete
@@ -865,8 +892,18 @@ class NeurosurgeryLibraryApp(ctk.CTk):
                         # Cancel all pending futures
                         for f in future_to_path:
                             f.cancel()
-                        self.after(0, lambda: self._show_status("Extraction cancelled", "warning"))
-                        self.after(0, lambda: self.extract_btn.configure(state="normal", text="Extract Figures"))
+                        self.after(
+                            0,
+                            lambda: self._show_status(
+                                "Extraction cancelled", "warning"
+                            ),
+                        )
+                        self.after(
+                            0,
+                            lambda: self.extract_btn.configure(
+                                state="normal", text="Extract Figures"
+                            ),
+                        )
                         return  # Exit early
 
                     pdf_path, fig_count = future.result()
@@ -874,10 +911,11 @@ class NeurosurgeryLibraryApp(ctk.CTk):
                     processed += 1
 
                     # Update progress
-                    self.after(0, lambda p=pdf_path.name, idx=processed, t=total, fc=fig_count:
-                        self._show_status(
+                    self.after(
+                        0,
+                        lambda p=pdf_path.name, idx=processed, t=total, fc=fig_count: self._show_status(
                             f"Extracting {idx}/{t}: {p[:30]}... ({fc} figs)"
-                        )
+                        ),
                     )
 
             self.after(0, lambda: self._on_extract_complete(total, total_figures))
@@ -888,11 +926,15 @@ class NeurosurgeryLibraryApp(ctk.CTk):
     def _on_extract_complete(self, pdfs_processed: int, figures_extracted: int):
         """Handle figure extraction completion."""
         self.extract_btn.configure(state="normal", text="Extract Figures")
-        self._show_status(f"Extracted {figures_extracted} figures from {pdfs_processed} PDFs", "success")
+        self._show_status(
+            f"Extracted {figures_extracted} figures from {pdfs_processed} PDFs",
+            "success",
+        )
 
     def _extract_images_from_result(self, result: SearchResult):
         """Extract images from a single PDF (context menu action)."""
         from ..utils.neurosynth_imports import NEUROSYNTH_AVAILABLE
+
         if not NEUROSYNTH_AVAILABLE:
             self._show_status("Extraction unavailable (missing dependencies)", "error")
             return
@@ -904,14 +946,19 @@ class NeurosurgeryLibraryApp(ctk.CTk):
             try:
                 figures = self.scanner.extract_figures(pdf_path, force=True)
                 count = len(figures)
-                self.after(0, lambda: self._show_status(
-                    f"Extracted {count} figures from {pdf_path.name}", 
-                    "success" if count > 0 else "info"
-                ))
+                self.after(
+                    0,
+                    lambda: self._show_status(
+                        f"Extracted {count} figures from {pdf_path.name}",
+                        "success" if count > 0 else "info",
+                    ),
+                )
                 # Refresh tree to show new figure count
                 self.after(0, lambda: self.results_tree.update())
             except Exception as e:
-                self.after(0, lambda: self._show_status(f"Extraction error: {e}", "error"))
+                self.after(
+                    0, lambda: self._show_status(f"Extraction error: {e}", "error")
+                )
 
         threading.Thread(target=_do_single_extract, daemon=True).start()
 
@@ -923,16 +970,27 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         def _do_single_index():
             try:
                 pages = self.searcher.index_pdf_semantic(pdf_path)
-                self.after(0, lambda: self._show_status(
-                    f"Indexed {pages} pages from {pdf_path.name}", 
-                    "success" if pages > 0 else "info"
-                ))
+                self.after(
+                    0,
+                    lambda: self._show_status(
+                        f"Indexed {pages} pages from {pdf_path.name}",
+                        "success" if pages > 0 else "info",
+                    ),
+                )
             except Exception as e:
-                self.after(0, lambda: self._show_status(f"Indexing error: {e}", "error"))
+                self.after(
+                    0, lambda: self._show_status(f"Indexing error: {e}", "error")
+                )
 
         threading.Thread(target=_do_single_index, daemon=True).start()
 
-    def _on_index_complete(self, text_count: int, figure_stats: dict = None, captions_indexed: int = 0, extraction_warning: str = None):
+    def _on_index_complete(
+        self,
+        text_count: int,
+        figure_stats: dict = None,
+        captions_indexed: int = 0,
+        extraction_warning: str = None,
+    ):
         """Handle semantic indexing completion (legacy, kept for compatibility)."""
         self.index_btn.configure(state="normal", text="Index Text")
 
@@ -953,7 +1011,9 @@ class NeurosurgeryLibraryApp(ctk.CTk):
 
     # NeuroSynth Integration Methods
 
-    def _convert_to_search_results(self, items: list[SearchResult | ChapterResult]) -> list[SearchResult]:
+    def _convert_to_search_results(
+        self, items: list[SearchResult | ChapterResult]
+    ) -> list[SearchResult]:
         """Convert mixed results to SearchResult list for synthesis compatibility."""
         search_results = []
         for item in items:
@@ -973,12 +1033,14 @@ class NeurosurgeryLibraryApp(ctk.CTk):
                     context=item.preview_context or "",
                     match_count=item.total_occurrences,
                     is_title_match=item.is_dedicated,
-                    relevance_score=item.relevance_score
+                    relevance_score=item.relevance_score,
                 )
                 search_results.append(search_result)
         return search_results
 
-    def _on_selection_change(self, selected_results: list[SearchResult | ChapterResult]):
+    def _on_selection_change(
+        self, selected_results: list[SearchResult | ChapterResult]
+    ):
         """Handle selection change in results tree."""
         self.selected_results = selected_results
 
@@ -987,7 +1049,6 @@ class NeurosurgeryLibraryApp(ctk.CTk):
             self.synthesize_btn.configure(state="normal")
         else:
             self.synthesize_btn.configure(state="disabled")
-
 
     def _on_smart_select(self, choice: str):
         """Handle smart selection dropdown choice."""
@@ -1027,7 +1088,7 @@ class NeurosurgeryLibraryApp(ctk.CTk):
         dialog = SynthesisDialog(
             self,
             initial_topic=topic,
-            selected_results=selected_results  # Pass original mixed results
+            selected_results=selected_results,  # Pass original mixed results
         )
         result = dialog.get_input()
 
@@ -1053,7 +1114,7 @@ class NeurosurgeryLibraryApp(ctk.CTk):
                 on_progress=lambda msg: self.after(0, lambda: self._show_status(msg)),
                 search_query=search_query,
                 search_mode=search_mode,
-                template_type=template_type
+                template_type=template_type,
             )
 
             self.after(0, lambda: self._on_synthesis_complete(result))
@@ -1071,15 +1132,19 @@ class NeurosurgeryLibraryApp(ctk.CTk):
             self.synthesize_btn.configure(state="normal")
 
         if result.success:
-            self._show_status(f"Chapter synthesized: {result.output_path.name}", "success")
+            self._show_status(
+                f"Chapter synthesized: {result.output_path.name}", "success"
+            )
 
             # Offer to open the file
             from tkinter import messagebox
+
             if messagebox.askyesno(
                 "Synthesis Complete",
-                f"Chapter saved to:\n{result.output_path}\n\nOpen the file now?"
+                f"Chapter saved to:\n{result.output_path}\n\nOpen the file now?",
             ):
                 import subprocess
+
                 subprocess.run(["open", str(result.output_path)])
         else:
             self._show_status(f"Synthesis failed: {result.error}", "error")

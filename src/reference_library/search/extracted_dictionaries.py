@@ -14,9 +14,14 @@ from typing import Dict, List
 # =============================================================================
 INSTRUMENT_SYNONYMS: Dict[str, List[str]] = {
     # Head Fixation
-    "mayfield": ["skull clamp", "head holder", "three-pin fixation", "pin fixation", "head frame"],
+    "mayfield": [
+        "skull clamp",
+        "head holder",
+        "three-pin fixation",
+        "pin fixation",
+        "head frame",
+    ],
     "skull clamp": ["mayfield", "head holder", "pin fixation"],
-    
     # Bone Instruments
     "kerrison": ["kerrison rongeur", "rongeur", "bone biter"],
     "rongeur": ["kerrison", "bone biter", "pituitary rongeur"],
@@ -24,40 +29,36 @@ INSTRUMENT_SYNONYMS: Dict[str, List[str]] = {
     "perforator": ["burr", "drill bit", "cranial drill"],
     "high-speed drill": ["craniotome", "matchstick burr", "cutting burr"],
     "osteotome": ["bone chisel", "bone cutter"],
-    
     # Dissection Instruments
     "penfield": ["penfield dissector", "dural elevator", "dissector"],
     "microdissector": ["micro-dissector", "dissector", "nerve hook"],
     "cottonoid": ["patty", "cottonoid patty", "neurosurgical patty"],
-    
     # Retractors
-    "self-retaining retractor": ["weitlaner", "cerebellar retractor", "brain retractor"],
+    "self-retaining retractor": [
+        "weitlaner",
+        "cerebellar retractor",
+        "brain retractor",
+    ],
     "army-navy": ["army navy retractor", "handheld retractor"],
     "cerebellar retractor": ["brain retractor", "fixed arm retractor"],
-    
     # Cutting Instruments
     "microscissors": ["micro-scissors", "microsurgical scissors", "dural scissors"],
     "microscalpel": ["micro-scalpel", "#11 blade", "#15 blade"],
-    
     # Forceps
     "bipolar": ["bipolar forceps", "bipolar cautery", "bipolar coagulation"],
     "adson": ["adson forceps", "tissue forceps"],
     "debakey": ["debakey forceps", "vascular forceps"],
     "tumor forceps": ["biopsy forceps", "grasping forceps"],
-    
     # Aspiration/Debulking
     "cusa": ["cavitron", "ultrasonic aspirator", "ultrasonic surgical aspirator"],
     "suction": ["sucker", "frazier suction", "neurosurgical suction"],
-    
     # Clips and Ligatures
     "raney clips": ["scalp clips", "hemostatic clips"],
     "aneurysm clip": ["yasargil clip", "sugita clip", "vascular clip"],
     "micro-clip": ["microclip", "temporary clip", "vessel clip"],
-    
     # Cautery
     "monopolar": ["monopolar cautery", "bovie", "electrocautery"],
     "electrocautery": ["cautery", "bovie", "monopolar"],
-    
     # Visualization
     "operating microscope": ["surgical microscope", "microscope"],
     "endoscope": ["neuroendoscope", "ventricular scope"],
@@ -74,20 +75,17 @@ POSITIONING_TERMS: Dict[str, List[str]] = {
     "prone": ["prone position", "face down", "ventral decubitus"],
     "supine": ["supine position", "dorsal decubitus", "face up"],
     "sitting": ["sitting position", "semi-sitting", "beach chair"],
-    
     # Position Components
     "axillary roll": ["chest roll", "axilla support", "brachial plexus protection"],
     "chest roll": ["thoracic roll", "body support"],
     "head holder": ["mayfield", "skull clamp", "pin fixation"],
     "arm board": ["arm support", "arm rest"],
-    
     # Position Modifications
     "reverse trendelenburg": ["head up", "anti-trendelenburg"],
     "trendelenburg": ["head down", "feet elevated"],
     "neck flexion": ["chin tuck", "cervical flexion"],
     "neck extension": ["cervical extension", "head back"],
     "head rotation": ["head turn", "cervical rotation"],
-    
     # Pressure Points
     "pressure point": ["bony prominence", "weight-bearing area"],
     "gel pad": ["foam pad", "pressure relief", "positioning pad"],
@@ -99,33 +97,41 @@ POSITIONING_TERMS: Dict[str, List[str]] = {
 NEUROMONITORING_TERMS: Dict[str, Dict] = {
     "BAER": {
         "full": "brainstem auditory evoked responses",
-        "synonyms": ["ABR", "auditory brainstem response", "brainstem auditory evoked potentials"],
-        "context": ["posterior fossa", "acoustic neuroma", "CN VIII", "brainstem"]
+        "synonyms": [
+            "ABR",
+            "auditory brainstem response",
+            "brainstem auditory evoked potentials",
+        ],
+        "context": ["posterior fossa", "acoustic neuroma", "CN VIII", "brainstem"],
     },
     "SSEP": {
         "full": "somatosensory evoked potentials",
         "synonyms": ["somatosensory evoked responses", "sensory evoked potentials"],
-        "context": ["spinal cord", "sensory pathway", "dorsal column"]
+        "context": ["spinal cord", "sensory pathway", "dorsal column"],
     },
     "MEP": {
         "full": "motor evoked potentials",
-        "synonyms": ["motor evoked responses", "transcranial motor evoked potentials", "TcMEP"],
-        "context": ["motor pathway", "corticospinal tract", "spinal cord"]
+        "synonyms": [
+            "motor evoked responses",
+            "transcranial motor evoked potentials",
+            "TcMEP",
+        ],
+        "context": ["motor pathway", "corticospinal tract", "spinal cord"],
     },
     "EMG": {
         "full": "electromyography",
         "synonyms": ["electromyogram", "muscle monitoring", "nerve monitoring"],
-        "context": ["facial nerve", "cranial nerve", "nerve root", "triggered EMG"]
+        "context": ["facial nerve", "cranial nerve", "nerve root", "triggered EMG"],
     },
     "EEG": {
         "full": "electroencephalography",
         "synonyms": ["electroencephalogram", "brain wave monitoring"],
-        "context": ["seizure", "cortical function", "depth of anesthesia"]
+        "context": ["seizure", "cortical function", "depth of anesthesia"],
     },
     "triggered EMG": {
         "full": "triggered electromyography",
         "synonyms": ["stimulated EMG", "pedicle screw testing"],
-        "context": ["pedicle screw", "nerve proximity", "XLIF", "lateral approach"]
+        "context": ["pedicle screw", "nerve proximity", "XLIF", "lateral approach"],
     },
 }
 
@@ -139,14 +145,11 @@ HEMOSTATIC_AGENTS: Dict[str, List[str]] = {
     "floseal": ["gelatin-thrombin matrix", "flowable hemostatic", "thrombin matrix"],
     "tisseel": ["fibrin glue", "fibrin sealant", "fibrinogen-thrombin"],
     "thrombin": ["topical thrombin", "bovine thrombin", "recombinant thrombin"],
-    
     # Bone Hemostasis
     "bone wax": ["bone hemostasis", "beeswax", "ostene"],
-    
     # Dural Sealants
     "duraseal": ["dural sealant", "PEG sealant", "polyethylene glycol sealant"],
     "fibrin glue": ["tisseel", "fibrin sealant", "biological glue"],
-    
     # Techniques
     "bipolar coagulation": ["bipolar cautery", "bipolar hemostasis", "electrocautery"],
     "cottonoid tamponade": ["patty pressure", "cottonoid pressure", "gentle tamponade"],
@@ -160,73 +163,82 @@ COMPLICATION_TERMS: Dict[str, Dict] = {
     # Vascular Complications
     "hematoma": {
         "synonyms": ["blood collection", "hemorrhage", "bleeding"],
-        "types": ["epidural hematoma", "subdural hematoma", "intracerebral hematoma",
-                  "posterior fossa hematoma", "wound hematoma"]
+        "types": [
+            "epidural hematoma",
+            "subdural hematoma",
+            "intracerebral hematoma",
+            "posterior fossa hematoma",
+            "wound hematoma",
+        ],
     },
     "hemorrhage": {
         "synonyms": ["bleeding", "blood loss", "exsanguination"],
-        "types": ["arterial bleeding", "venous bleeding", "parenchymal bleeding"]
+        "types": ["arterial bleeding", "venous bleeding", "parenchymal bleeding"],
     },
     "venous air embolism": {
         "synonyms": ["VAE", "air embolism", "gas embolism"],
-        "context": ["sitting position", "park bench", "negative venous pressure"]
+        "context": ["sitting position", "park bench", "negative venous pressure"],
     },
     "sinus injury": {
         "synonyms": ["venous sinus injury", "sinus tear", "sinus laceration"],
-        "types": ["transverse sinus", "sigmoid sinus", "sagittal sinus", "torcula"]
+        "types": ["transverse sinus", "sigmoid sinus", "sagittal sinus", "torcula"],
     },
-
     # Neural Complications
     "nerve injury": {
         "synonyms": ["nerve damage", "neuropraxia", "axonotmesis", "neurotmesis"],
-        "types": ["cranial nerve injury", "nerve root injury", "peripheral nerve injury"]
+        "types": [
+            "cranial nerve injury",
+            "nerve root injury",
+            "peripheral nerve injury",
+        ],
     },
     "brachial plexus injury": {
         "synonyms": ["plexopathy", "arm weakness", "positioning injury"],
-        "context": ["lateral position", "park bench", "axillary roll"]
+        "context": ["lateral position", "park bench", "axillary roll"],
     },
     "peroneal nerve palsy": {
         "synonyms": ["foot drop", "peroneal neuropathy", "fibular nerve injury"],
-        "context": ["lateral position", "knee compression", "fibular head"]
+        "context": ["lateral position", "knee compression", "fibular head"],
     },
     "facial palsy": {
         "synonyms": ["facial weakness", "CN VII injury", "facial nerve injury"],
-        "context": ["CPA tumor", "acoustic neuroma", "parotid surgery"]
+        "context": ["CPA tumor", "acoustic neuroma", "parotid surgery"],
     },
-
     # CSF-Related
     "CSF leak": {
         "synonyms": ["cerebrospinal fluid leak", "CSF fistula", "pseudomeningocele"],
-        "context": ["dural tear", "wound leak", "rhinorrhea", "otorrhea"]
+        "context": ["dural tear", "wound leak", "rhinorrhea", "otorrhea"],
     },
     "dural tear": {
         "synonyms": ["durotomy", "dural laceration", "incidental durotomy"],
-        "context": ["CSF leak", "dural repair", "dural patch"]
+        "context": ["CSF leak", "dural repair", "dural patch"],
     },
-
     # Positioning Complications
     "POVL": {
         "full": "perioperative vision loss",
-        "synonyms": ["postoperative blindness", "ischemic optic neuropathy", "retinal artery occlusion"],
-        "context": ["prone position", "eye pressure", "long surgery"]
+        "synonyms": [
+            "postoperative blindness",
+            "ischemic optic neuropathy",
+            "retinal artery occlusion",
+        ],
+        "context": ["prone position", "eye pressure", "long surgery"],
     },
     "pressure ulcer": {
         "synonyms": ["decubitus ulcer", "pressure sore", "bedsore", "pressure injury"],
-        "context": ["bony prominence", "long surgery", "positioning"]
+        "context": ["bony prominence", "long surgery", "positioning"],
     },
-
     # Neurological Deficits
     "paresis": {
         "synonyms": ["weakness", "motor deficit", "hemiparesis", "monoparesis"],
-        "types": ["hemiparesis", "paraparesis", "quadriparesis", "monoparesis"]
+        "types": ["hemiparesis", "paraparesis", "quadriparesis", "monoparesis"],
     },
     "ataxia": {
         "synonyms": ["incoordination", "cerebellar dysfunction", "gait instability"],
-        "context": ["cerebellar injury", "posterior fossa", "vermis"]
+        "context": ["cerebellar injury", "posterior fossa", "vermis"],
     },
     "dysphagia": {
         "synonyms": ["swallowing difficulty", "deglutition disorder"],
-        "context": ["lower cranial nerve", "brainstem", "CN IX", "CN X"]
+        "context": ["lower cranial nerve", "brainstem", "CN IX", "CN X"],
     },
 }
 
@@ -238,30 +250,28 @@ TISSUE_DESCRIPTORS: Dict[str, List[str]] = {
     "dura": ["dura mater", "dural", "pachymeninx"],
     "arachnoid": ["arachnoid mater", "arachnoid membrane", "leptomeninges"],
     "pia": ["pia mater", "pial", "leptomeninges"],
-
     # Brain Tissue
     "cortex": ["cortical", "gray matter", "cerebral cortex", "cerebellar cortex"],
     "white matter": ["subcortical", "fiber tracts", "corona radiata"],
     "parenchyma": ["brain tissue", "neural tissue", "brain parenchyma"],
-
     # Tumor Characteristics
     "tumor capsule": ["capsule", "tumor margin", "pseudocapsule"],
     "cleavage plane": ["dissection plane", "tumor-brain interface", "surgical plane"],
     "feeding artery": ["tumor feeder", "arterial supply", "vascular pedicle"],
     "draining vein": ["venous drainage", "tumor vein"],
-
     # Scalp Layers
-    "scalp": ["SCALP layers", "skin-connective tissue-aponeurosis-loose CT-pericranium"],
+    "scalp": [
+        "SCALP layers",
+        "skin-connective tissue-aponeurosis-loose CT-pericranium",
+    ],
     "galea": ["galea aponeurotica", "epicranial aponeurosis"],
     "pericranium": ["periosteum", "outer periosteum"],
-
     # Spinal Layers
     "ligamentum flavum": ["yellow ligament", "flavum"],
     "posterior longitudinal ligament": ["PLL", "posterior ligament"],
     "anterior longitudinal ligament": ["ALL", "anterior ligament"],
     "annulus fibrosus": ["annulus", "disc annulus", "outer disc"],
     "nucleus pulposus": ["nucleus", "disc nucleus", "inner disc"],
-
     # Fascia
     "thoracolumbar fascia": ["lumbodorsal fascia", "posterior fascia"],
     "prevertebral fascia": ["anterior cervical fascia", "deep cervical fascia"],
@@ -277,20 +287,22 @@ IMAGING_INTRAOP: Dict[str, List[str]] = {
     "c-arm": ["C-arm fluoroscopy", "mobile fluoroscopy", "image intensifier"],
     "AP view": ["anteroposterior", "frontal view"],
     "lateral view": ["lateral fluoroscopy", "side view"],
-
     # Navigation
-    "neuronavigation": ["navigation", "image guidance", "stereotactic navigation", "BrainLab", "Stealth"],
+    "neuronavigation": [
+        "navigation",
+        "image guidance",
+        "stereotactic navigation",
+        "BrainLab",
+        "Stealth",
+    ],
     "stereotactic": ["stereotaxy", "frame-based", "frameless navigation"],
-
     # Ultrasound
     "intraoperative ultrasound": ["IOUS", "surgical ultrasound", "neurosonography"],
     "ultrasound": ["sonography", "US", "ultrasonography"],
-
     # Vascular Imaging
     "ICG": ["indocyanine green", "ICG angiography", "fluorescence angiography"],
     "intraoperative angiography": ["IOA", "surgical angiography"],
     "micro-Doppler": ["microvascular Doppler", "vessel Doppler"],
-
     # Advanced Imaging
     "intraoperative MRI": ["iMRI", "surgical MRI", "intraoperative magnetic resonance"],
     "intraoperative CT": ["iCT", "surgical CT", "O-arm"],
@@ -305,19 +317,20 @@ SURGICAL_PHASES: Dict[str, List[str]] = {
     "positioning": ["patient positioning", "surgical position", "operative position"],
     "prep and drape": ["surgical prep", "sterile preparation", "draping"],
     "timeout": ["surgical timeout", "time out", "safety pause"],
-
     # Exposure
     "incision": ["skin incision", "surgical incision", "approach"],
     "dissection": ["tissue dissection", "surgical dissection", "exposure"],
     "craniotomy": ["bone flap", "craniectomy", "bone removal"],
     "laminectomy": ["lamina removal", "decompression", "laminotomy"],
-
     # Core Procedure
     "dural opening": ["durotomy", "dural incision", "opening dura"],
     "tumor resection": ["tumor removal", "excision", "debulking"],
-    "decompression": ["neural decompression", "cord decompression", "root decompression"],
+    "decompression": [
+        "neural decompression",
+        "cord decompression",
+        "root decompression",
+    ],
     "fusion": ["arthrodesis", "spinal fusion", "instrumented fusion"],
-
     # Closure
     "dural closure": ["dural repair", "duraplasty", "watertight closure"],
     "bone flap replacement": ["cranioplasty", "bone replacement"],
@@ -339,7 +352,6 @@ ORTHOGRAPHIC_VARIATIONS: Dict[str, str] = {
     "neighbour": "neighbor",
     "odour": "odor",
     "vapour": "vapor",
-
     # -ise/-ize variations
     "anaesthetise": "anesthetize",
     "cauterise": "cauterize",
@@ -348,7 +360,6 @@ ORTHOGRAPHIC_VARIATIONS: Dict[str, str] = {
     "mobilise": "mobilize",
     "stabilise": "stabilize",
     "visualise": "visualize",
-
     # -ae-/-e- variations
     "anaemia": "anemia",
     "anaesthesia": "anesthesia",
@@ -359,13 +370,11 @@ ORTHOGRAPHIC_VARIATIONS: Dict[str, str] = {
     "oedema": "edema",
     "oesophagus": "esophagus",
     "paediatric": "pediatric",
-
     # -re/-er variations
     "centre": "center",
     "fibre": "fiber",
     "litre": "liter",
     "metre": "meter",
-
     # Other variations
     "disc": "disk",
     "grey": "gray",
@@ -400,6 +409,7 @@ ORTHOGRAPHIC_VARIATIONS: Dict[str, str] = {
 # =============================================================================
 # UTILITY FUNCTIONS
 # =============================================================================
+
 
 def get_all_synonyms() -> Dict[str, List[str]]:
     """Combine all simple synonym dictionaries into one."""
@@ -437,15 +447,15 @@ def get_orthographic_variants(term: str) -> List[str]:
     # e.g., "discectomy" contains "disc" → generate "diskectomy"
     # e.g., "haematoma" is already in dict, but "subdural haematoma" needs expansion
     compound_roots = [
-        ("disc", "disk"),      # discectomy/diskectomy, disc herniation/disk herniation
-        ("tumour", "tumor"),   # tumour resection/tumor resection
-        ("haem", "hem"),       # haematoma/hematoma, haemorrhage/hemorrhage
-        ("anaesth", "anesth"), # anaesthesia/anesthesia
-        ("oedem", "edem"),     # oedema/edema
-        ("paed", "ped"),       # paediatric/pediatric
+        ("disc", "disk"),  # discectomy/diskectomy, disc herniation/disk herniation
+        ("tumour", "tumor"),  # tumour resection/tumor resection
+        ("haem", "hem"),  # haematoma/hematoma, haemorrhage/hemorrhage
+        ("anaesth", "anesth"),  # anaesthesia/anesthesia
+        ("oedem", "edem"),  # oedema/edema
+        ("paed", "ped"),  # paediatric/pediatric
         ("centre", "center"),  # centre of mass/center of mass
-        ("fibre", "fiber"),    # nerve fibre/nerve fiber
-        ("grey", "gray"),      # grey matter/gray matter
+        ("fibre", "fiber"),  # nerve fibre/nerve fiber
+        ("grey", "gray"),  # grey matter/gray matter
     ]
 
     for british_root, american_root in compound_roots:
@@ -483,7 +493,9 @@ def expand_with_complication_context(term: str) -> List[str]:
     expansions = [term]
 
     for key, entry in COMPLICATION_TERMS.items():
-        if term_lower == key.lower() or term_lower in [s.lower() for s in entry.get("synonyms", [])]:
+        if term_lower == key.lower() or term_lower in [
+            s.lower() for s in entry.get("synonyms", [])
+        ]:
             expansions.extend(entry.get("synonyms", []))
             expansions.extend(entry.get("types", []))
             expansions.extend(entry.get("context", []))
@@ -509,4 +521,3 @@ __all__ = [
     "expand_with_monitoring_context",
     "expand_with_complication_context",
 ]
-

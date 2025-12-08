@@ -97,6 +97,11 @@ dependencies = [
     # Async
     "aiofiles>=23.2.0",
     "httpx>=0.27.0",
+    # AI Vision
+    "pymupdf4llm>=0.0.1",
+    "opencv-python-headless>=4.8.0",
+    "open_clip_torch>=2.20.0",
+    "structlog>=23.2.0",
 ]
 
 [project.optional-dependencies]

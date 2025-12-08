@@ -1,8 +1,11 @@
 """Additional filter controls panel."""
-import customtkinter as ctk
+
 from typing import Callable, Optional
 
+import customtkinter as ctk
+
 from reference_library import config
+
 from .styles import FONTS, PADDING
 
 
@@ -10,10 +13,7 @@ class FilterPanel(ctk.CTkFrame):
     """Advanced filtering options panel."""
 
     def __init__(
-        self,
-        parent,
-        on_filter_change: Optional[Callable[[], None]] = None,
-        **kwargs
+        self, parent, on_filter_change: Optional[Callable[[], None]] = None, **kwargs
     ):
         super().__init__(parent, **kwargs)
         self.on_filter_change = on_filter_change
@@ -23,11 +23,9 @@ class FilterPanel(ctk.CTkFrame):
     def _setup_ui(self):
         """Set up the filter panel UI."""
         # Series filter
-        ctk.CTkLabel(
-            self,
-            text="Filter by Book Series:",
-            font=FONTS["small"]
-        ).pack(anchor="w", padx=PADDING["small"], pady=(PADDING["small"], 0))
+        ctk.CTkLabel(self, text="Filter by Book Series:", font=FONTS["small"]).pack(
+            anchor="w", padx=PADDING["small"], pady=(PADDING["small"], 0)
+        )
 
         self.series_var = ctk.StringVar(value="All Series")
         self.series_menu = ctk.CTkOptionMenu(
@@ -35,7 +33,7 @@ class FilterPanel(ctk.CTkFrame):
             variable=self.series_var,
             values=["All Series"] + list(config.KNOWN_SERIES.values()),
             command=self._on_series_change,
-            width=200
+            width=200,
         )
         self.series_menu.pack(anchor="w", padx=PADDING["small"], pady=PADDING["small"])
 

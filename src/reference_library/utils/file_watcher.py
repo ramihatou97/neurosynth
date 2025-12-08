@@ -1,9 +1,16 @@
 """File system watcher for detecting new PDFs in the library."""
+
 import threading
 from pathlib import Path
 from typing import Callable, Optional
+
+from watchdog.events import (
+    FileCreatedEvent,
+    FileDeletedEvent,
+    FileModifiedEvent,
+    FileSystemEventHandler,
+)
 from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileModifiedEvent, FileDeletedEvent
 
 from reference_library import config
 
@@ -15,7 +22,7 @@ class PDFEventHandler(FileSystemEventHandler):
         self,
         on_new_file: Callable[[Path], None],
         on_modified_file: Callable[[Path], None],
-        on_deleted_file: Callable[[Path], None]
+        on_deleted_file: Callable[[Path], None],
     ):
         super().__init__()
         self.on_new_file = on_new_file
@@ -24,7 +31,7 @@ class PDFEventHandler(FileSystemEventHandler):
 
     def _is_pdf(self, path: str) -> bool:
         """Check if path is a PDF file."""
-        return path.lower().endswith('.pdf')
+        return path.lower().endswith(".pdf")
 
     def on_created(self, event):
         """Handle file creation event."""
@@ -50,7 +57,7 @@ class FileWatcher:
         library_path: Path,
         on_new_file: Optional[Callable[[Path], None]] = None,
         on_modified_file: Optional[Callable[[Path], None]] = None,
-        on_deleted_file: Optional[Callable[[Path], None]] = None
+        on_deleted_file: Optional[Callable[[Path], None]] = None,
     ):
         self.library_path = library_path
         self.on_new_file = on_new_file or (lambda p: None)
@@ -69,15 +76,11 @@ class FileWatcher:
         event_handler = PDFEventHandler(
             on_new_file=self._handle_new_file,
             on_modified_file=self._handle_modified_file,
-            on_deleted_file=self._handle_deleted_file
+            on_deleted_file=self._handle_deleted_file,
         )
 
         # Watch recursively
-        self._observer.schedule(
-            event_handler,
-            str(self.library_path),
-            recursive=True
-        )
+        self._observer.schedule(event_handler, str(self.library_path), recursive=True)
 
         self._observer.start()
         self._running = True

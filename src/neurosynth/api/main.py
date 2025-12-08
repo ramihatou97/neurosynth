@@ -7,9 +7,10 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from ai.client import AsyncAIClient
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from ai.client import AsyncAIClient
 from neurosynth.api.deps import close_redis_pool, get_settings
 from neurosynth.api.routes import health_router, jobs_router
 

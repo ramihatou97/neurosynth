@@ -7,10 +7,10 @@ Following user rules: Mock the LLM Provider.
 
 import asyncio
 import json
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
+import pytest
 
 
 class TestDeepDxCriticAsync:
@@ -20,13 +20,15 @@ class TestDeepDxCriticAsync:
     def mock_settings(self, monkeypatch):
         """Mock settings and environment."""
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-anthropic-key")
-        
+
         # Mock the settings modules
         mock_ddx_settings = MagicMock()
         mock_ns_settings = MagicMock()
         mock_ns_settings.anthropic_api_key = "test-anthropic-key"
-        
-        with patch("deep_dx.config.get_deepdx_settings", return_value=mock_ddx_settings):
+
+        with patch(
+            "deep_dx.config.get_deepdx_settings", return_value=mock_ddx_settings
+        ):
             with patch("neurosynth.config.get_settings", return_value=mock_ns_settings):
                 yield
 
@@ -40,12 +42,8 @@ class TestDeepDxCriticAsync:
     async def test_check_safety_async_safe(self, mock_settings, mock_httpx_client):
         """Test safety check returns safe result."""
         # Arrange
-        safety_response = {
-            "safe": True,
-            "issues": [],
-            "risk_level": "low"
-        }
-        
+        safety_response = {"safe": True, "issues": [], "risk_level": "low"}
+
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -55,13 +53,13 @@ class TestDeepDxCriticAsync:
         mock_httpx_client.post = AsyncMock(return_value=mock_response)
 
         from deep_dx.critic.critic import DeepDxCritic
-        
+
         critic = DeepDxCritic(async_client=mock_httpx_client)
 
         # Act
         result = await critic.check_safety_async(
             query="What is the approach to VS?",
-            answer="The retrosigmoid approach is commonly used."
+            answer="The retrosigmoid approach is commonly used.",
         )
 
         # Assert
@@ -75,9 +73,9 @@ class TestDeepDxCriticAsync:
         safety_response = {
             "safe": False,
             "issues": ["Laterality confusion detected"],
-            "risk_level": "high"
+            "risk_level": "high",
         }
-        
+
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -87,13 +85,13 @@ class TestDeepDxCriticAsync:
         mock_httpx_client.post = AsyncMock(return_value=mock_response)
 
         from deep_dx.critic.critic import DeepDxCritic
-        
+
         critic = DeepDxCritic(async_client=mock_httpx_client)
 
         # Act
         result = await critic.check_safety_async(
             query="Left-sided tumor approach",
-            answer="Approach from the right side..."  # Wrong laterality
+            answer="Approach from the right side...",  # Wrong laterality
         )
 
         # Assert
@@ -110,7 +108,7 @@ class TestDeepDxCriticAsync:
             {"id": 1, "score": 5, "reason": "Tangentially related"},
             {"id": 2, "score": 8, "reason": "Good context"},
         ]
-        
+
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -120,7 +118,7 @@ class TestDeepDxCriticAsync:
         mock_httpx_client.post = AsyncMock(return_value=mock_response)
 
         from deep_dx.critic.critic import DeepDxCritic
-        
+
         critic = DeepDxCritic(async_client=mock_httpx_client)
 
         chunks = [
@@ -131,9 +129,7 @@ class TestDeepDxCriticAsync:
 
         # Act
         result = await critic.evaluate_relevance_async(
-            query="VS surgical approach",
-            chunks=chunks,
-            threshold=7
+            query="VS surgical approach", chunks=chunks, threshold=7
         )
 
         # Assert
@@ -143,4 +139,3 @@ class TestDeepDxCriticAsync:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

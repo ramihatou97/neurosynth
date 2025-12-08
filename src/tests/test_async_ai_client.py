@@ -6,10 +6,10 @@ Following user rules: Mock the LLM Provider and Vector DB.
 """
 
 import asyncio
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
+import pytest
 
 
 class TestAsyncAIClient:
@@ -76,7 +76,7 @@ class TestAsyncAIClient:
         # Act
         result = await client.synthesize(
             prompt="What is the approach to vestibular schwannoma?",
-            system_prompt="You are a neurosurgical assistant."
+            system_prompt="You are a neurosurgical assistant.",
         )
 
         # Assert
@@ -132,4 +132,3 @@ class TestAsyncAIClient:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

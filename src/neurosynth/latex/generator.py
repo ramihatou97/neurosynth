@@ -265,7 +265,10 @@ class LaTeXGenerator:
                 # Check PDF magic bytes
                 header = f.read(5)
                 if header != b"%PDF-":
-                    return False, f"Invalid PDF header (expected %PDF-, found {header!r})"
+                    return (
+                        False,
+                        f"Invalid PDF header (expected %PDF-, found {header!r})",
+                    )
 
                 # Check for EOF marker in last 1KB
                 f.seek(max(0, file_size - 1024))
@@ -344,13 +347,46 @@ class LaTeXGenerator:
             return self.env.from_string(DEFAULT_CHAPTER_TEMPLATE)
 
     def _prepare_section(self, section: Section) -> dict[str, Any]:
-        """Prepare section for template."""
-        # Prepare inline figures
+        """Prepare section for template.
+
+        Handles positioned figures with paragraph-level placement and
+        subfigure grouping for procedural sequences.
+        """
+        # Prepare inline figures with positioning metadata
         inline_figures = []
+        subfigure_groups: dict[str, list[dict[str, Any]]] = {}
+
         for visual in section.inline_figures:
             fig_data = self._prepare_figure(visual)
-            if fig_data:
+            if not fig_data:
+                continue
+
+            # Add positioning metadata from visual's output fields
+            fig_data["anchor_paragraph"] = visual.output_anchor_paragraph
+            fig_data["placement_type"] = visual.output_placement
+            fig_data["match_method"] = visual.output_match_method
+            fig_data["subfigure_label"] = visual.subfigure_label
+
+            # Group subfigures together
+            if visual.subfigure_group_id:
+                if visual.subfigure_group_id not in subfigure_groups:
+                    subfigure_groups[visual.subfigure_group_id] = []
+                subfigure_groups[visual.subfigure_group_id].append(fig_data)
+            else:
                 inline_figures.append(fig_data)
+
+        # Convert subfigure groups to combined figures
+        for group_id, group_figs in subfigure_groups.items():
+            if len(group_figs) >= 2:
+                combined = self._prepare_subfigure_group(group_figs, group_id)
+                if combined:
+                    inline_figures.append(combined)
+            else:
+                # Single figure, add as regular inline
+                inline_figures.extend(group_figs)
+
+        # Sort inline figures by anchor paragraph for proper interleaving
+        inline_figures.sort(key=lambda f: f.get("anchor_paragraph") or 0)
 
         # Prepare figure plate
         figure_plate = None
@@ -375,6 +411,49 @@ class LaTeXGenerator:
             "figure_plate": figure_plate,
             "has_visuals": bool(inline_figures or figure_plate),
             "subsections": [self._prepare_section(s) for s in section.subsections],
+        }
+
+    def _prepare_subfigure_group(
+        self,
+        figures: list[dict[str, Any]],
+        group_id: str,
+    ) -> dict[str, Any] | None:
+        """Prepare a group of subfigures as a combined figure environment.
+
+        Creates a LaTeX figure with multiple subfigures (a), (b), (c), etc.
+        """
+        if not figures:
+            return None
+
+        # Sort by subfigure label
+        figures.sort(key=lambda f: f.get("subfigure_label") or "z")
+
+        # Generate combined caption from individual captions
+        combined_caption_parts = []
+        for fig in figures:
+            label = fig.get("subfigure_label", "")
+            caption = fig.get("caption", "")
+            if label and caption:
+                combined_caption_parts.append(f"({label}) {caption}")
+            elif caption:
+                combined_caption_parts.append(caption)
+
+        combined_caption = (
+            "; ".join(combined_caption_parts) if combined_caption_parts else ""
+        )
+
+        # Use first figure's anchor paragraph
+        anchor = figures[0].get("anchor_paragraph")
+
+        return {
+            "is_subfigure_group": True,
+            "group_id": group_id,
+            "subfigures": figures,
+            "caption": combined_caption,
+            "label": f"fig:group_{group_id}",
+            "anchor_paragraph": anchor,
+            "placement_type": "subfigure",
+            "subfigure_count": len(figures),
         }
 
     def _prepare_figure(self, visual: "VisualElement") -> dict[str, Any] | None:
@@ -541,7 +620,14 @@ class LaTeXGenerator:
         return f"\\cite{{{source.citation_key}}}"
 
     def _format_figure(self, fig_data: dict[str, Any]) -> str:
-        """Format a figure dictionary as LaTeX figure environment."""
+        """Format a figure dictionary as LaTeX figure environment.
+
+        Handles both single figures and subfigure groups.
+        """
+        # Check if this is a subfigure group
+        if fig_data.get("is_subfigure_group"):
+            return self._format_subfigure_group(fig_data)
+
         return (
             f"\\begin{{figure}}[htbp]\n"
             f"\\centering\n"
@@ -550,6 +636,51 @@ class LaTeXGenerator:
             f"\\label{{{fig_data['label']}}}\n"
             f"\\end{{figure}}"
         )
+
+    def _format_subfigure_group(self, group_data: dict[str, Any]) -> str:
+        """Format a group of subfigures as a combined LaTeX figure.
+
+        Uses the subcaption package for proper subfigure labeling.
+        """
+        subfigures = group_data.get("subfigures", [])
+        if not subfigures:
+            return ""
+
+        # Calculate width per subfigure (with small gap)
+        count = len(subfigures)
+        width_per = 0.9 / count  # Leave room for spacing
+
+        lines = [
+            "\\begin{figure}[htbp]",
+            "\\centering",
+        ]
+
+        for i, subfig in enumerate(subfigures):
+            label = subfig.get("subfigure_label", chr(ord("a") + i))
+            path = subfig.get("path", "")
+            caption = subfig.get("caption", "")
+
+            lines.append(f"\\begin{{subfigure}}{{{width_per:.2f}\\textwidth}}")
+            lines.append("\\centering")
+            lines.append(f"\\includegraphics[width=\\textwidth]{{{path}}}")
+            lines.append(f"\\caption{{{caption}}}")
+            lines.append(
+                f"\\label{{fig:{group_data.get('group_id', 'group')}_{label}}}"
+            )
+            lines.append("\\end{subfigure}")
+
+            # Add horizontal fill between subfigures (except last)
+            if i < count - 1:
+                lines.append("\\hfill")
+
+        # Add overall caption and label
+        overall_caption = group_data.get("caption", "")
+        if overall_caption:
+            lines.append(f"\\caption{{{overall_caption}}}")
+        lines.append(f"\\label{{{group_data.get('label', 'fig:group')}}}")
+        lines.append("\\end{figure}")
+
+        return "\n".join(lines)
 
 
 # Default template when no external template is available
@@ -567,6 +698,7 @@ DEFAULT_CHAPTER_TEMPLATE = r"""
 \usepackage{titlesec}
 \usepackage{fancyhdr}
 \usepackage{xcolor}
+\usepackage{subcaption}  % For subfigure groups
 
 % Page geometry
 \geometry{margin=1in}

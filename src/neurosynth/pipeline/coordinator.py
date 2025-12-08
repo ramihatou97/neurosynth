@@ -119,6 +119,7 @@ class Pipeline:
         "merge",
         "outline",
         "synthesize",
+        "resolve_figures",  # New: Resolve figure placements in synthesized text
         "output",
     ]
 
@@ -256,6 +257,10 @@ class Pipeline:
 
             # Stage 10: Synthesize content
             await self._run_stage("synthesize", self._synthesize_chapter)
+
+            # Stage 10.5: Resolve figure placements
+            if self.config.enable_visual_extraction and self.state.all_visuals:
+                await self._run_stage("resolve_figures", self._resolve_figures)
 
             # Stage 11: Generate output
             await self._run_stage("output", self._generate_output)
@@ -666,7 +671,9 @@ class Pipeline:
             sklearn_clusterer = SemanticClusterer(
                 similarity_threshold=self.config.similarity_threshold,
             )
-            sklearn_result = await sklearn_clusterer.cluster_chunks(self.state.all_chunks)
+            sklearn_result = await sklearn_clusterer.cluster_chunks(
+                self.state.all_chunks
+            )
             self.state.clusters = sklearn_result.clusters
             self.state.metrics["clustering_backend"] = "sklearn"
             self.state.metrics["clusters_created"] = sklearn_result.num_clusters
@@ -724,6 +731,50 @@ class Pipeline:
 
         self.state.metrics["total_words"] = self.state.chapter.total_words
         self.state.metrics["total_sources"] = self.state.chapter.total_sources
+
+    async def _resolve_figures(self) -> None:
+        """Resolve figure placements in synthesized content.
+
+        Uses the FigureIntegrationPipeline to:
+        1. Parse [FIGURE: ID] and [IMAGE: Type] placeholders from AI output
+        2. Match paragraphs to images via semantic similarity
+        3. Correlate surgical steps with procedural image sequences
+        4. Optimize placement with density limits
+
+        Unused figures remain in a library for later access.
+        """
+        from neurosynth.synthesis.figure_integration import FigureIntegrationPipeline
+
+        if not self.state.chapter:
+            console.print("  [dim]No chapter to resolve figures for[/dim]")
+            return
+
+        if not self.state.all_visuals:
+            console.print("  [dim]No visuals available for resolution[/dim]")
+            return
+
+        console.print(
+            f"  Processing {len(self.state.all_visuals)} available figures "
+            f"for {len(self.state.chapter.sections)} sections..."
+        )
+
+        pipeline = FigureIntegrationPipeline(
+            available_visuals=self.state.all_visuals,
+        )
+
+        resolution = pipeline.resolve_chapter(self.state.chapter)
+
+        # Store metrics
+        self.state.metrics["figures_positioned"] = resolution.total_positioned
+        self.state.metrics["placeholders_unresolved"] = (
+            resolution.total_unresolved_placeholders
+        )
+        self.state.metrics["figures_unused"] = resolution.figure_library.unused_count
+
+        console.print(
+            f"  Positioned {resolution.total_positioned} figures, "
+            f"{resolution.figure_library.unused_count} remain in library"
+        )
 
     async def _generate_output(self) -> None:
         """Generate final output files."""

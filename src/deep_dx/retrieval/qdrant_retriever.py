@@ -1,9 +1,10 @@
 import logging
 from typing import List, Optional
 
-from models import Chunk, ChunkType, SearchResult
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
+
+from models import Chunk, ChunkType, SearchResult
 
 logger = logging.getLogger(__name__)
 

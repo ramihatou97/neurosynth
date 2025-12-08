@@ -1,7 +1,8 @@
 """Subprocess-based embedding worker to avoid GIL blocking UI."""
+
+import json
 import os
 import sys
-import json
 from pathlib import Path
 
 # Prevent tokenizers deadlock

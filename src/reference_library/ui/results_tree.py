@@ -1,10 +1,13 @@
 """Hierarchical results tree display."""
-import customtkinter as ctk
+
+from pathlib import Path
 from tkinter import ttk
 from typing import Callable, Optional
-from pathlib import Path
+
+import customtkinter as ctk
 
 from reference_library import config
+
 from ..search.result_model import SearchResult
 from .styles import FONTS, PADDING
 
@@ -20,7 +23,7 @@ class ResultsTree(ctk.CTkFrame):
         on_extract_images: Optional[Callable[[SearchResult], None]] = None,
         on_index_text: Optional[Callable[[SearchResult], None]] = None,
         database=None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(parent, **kwargs)
         self.on_select = on_select
@@ -46,18 +49,13 @@ class ResultsTree(ctk.CTkFrame):
         header_frame.pack(fill="x", padx=PADDING["small"], pady=PADDING["small"])
 
         self.results_label = ctk.CTkLabel(
-            header_frame,
-            text="Results (0 matches)",
-            font=FONTS["subheading"]
+            header_frame, text="Results (0 matches)", font=FONTS["subheading"]
         )
         self.results_label.pack(side="left")
 
         # Selection count label
         self.selection_label = ctk.CTkLabel(
-            header_frame,
-            text="",
-            font=FONTS["small"],
-            text_color="gray"
+            header_frame, text="", font=FONTS["small"], text_color="gray"
         )
         self.selection_label.pack(side="left", padx=(10, 0))
 
@@ -68,7 +66,7 @@ class ResultsTree(ctk.CTkFrame):
             command=self._expand_all,
             width=80,
             height=24,
-            font=FONTS["small"]
+            font=FONTS["small"],
         ).pack(side="right", padx=2)
 
         ctk.CTkButton(
@@ -77,7 +75,7 @@ class ResultsTree(ctk.CTkFrame):
             command=self._collapse_all,
             width=70,
             height=24,
-            font=FONTS["small"]
+            font=FONTS["small"],
         ).pack(side="right", padx=2)
 
         # Selection buttons
@@ -87,7 +85,7 @@ class ResultsTree(ctk.CTkFrame):
             command=self._clear_selection,
             width=60,
             height=24,
-            font=FONTS["small"]
+            font=FONTS["small"],
         ).pack(side="right", padx=2)
 
         ctk.CTkButton(
@@ -96,7 +94,7 @@ class ResultsTree(ctk.CTkFrame):
             command=self._select_all,
             width=80,
             height=24,
-            font=FONTS["small"]
+            font=FONTS["small"],
         ).pack(side="right", padx=2)
 
         # Tree view with scrollbar
@@ -111,13 +109,13 @@ class ResultsTree(ctk.CTkFrame):
             rowheight=25,
             foreground="#FFFFFF",
             background="#2b2b2b",
-            fieldbackground="#2b2b2b"
+            fieldbackground="#2b2b2b",
         )
         style.configure(
             "Results.Treeview.Heading",
             font=FONTS["body"],
             foreground="#FFFFFF",
-            background="#1e1e1e"
+            background="#1e1e1e",
         )
 
         # Scrollbar
@@ -130,7 +128,7 @@ class ResultsTree(ctk.CTkFrame):
             columns=("select", "page", "figs"),
             show="tree headings",
             yscrollcommand=scrollbar.set,
-            style="Results.Treeview"
+            style="Results.Treeview",
         )
         self.tree.pack(fill="both", expand=True)
         scrollbar.config(command=self.tree.yview)
@@ -150,7 +148,7 @@ class ResultsTree(ctk.CTkFrame):
         self.tree.bind("<<TreeviewSelect>>", self._on_tree_select)
         self.tree.bind("<Double-1>", self._on_double_click)
         self.tree.bind("<Button-1>", self._on_click)
-        
+
         # Bind right-click for context menu (macOS uses Button-2 or Button-3 depending on config)
         self.tree.bind("<Button-2>", self._show_context_menu)
         self.tree.bind("<Button-3>", self._show_context_menu)
@@ -187,11 +185,7 @@ class ResultsTree(ctk.CTkFrame):
             chapter_id,
             "end",
             text=f"p.{result.page_number}: {result.match_text[:50]}...",
-            values=(
-                "☐",  # Unchecked checkbox
-                result.page_number,
-                fig_count
-            )
+            values=("☐", result.page_number, fig_count),  # Unchecked checkbox
         )
 
         self.results[match_id] = result
@@ -203,7 +197,9 @@ class ResultsTree(ctk.CTkFrame):
         if not self.database:
             return "-"
         try:
-            count = self.database.get_page_figure_count(result.pdf_path, result.page_number)
+            count = self.database.get_page_figure_count(
+                result.pdf_path, result.page_number
+            )
             return str(count) if count > 0 else "-"
         except Exception:
             return "-"
@@ -212,24 +208,18 @@ class ResultsTree(ctk.CTkFrame):
         """Get or create a series node in the tree."""
         if series_name not in self.series_items:
             display_name = config.KNOWN_SERIES.get(series_name, series_name)
-            series_id = self.tree.insert(
-                "",
-                "end",
-                text=f"{display_name}",
-                open=True
-            )
+            series_id = self.tree.insert("", "end", text=f"{display_name}", open=True)
             self.series_items[series_name] = series_id
         return self.series_items[series_name]
 
-    def _get_or_create_chapter(self, series_id: str, chapter_key: str, result: SearchResult) -> str:
+    def _get_or_create_chapter(
+        self, series_id: str, chapter_key: str, result: SearchResult
+    ) -> str:
         """Get or create a chapter node in the tree."""
         if chapter_key not in self.chapter_items:
             display_name = result.display_name
             chapter_id = self.tree.insert(
-                series_id,
-                "end",
-                text=display_name,
-                open=True
+                series_id, "end", text=display_name, open=True
             )
             self.chapter_items[chapter_key] = chapter_id
         return self.chapter_items[chapter_key]
@@ -242,7 +232,9 @@ class ResultsTree(ctk.CTkFrame):
         """Update match counts on series nodes."""
         for series_name, series_id in self.series_items.items():
             # Count matches in this series
-            count = sum(1 for r in self.results.values() if r.book_series == series_name)
+            count = sum(
+                1 for r in self.results.values() if r.book_series == series_name
+            )
             current_text = self.tree.item(series_id, "text")
             # Extract base name without count
             base_name = current_text.split(" (")[0]
@@ -263,10 +255,12 @@ class ResultsTree(ctk.CTkFrame):
             result = self.results[item_id]
             # Open PDF at page (macOS)
             import subprocess
+
             subprocess.run(["open", "-a", "Preview", str(result.pdf_path)])
 
     def _expand_all(self):
         """Expand all tree nodes."""
+
         def expand_children(item):
             self.tree.item(item, open=True)
             for child in self.tree.get_children(item):
@@ -356,7 +350,11 @@ class ResultsTree(ctk.CTkFrame):
 
     def get_selected_results(self) -> list[SearchResult]:
         """Get list of selected SearchResult objects."""
-        return [self.results[item_id] for item_id in self.selected_items if item_id in self.results]
+        return [
+            self.results[item_id]
+            for item_id in self.selected_items
+            if item_id in self.results
+        ]
 
     # ==================== Smart Selection Methods ====================
 
@@ -456,9 +454,14 @@ class ResultsTree(ctk.CTkFrame):
     def _create_context_menu(self):
         """Create the right-click context menu."""
         import tkinter as tk
+
         self.context_menu = tk.Menu(self, tearoff=0)
-        self.context_menu.add_command(label="Extract Images from PDF", command=self._handle_extract_images)
-        self.context_menu.add_command(label="Index Text (Background)", command=self._handle_index_text)
+        self.context_menu.add_command(
+            label="Extract Images from PDF", command=self._handle_extract_images
+        )
+        self.context_menu.add_command(
+            label="Index Text (Background)", command=self._handle_index_text
+        )
         self.context_menu.add_separator()
         self.context_menu.add_command(label="Open PDF", command=self._handle_open_pdf)
 
@@ -469,7 +472,7 @@ class ResultsTree(ctk.CTkFrame):
             # Select the item first
             self.tree.selection_set(item_id)
             self._on_tree_select(None)
-            
+
             # Show menu
             try:
                 self.context_menu.tk_popup(event.x_root, event.y_root)
@@ -500,5 +503,5 @@ class ResultsTree(ctk.CTkFrame):
             if item_id in self.results:
                 result = self.results[item_id]
                 import subprocess
-                subprocess.run(["open", "-a", "Preview", str(result.pdf_path)])
 
+                subprocess.run(["open", "-a", "Preview", str(result.pdf_path)])

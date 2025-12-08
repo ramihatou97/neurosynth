@@ -4,18 +4,18 @@ from reference_library.search.pdf_searcher import PDFSearcher
 from reference_library.search.result_model import (
     ChapterResult,
     MatchType,
-    SearchResult,
     PageMatch,
     SearchProgress,
+    SearchResult,
 )
 from reference_library.search.search_strategy import SearchStrategy, get_strategy
 
 # Study Package (BROAD mode enhancement)
 from reference_library.search.study_package import (
-    enhance_broad_results,
-    analyze_query,
-    StudyModeReport,
     QueryAnalysis,
+    StudyModeReport,
+    analyze_query,
+    enhance_broad_results,
 )
 
 __all__ = [

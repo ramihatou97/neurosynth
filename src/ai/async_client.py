@@ -5,22 +5,23 @@ Non-blocking version of AIClient for use in GUI and async contexts.
 Uses Voyage AI for embeddings and Claude for synthesis.
 """
 
-import os
 import logging
+import os
 from pathlib import Path
 from typing import List, Optional
 
 import httpx
 from tenacity import (
     retry,
+    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
 )
 
 # Try to load .env from neurosynth root if not already loaded
 try:
     from dotenv import load_dotenv
+
     # Look for .env in the src parent directory (neurosynth root)
     env_path = Path(__file__).parent.parent.parent / ".env"
     if env_path.exists():
@@ -113,7 +114,9 @@ class AsyncAIClient:
                 limits=httpx.Limits(max_keepalive_connections=20, max_connections=100),
             )
             self._client_loop_id = current_loop_id
-            logger.debug("Created new httpx.AsyncClient for event loop %s", current_loop_id)
+            logger.debug(
+                "Created new httpx.AsyncClient for event loop %s", current_loop_id
+            )
 
         return self._client
 
@@ -271,4 +274,3 @@ Guidelines:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.close()
-

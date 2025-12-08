@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
+
 from deep_dx.critic.critic import DeepDxCritic
 
 # ============================================================================

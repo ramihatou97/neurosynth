@@ -6,24 +6,23 @@ to improve search recall by expanding queries with related terminology.
 Enhanced with extracted dictionaries from the Neurosurgical Procedural Framework.
 """
 
-from typing import Dict, List, Set, Optional
+from typing import Dict, List, Optional, Set
 
 # Import extracted dictionaries
 from .extracted_dictionaries import (
-    INSTRUMENT_SYNONYMS,
-    POSITIONING_TERMS,
-    NEUROMONITORING_TERMS,
-    HEMOSTATIC_AGENTS,
     COMPLICATION_TERMS,
-    TISSUE_DESCRIPTORS,
+    HEMOSTATIC_AGENTS,
     IMAGING_INTRAOP,
-    SURGICAL_PHASES,
+    INSTRUMENT_SYNONYMS,
+    NEUROMONITORING_TERMS,
     ORTHOGRAPHIC_VARIATIONS,
-    get_orthographic_variants,
-    expand_with_monitoring_context,
+    POSITIONING_TERMS,
+    SURGICAL_PHASES,
+    TISSUE_DESCRIPTORS,
     expand_with_complication_context,
+    expand_with_monitoring_context,
+    get_orthographic_variants,
 )
-
 
 # =============================================================================
 # ORIGINAL SYNONYM DICTIONARIES (Enhanced)
@@ -31,11 +30,26 @@ from .extracted_dictionaries import (
 
 # Tumor/Pathology Synonyms
 TUMOR_SYNONYMS: Dict[str, List[str]] = {
-    "acoustic neuroma": ["vestibular schwannoma", "VS", "cerebellopontine angle tumor", "CPA tumor"],
+    "acoustic neuroma": [
+        "vestibular schwannoma",
+        "VS",
+        "cerebellopontine angle tumor",
+        "CPA tumor",
+    ],
     "vestibular schwannoma": ["acoustic neuroma", "VS", "cerebellopontine angle tumor"],
-    "glioblastoma": ["GBM", "glioblastoma multiforme", "grade IV astrocytoma", "high-grade glioma"],
+    "glioblastoma": [
+        "GBM",
+        "glioblastoma multiforme",
+        "grade IV astrocytoma",
+        "high-grade glioma",
+    ],
     "meningioma": ["meningeal tumor", "dural tumor"],
-    "pituitary adenoma": ["pituitary tumor", "sellar mass", "pituitary macroadenoma", "pituitary microadenoma"],
+    "pituitary adenoma": [
+        "pituitary tumor",
+        "sellar mass",
+        "pituitary macroadenoma",
+        "pituitary microadenoma",
+    ],
     "craniopharyngioma": ["suprasellar tumor", "Rathke's pouch tumor"],
     "medulloblastoma": ["posterior fossa tumor", "cerebellar tumor"],
     "ependymoma": ["ventricular tumor", "fourth ventricle tumor"],
@@ -51,7 +65,12 @@ VASCULAR_SYNONYMS: Dict[str, List[str]] = {
     "AVM": ["arteriovenous malformation", "cerebral AVM", "brain AVM"],
     "cavernoma": ["cavernous malformation", "cavernous angioma", "cerebral cavernoma"],
     "dural fistula": ["dural arteriovenous fistula", "DAVF", "dural AVF"],
-    "stroke": ["cerebrovascular accident", "CVA", "ischemic stroke", "hemorrhagic stroke"],
+    "stroke": [
+        "cerebrovascular accident",
+        "CVA",
+        "ischemic stroke",
+        "hemorrhagic stroke",
+    ],
     "SAH": ["subarachnoid hemorrhage", "aneurysmal hemorrhage"],
     "ICH": ["intracerebral hemorrhage", "intraparenchymal hemorrhage"],
     "SDH": ["subdural hematoma", "subdural hemorrhage"],
@@ -60,7 +79,12 @@ VASCULAR_SYNONYMS: Dict[str, List[str]] = {
 
 # Spinal Pathology Synonyms
 SPINAL_SYNONYMS: Dict[str, List[str]] = {
-    "herniated disc": ["disc herniation", "HNP", "herniated nucleus pulposus", "ruptured disc"],
+    "herniated disc": [
+        "disc herniation",
+        "HNP",
+        "herniated nucleus pulposus",
+        "ruptured disc",
+    ],
     "spinal stenosis": ["canal stenosis", "central stenosis", "foraminal stenosis"],
     "spondylolisthesis": ["vertebral slip", "degenerative spondylolisthesis"],
     "chiari malformation": ["Chiari I", "Chiari II", "tonsillar herniation"],
@@ -88,9 +112,23 @@ APPROACH_SYNONYMS: Dict[str, List[str]] = {
 PROCEDURE_SYNONYMS: Dict[str, List[str]] = {
     "craniotomy": ["cranial opening", "bone flap", "skull opening"],
     "craniectomy": ["decompressive craniectomy", "bone removal", "DC"],
-    "aneurysm clipping": ["microsurgical clipping", "clip ligation", "aneurysm obliteration"],
-    "tumor resection": ["tumor removal", "excision", "gross total resection", "GTR", "subtotal resection"],
-    "microvascular decompression": ["MVD", "Jannetta procedure", "neurovascular decompression"],
+    "aneurysm clipping": [
+        "microsurgical clipping",
+        "clip ligation",
+        "aneurysm obliteration",
+    ],
+    "tumor resection": [
+        "tumor removal",
+        "excision",
+        "gross total resection",
+        "GTR",
+        "subtotal resection",
+    ],
+    "microvascular decompression": [
+        "MVD",
+        "Jannetta procedure",
+        "neurovascular decompression",
+    ],
     "ventriculostomy": ["EVD", "external ventricular drain", "ventricular catheter"],
     "VP shunt": ["ventriculoperitoneal shunt", "CSF shunt", "shunt placement"],
     "laminectomy": ["decompression", "posterior decompression", "laminotomy"],
@@ -170,6 +208,7 @@ ALL_SYNONYMS: Dict[str, List[str]] = {
 # ENHANCED QUERY EXPANSION FUNCTIONS
 # =============================================================================
 
+
 def expand_query(
     query: str,
     max_expansions: int = 5,
@@ -240,7 +279,7 @@ def expand_query(
                 synonym_query = query_lower.replace(term.lower(), synonym.lower())
                 add_expansion(synonym_query)
 
-    return expanded[:max_expansions + 1]  # Limit total expansions
+    return expanded[: max_expansions + 1]  # Limit total expansions
 
 
 def expand_query_simple(query: str, max_expansions: int = 3) -> List[str]:
@@ -264,7 +303,7 @@ def expand_query_simple(query: str, max_expansions: int = 3) -> List[str]:
                 if expanded_query not in [e.lower() for e in expanded]:
                     expanded.append(expanded_query)
 
-    return expanded[:max_expansions + 1]
+    return expanded[: max_expansions + 1]
 
 
 def get_all_terms_for_query(query: str, include_orthographic: bool = True) -> Set[str]:
@@ -386,4 +425,3 @@ def get_monitoring_expansion(acronym: str) -> Dict:
     if acronym_upper in NEUROMONITORING_TERMS:
         return {"term": acronym, **NEUROMONITORING_TERMS[acronym_upper]}
     return {"term": acronym, "full": None, "synonyms": [], "context": []}
-

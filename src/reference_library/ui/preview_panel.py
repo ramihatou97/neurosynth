@@ -1,13 +1,15 @@
 """Preview panel for displaying selected result details."""
-import customtkinter as ctk
-from typing import Optional, Callable
-from pathlib import Path
+
 import subprocess
 import sys
+from pathlib import Path
+from typing import Callable, Optional
 
+import customtkinter as ctk
 from PIL import Image, ImageTk
 
 from reference_library import config
+
 from ..search.result_model import SearchResult
 from .styles import FONTS, PADDING
 
@@ -31,40 +33,31 @@ class PreviewPanel(ctk.CTkFrame):
     def _setup_ui(self):
         """Set up the preview panel UI."""
         # Header
-        ctk.CTkLabel(
-            self,
-            text="Preview",
-            font=FONTS["subheading"]
-        ).pack(anchor="w", padx=PADDING["medium"], pady=PADDING["small"])
+        ctk.CTkLabel(self, text="Preview", font=FONTS["subheading"]).pack(
+            anchor="w", padx=PADDING["medium"], pady=PADDING["small"]
+        )
 
         # Metadata section
         self.metadata_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.metadata_frame.pack(fill="x", padx=PADDING["medium"], pady=PADDING["small"])
+        self.metadata_frame.pack(
+            fill="x", padx=PADDING["medium"], pady=PADDING["small"]
+        )
 
         # Book info
         self.book_label = ctk.CTkLabel(
-            self.metadata_frame,
-            text="Book: -",
-            font=FONTS["body"],
-            anchor="w"
+            self.metadata_frame, text="Book: -", font=FONTS["body"], anchor="w"
         )
         self.book_label.pack(fill="x")
 
         # Chapter info
         self.chapter_label = ctk.CTkLabel(
-            self.metadata_frame,
-            text="Chapter: -",
-            font=FONTS["body"],
-            anchor="w"
+            self.metadata_frame, text="Chapter: -", font=FONTS["body"], anchor="w"
         )
         self.chapter_label.pack(fill="x")
 
         # Page info
         self.page_label = ctk.CTkLabel(
-            self.metadata_frame,
-            text="Page: -",
-            font=FONTS["body"],
-            anchor="w"
+            self.metadata_frame, text="Page: -", font=FONTS["body"], anchor="w"
         )
         self.page_label.pack(fill="x")
 
@@ -74,7 +67,7 @@ class PreviewPanel(ctk.CTkFrame):
             text="",
             font=FONTS["body"],
             anchor="w",
-            text_color="#6c5ce7"
+            text_color="#6c5ce7",
         )
         self.location_label.pack(fill="x")
 
@@ -84,29 +77,24 @@ class PreviewPanel(ctk.CTkFrame):
         )
 
         # Context text
-        ctk.CTkLabel(
-            self,
-            text="Context:",
-            font=FONTS["body"]
-        ).pack(anchor="w", padx=PADDING["medium"])
+        ctk.CTkLabel(self, text="Context:", font=FONTS["body"]).pack(
+            anchor="w", padx=PADDING["medium"]
+        )
 
         # Text box for context
         self.context_text = ctk.CTkTextbox(
-            self,
-            font=FONTS["mono"],
-            wrap="word",
-            height=200
+            self, font=FONTS["mono"], wrap="word", height=200
         )
-        self.context_text.pack(fill="both", expand=True, padx=PADDING["medium"], pady=PADDING["small"])
+        self.context_text.pack(
+            fill="both", expand=True, padx=PADDING["medium"], pady=PADDING["small"]
+        )
 
         # Figures section
         self.figures_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.figures_frame.pack(fill="x", padx=PADDING["medium"], pady=PADDING["small"])
 
         self.figures_header = ctk.CTkLabel(
-            self.figures_frame,
-            text="Figures (0):",
-            font=FONTS["body"]
+            self.figures_frame, text="Figures (0):", font=FONTS["body"]
         )
         self.figures_header.pack(anchor="w")
 
@@ -121,7 +109,7 @@ class PreviewPanel(ctk.CTkFrame):
             font=FONTS["small"],
             text_color="gray",
             wraplength=350,
-            anchor="w"
+            anchor="w",
         )
         self.caption_label.pack(fill="x")
 
@@ -135,7 +123,7 @@ class PreviewPanel(ctk.CTkFrame):
             command=self._open_pdf,
             width=100,
             font=FONTS["body"],
-            state="disabled"
+            state="disabled",
         )
         self.open_btn.pack(side="left", padx=(0, PADDING["small"]))
 
@@ -145,7 +133,7 @@ class PreviewPanel(ctk.CTkFrame):
             command=self._copy_reference,
             width=120,
             font=FONTS["body"],
-            state="disabled"
+            state="disabled",
         )
         self.copy_btn.pack(side="left")
 
@@ -160,9 +148,9 @@ class PreviewPanel(ctk.CTkFrame):
         self.page_label.configure(text=f"Page: {result.page_number}")
 
         # Update match location info
-        match_count = getattr(result, 'match_count', 1)
-        location_icon = getattr(result, 'location_icon', '📄')
-        match_summary = getattr(result, 'match_summary', '')
+        match_count = getattr(result, "match_count", 1)
+        location_icon = getattr(result, "location_icon", "📄")
+        match_summary = getattr(result, "match_summary", "")
         if match_summary:
             self.location_label.configure(text=f"{location_icon} {match_summary}")
         else:
@@ -196,8 +184,7 @@ class PreviewPanel(ctk.CTkFrame):
         # Get figures for this page
         try:
             figures = self.database.get_page_figures(
-                result.pdf_path,
-                result.page_number
+                result.pdf_path, result.page_number
             )
         except Exception as e:
             print(f"Error loading figures: {e}")
@@ -223,7 +210,7 @@ class PreviewPanel(ctk.CTkFrame):
                 self.thumbnail_frame,
                 text=f"+{overflow}",
                 font=FONTS["body"],
-                text_color="gray"
+                text_color="gray",
             )
             overflow_label.pack(side="left", padx=PADDING["small"])
 
@@ -258,9 +245,7 @@ class PreviewPanel(ctk.CTkFrame):
 
             # Create thumbnail container with border
             thumb_container = ctk.CTkFrame(
-                self.thumbnail_frame,
-                fg_color=border_color,
-                corner_radius=4
+                self.thumbnail_frame, fg_color=border_color, corner_radius=4
             )
             thumb_container.pack(side="left", padx=2, pady=2)
 
@@ -270,7 +255,7 @@ class PreviewPanel(ctk.CTkFrame):
                 image=photo,
                 text="",
                 width=THUMB_SIZE[0] + 4,
-                height=THUMB_SIZE[1] + 4
+                height=THUMB_SIZE[1] + 4,
             )
             thumb_label.pack(padx=2, pady=2)
 
@@ -320,6 +305,7 @@ class PreviewPanel(ctk.CTkFrame):
             subprocess.run(["open", image_path])
         elif sys.platform == "win32":  # Windows
             import os
+
             os.startfile(image_path)
         else:  # Linux
             subprocess.run(["xdg-open", image_path])
@@ -347,11 +333,10 @@ class PreviewPanel(ctk.CTkFrame):
             return
 
         pdf_path = self.current_result.pdf_path
-        
+
         if not pdf_path.exists():
             self.caption_label.configure(
-                text=f"Error: PDF not found at {pdf_path}",
-                text_color="red"
+                text=f"Error: PDF not found at {pdf_path}", text_color="red"
             )
             return
 
@@ -361,13 +346,13 @@ class PreviewPanel(ctk.CTkFrame):
                 subprocess.run(["open", "-a", "Preview", str(pdf_path)])
             elif sys.platform == "win32":  # Windows
                 import os
+
                 os.startfile(str(pdf_path))
             else:  # Linux
                 subprocess.run(["xdg-open", str(pdf_path)])
         except Exception as e:
             self.caption_label.configure(
-                text=f"Error opening PDF: {e}",
-                text_color="red"
+                text=f"Error opening PDF: {e}", text_color="red"
             )
 
     def _copy_reference(self):

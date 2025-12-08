@@ -2,7 +2,7 @@
 AI module - Embeddings and synthesis
 """
 
-from .client import AIClient
 from .async_client import AsyncAIClient
+from .client import AIClient
 
 __all__ = ["AIClient", "AsyncAIClient"]

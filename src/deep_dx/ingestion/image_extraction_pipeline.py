@@ -3,28 +3,31 @@ Image Extraction Pipeline
 =========================
 Systematic extraction of visual content from the NeuroLi PDF Library.
 Features:
-- State persistence (Pause/Resume)
-- Smart Filtering (removes icons/artifacts)
-- Metadata Enrichment (Captions, Source linkage)
-- Direct Database Storage
+- AI-Powered Extraction (SmartExtractor)
+- Visual Embedding & Search Indexing (BiomedIngestor)
+- SQL Persistence for Legacy Compatibility
 """
 
-import hashlib
 import json
 import logging
+import sys
 import time
-import uuid
 from pathlib import Path
-from typing import Dict, List, Optional
 
-# 3rd party
-try:
-    import pdfplumber
-except ImportError:
-    pdfplumber = None
+# Add src to path to resolve 'index', 'models', etc.
+sys.path.append(str(Path(__file__).resolve().parents[3] / "src"))
 
 from index.database import Database
 from models import ExtractedImage, ImageType, SourceMetadata
+
+# AI Components
+try:
+    from ingest.smart_extractor import ExtractedFigure, SmartImageExtractor
+    from neurosynth.ai.ingestor import BiomedIngestor
+except ImportError as e:
+    logging.warning(f"AI components missing: {e}")
+    SmartImageExtractor = None
+    BiomedIngestor = None
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("image_pipeline")
@@ -39,10 +42,13 @@ class ImageExtractionPipeline:
         self.state = self._load_state()
         ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 
-        if not pdfplumber:
-            logger.error(
-                "❌ pdfplumber not installed. Please install it: pip install pdfplumber"
-            )
+        # Initialize AI Components
+        if SmartImageExtractor:
+            self.extractor = SmartImageExtractor(str(ASSETS_DIR))
+            self.ingestor = BiomedIngestor()
+        else:
+            self.extractor = None
+            logger.error("❌ SmartExtractor dependencies missing. Pipeline disabled.")
 
     def _load_state(self) -> dict:
         if STATE_FILE.exists():
@@ -59,11 +65,12 @@ class ImageExtractionPipeline:
 
     def run(self, max_docs: int = None):
         """Run the extraction pipeline"""
-        if not pdfplumber:
+        if not self.extractor:
+            logger.error("Pipeline cannot run without SmartExtractor.")
             return
 
         sources = self.db.get_all_sources()
-        logger.info(f"📸 Starting Image Extraction on {len(sources)} sources")
+        logger.info(f"📸 Starting AI Image Extraction on {len(sources)} sources")
 
         count = 0
         for source in sources:
@@ -73,24 +80,6 @@ class ImageExtractionPipeline:
             if max_docs and count >= max_docs:
                 logger.info(f"🛑 Reached max_docs limit ({max_docs}). Pausing.")
                 break
-
-            # Idle Check
-            activity_file = Path(".app_activity")
-            if activity_file.exists():
-                try:
-                    last_active = activity_file.stat().st_mtime
-                    if time.time() - last_active < 60:  # 60s cooldown
-                        logger.info(
-                            "⏳ App is active. Pausing background extraction..."
-                        )
-                        while time.time() - last_active < 60:
-                            time.sleep(5)
-                            # Refresh timestamp check
-                            if activity_file.exists():
-                                last_active = activity_file.stat().st_mtime
-                        logger.info("▶️ App idle. Resuming extraction.")
-                except Exception:
-                    pass
 
             logger.info(f"Processing: {source.title}...")
             self.state["current_source"] = source.id
@@ -104,91 +93,69 @@ class ImageExtractionPipeline:
                 count += 1
             except Exception as e:
                 logger.error(f"Failed to process {source.title}: {e}")
-                # Don't mark as processed, so we retry next time? Or mark as failed?
-                # For now, just log and continue to next
                 continue
 
     def _process_source(self, source: SourceMetadata):
-        """Extract images from a single PDF"""
-        pdf_path = source.file_path
+        """Extract images from a single PDF using AI Pipeline"""
+        pdf_path = Path(source.file_path)
 
-        # Check if file exists (it might be a 'NeuroLi copy' path issue)
-        # We need to resolve it effectively.
-        # Ideally MetadataManager helper would be used, but let's try direct first.
-        if not str(pdf_path).startswith("/"):
-            # Relative path?
-            pass
-
-        # Simple hack: if file not found, try to find it in common locations?
-        # Assuming path in DB is correct absolute path from ingestion
-        if not Path(pdf_path).exists():
+        if not pdf_path.exists():
             logger.warning(f"⚠️ File not found: {pdf_path}")
             return
 
-        images_found = 0
-        with pdfplumber.open(pdf_path) as pdf:
-            for page_num, page in enumerate(pdf.pages, 1):
-                # pdfplumber images
-                for img in page.images:
-                    # Filter tiny images (icons etc)
-                    if img["width"] < 100 or img["height"] < 100:
-                        continue
+        # 1. Extract Figures (Smart Mode)
+        figures = self.extractor.process_pdf(str(pdf_path))
+        if not figures:
+            logger.info("   -> No relevant images found.")
+            return
 
-                    # Extract high-res?
-                    # pdfplumber extracts as PIL Image
-                    try:
-                        # bounding box
-                        x0, top, x1, bottom = (
-                            img["x0"],
-                            img["top"],
-                            img["x1"],
-                            img["bottom"],
-                        )
+        logger.info(f"   -> Found {len(figures)} relevant images.")
 
-                        # Clamp to page bounds to avoid errors
-                        x0 = max(0, x0)
-                        top = max(0, top)
-                        x1 = min(page.width, x1)
-                        bottom = min(page.height, bottom)
+        # 2. Ingest into AI Engine (Vector DB)
+        # This creates the embeddings and searchable index
+        logger.info("   -> Embedding and indexing...")
+        self.ingestor.ingest_figures(figures)
 
-                        # Validate dimensions after clamping
-                        if (x1 - x0) < 50 or (bottom - top) < 50:
-                            continue
+        # 3. Persist to SQL Database (Old formatted records)
+        # We need this for the current UI/Synthesis logic that reads from SQL
+        saved_count = 0
+        for fig in figures:
+            try:
+                db_image = self._convert_to_db_model(fig, source.id)
+                self.db.insert_image(db_image)
+                saved_count += 1
+            except Exception as e:
+                logger.warning(f"SQL insert failed for {fig.image_filename}: {e}")
 
-                        # crop
-                        cropped = page.crop((x0, top, x1, bottom)).to_image(
-                            resolution=300
-                        )
+        self.state["images_count"] += saved_count
+        logger.info(f"   -> Saved {saved_count} images to SQL.")
 
-                        # Generate ID
-                        img_id = str(uuid.uuid4())
-                        filename = f"{source.id}_{page_num}_{img_id[:8]}.png"
-                        save_path = ASSETS_DIR / filename
+    def _convert_to_db_model(
+        self, fig: ExtractedFigure, source_id: str
+    ) -> ExtractedImage:
+        """Convert ExtractedFigure to ExtractedImage for SQL storage"""
+        # Simple heuristic mapping for image type
+        caption_lower = fig.caption.lower()
+        img_type = ImageType.ILLUSTRATION
 
-                        # Save to disk
-                        cropped.save(save_path)
+        if "mri" in caption_lower or "ct" in caption_lower:
+            img_type = ImageType.IMAGING_MRI
+        elif "intraoperative" in caption_lower or "view" in caption_lower:
+            img_type = ImageType.SURGICAL_PHOTO
+        elif "anatomy" in caption_lower:
+            img_type = ImageType.ANATOMICAL_DIAGRAM
 
-                        # Create DB Entry
-                        db_image = ExtractedImage(
-                            id=img_id,
-                            source_id=source.id,
-                            page=page_num,
-                            file_path=save_path.absolute(),
-                            caption=f"Image from p.{page_num}",  # Placeholder for now
-                            surrounding_text="",  # Placeholder
-                            image_type=ImageType.ILLUSTRATION,
-                            width=int(img["width"]),
-                            height=int(img["height"]),
-                        )
-
-                        self.db.insert_image(db_image)
-                        images_found += 1
-
-                    except Exception as e:
-                        logger.warning(f"Failed to extract image on p.{page_num}: {e}")
-
-        logger.info(f"   -> Extracted {images_found} images.")
-        self.state["images_count"] += images_found
+        return ExtractedImage(
+            id=fig.image_filename,  # Using filename as ID for simplicity
+            source_id=source_id,
+            page=fig.page_num,
+            file_path=fig.local_path,
+            caption=fig.caption,
+            surrounding_text=fig.context,
+            image_type=img_type,
+            width=0,  # Dimensions not available without re-reading
+            height=0,
+        )
 
 
 if __name__ == "__main__":

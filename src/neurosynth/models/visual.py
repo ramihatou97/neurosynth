@@ -119,6 +119,21 @@ class VisualElement:
     is_procedural: bool = False  # Whether part of procedural sequence
     procedural_confidence: float = 0.0  # 0-1 confidence score
 
+    # Phase 4: Output Placement (set during figure resolution, not extraction)
+    # These fields track where/how this image appears in synthesized output
+    output_anchor_paragraph: int | None = None  # Paragraph index in synthesized text
+    output_placement: str = (
+        "unassigned"  # inline_after, float_top, subfigure, plate, unassigned
+    )
+    output_match_method: str | None = (
+        None  # id_match, semantic, procedural, keyword, priority
+    )
+    output_match_confidence: float = 0.0  # 0-1 confidence in placement decision
+    resolved_from_placeholder: str | None = None  # Original [FIGURE: X] tag if resolved
+    paragraph_similarity: float = 0.0  # Embedding similarity to anchor paragraph
+    subfigure_group_id: str | None = None  # Group ID for subfigure sets
+    subfigure_label: str | None = None  # Label within group: "(a)", "(b)", etc.
+
     def __post_init__(self):
         """Validate and normalize fields after initialization."""
         if isinstance(self.image_path, str):
@@ -209,6 +224,15 @@ class VisualElement:
             "step_label": self.step_label,
             "is_procedural": self.is_procedural,
             "procedural_confidence": self.procedural_confidence,
+            # Output placement fields
+            "output_anchor_paragraph": self.output_anchor_paragraph,
+            "output_placement": self.output_placement,
+            "output_match_method": self.output_match_method,
+            "output_match_confidence": self.output_match_confidence,
+            "resolved_from_placeholder": self.resolved_from_placeholder,
+            "paragraph_similarity": self.paragraph_similarity,
+            "subfigure_group_id": self.subfigure_group_id,
+            "subfigure_label": self.subfigure_label,
         }
         if include_embedding and self.visual_embedding is not None:
             data["visual_embedding"] = self.visual_embedding.tolist()
@@ -243,6 +267,15 @@ class VisualElement:
             step_label=data.get("step_label"),
             is_procedural=data.get("is_procedural", False),
             procedural_confidence=data.get("procedural_confidence", 0.0),
+            # Output placement fields
+            output_anchor_paragraph=data.get("output_anchor_paragraph"),
+            output_placement=data.get("output_placement", "unassigned"),
+            output_match_method=data.get("output_match_method"),
+            output_match_confidence=data.get("output_match_confidence", 0.0),
+            resolved_from_placeholder=data.get("resolved_from_placeholder"),
+            paragraph_similarity=data.get("paragraph_similarity", 0.0),
+            subfigure_group_id=data.get("subfigure_group_id"),
+            subfigure_label=data.get("subfigure_label"),
         )
         # Restore visual embedding if present
         if "visual_embedding" in data and data["visual_embedding"] is not None:

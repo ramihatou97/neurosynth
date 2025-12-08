@@ -7,8 +7,9 @@ import json
 from typing import Any, Dict, List, Optional
 
 from anthropic import Anthropic
-from deep_dx.config import get_deepdx_settings
 from neo4j import GraphDatabase
+
+from deep_dx.config import get_deepdx_settings
 from neurosynth.config import get_settings as get_sys_settings
 
 

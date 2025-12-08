@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 import fitz  # PyMuPDF
+
 from config import settings
 from models import DocumentType, ProcessedDocument, Section, SourceMetadata, Specialty
 

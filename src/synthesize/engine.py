@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Dict, List, Optional, Set
 
 import numpy as np
+
 from ai.client import AIClient
 from config import settings
 from index.database import Database

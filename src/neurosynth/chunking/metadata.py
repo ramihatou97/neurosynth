@@ -105,7 +105,9 @@ class ChunkMetadataExtractor:
         # Ensure key_concepts is always a list
         key_concepts_raw: str | list[str] = result.get("key_concepts", [])
         key_concepts = (
-            [key_concepts_raw] if isinstance(key_concepts_raw, str) else key_concepts_raw
+            [key_concepts_raw]
+            if isinstance(key_concepts_raw, str)
+            else key_concepts_raw
         )
 
         metadata = ChunkMetadata(

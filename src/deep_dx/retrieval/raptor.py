@@ -8,9 +8,10 @@ from typing import Dict, List, Tuple
 import faiss
 import numpy as np
 from anthropic import Anthropic
+from sklearn.cluster import KMeans  # Robust alternative
+
 from deep_dx.retrieval.indexer import DeepDxIndexer
 from neurosynth.config import get_settings as get_sys_settings
-from sklearn.cluster import KMeans  # Robust alternative
 
 
 class RaptorIndexer:

@@ -1,12 +1,15 @@
 """Rich hierarchical results tree with inline thumbnails and expandable context."""
-import customtkinter as ctk
-from tkinter import ttk, Canvas
-from typing import Callable, Optional
+
 from pathlib import Path
+from tkinter import Canvas, ttk
+from typing import Callable, Optional
+
+import customtkinter as ctk
 from PIL import Image, ImageTk
 
 from reference_library import config
-from ..search.result_model import SearchResult, ChapterResult, MatchType
+
+from ..search.result_model import ChapterResult, MatchType, SearchResult
 from .styles import FONTS, PADDING, RICH_PREVIEW, RICH_PREVIEW_COLORS
 
 
@@ -17,11 +20,13 @@ class RichResultsTree(ctk.CTkFrame):
         self,
         parent,
         on_select: Callable[[SearchResult], None],
-        on_selection_change: Optional[Callable[[list[SearchResult | ChapterResult]], None]] = None,
+        on_selection_change: Optional[
+            Callable[[list[SearchResult | ChapterResult]], None]
+        ] = None,
         on_extract_images: Optional[Callable[[SearchResult], None]] = None,
         on_index_text: Optional[Callable[[SearchResult], None]] = None,
         database=None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(parent, **kwargs)
         self.on_select = on_select
@@ -57,18 +62,13 @@ class RichResultsTree(ctk.CTkFrame):
         header_frame.pack(fill="x", padx=PADDING["small"], pady=PADDING["small"])
 
         self.results_label = ctk.CTkLabel(
-            header_frame,
-            text="Results (0 matches)",
-            font=FONTS["subheading"]
+            header_frame, text="Results (0 matches)", font=FONTS["subheading"]
         )
         self.results_label.pack(side="left")
 
         # Selection count label
         self.selection_label = ctk.CTkLabel(
-            header_frame,
-            text="",
-            font=FONTS["small"],
-            text_color="gray"
+            header_frame, text="", font=FONTS["small"], text_color="gray"
         )
         self.selection_label.pack(side="left", padx=(10, 0))
 
@@ -78,7 +78,7 @@ class RichResultsTree(ctk.CTkFrame):
             text="Rich View",
             font=FONTS["small"],
             command=self._toggle_mode,
-            width=80
+            width=80,
         )
         self.mode_toggle.pack(side="right", padx=PADDING["small"])
         self.mode_toggle.select()  # Start in rich mode
@@ -90,7 +90,7 @@ class RichResultsTree(ctk.CTkFrame):
             command=self._expand_all,
             width=80,
             height=24,
-            font=FONTS["small"]
+            font=FONTS["small"],
         ).pack(side="right", padx=2)
 
         ctk.CTkButton(
@@ -99,7 +99,7 @@ class RichResultsTree(ctk.CTkFrame):
             command=self._collapse_all,
             width=70,
             height=24,
-            font=FONTS["small"]
+            font=FONTS["small"],
         ).pack(side="right", padx=2)
 
         # Selection buttons
@@ -109,7 +109,7 @@ class RichResultsTree(ctk.CTkFrame):
             command=self._clear_selection,
             width=60,
             height=24,
-            font=FONTS["small"]
+            font=FONTS["small"],
         ).pack(side="right", padx=2)
 
         ctk.CTkButton(
@@ -118,7 +118,7 @@ class RichResultsTree(ctk.CTkFrame):
             command=self._select_all,
             width=80,
             height=24,
-            font=FONTS["small"]
+            font=FONTS["small"],
         ).pack(side="right", padx=2)
 
         # Create scrollable content area
@@ -130,36 +130,32 @@ class RichResultsTree(ctk.CTkFrame):
         # Use a frame with canvas for custom scrolling
         container = ctk.CTkFrame(self, fg_color="transparent")
         container.pack(fill="both", expand=True, padx=PADDING["small"])
-        
+
         # Create canvas with scrollbar
-        self.canvas = Canvas(
-            container,
-            bg="#2b2b2b",
-            highlightthickness=0
+        self.canvas = Canvas(container, bg="#2b2b2b", highlightthickness=0)
+        self.scrollbar = ttk.Scrollbar(
+            container, orient="vertical", command=self.canvas.yview
         )
-        self.scrollbar = ttk.Scrollbar(container, orient="vertical", command=self.canvas.yview)
-        
+
         # Scrollable frame inside canvas
         self.results_frame = ctk.CTkFrame(self.canvas, fg_color="#2b2b2b")
-        
+
         self.canvas_window = self.canvas.create_window(
-            (0, 0),
-            window=self.results_frame,
-            anchor="nw"
+            (0, 0), window=self.results_frame, anchor="nw"
         )
-        
+
         # Configure scrolling
         self.results_frame.bind("<Configure>", self._on_frame_configure)
         self.canvas.bind("<Configure>", self._on_canvas_configure)
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
-        
+
         # Mouse wheel scrolling
         self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
-        
+
         # Pack widgets
         self.canvas.pack(side="left", fill="both", expand=True)
         self.scrollbar.pack(side="right", fill="y")
-        
+
         # Track result item widgets
         self._result_widgets: dict[str, ctk.CTkFrame] = {}
         self._series_widgets: dict[str, ctk.CTkFrame] = {}
@@ -235,7 +231,9 @@ class RichResultsTree(ctk.CTkFrame):
         self._item_parents[item_id] = chapter.book_series
 
         # Create the chapter result widget (displayed directly under series)
-        chapter_widget = self._create_chapter_result_widget(series_frame, item_id, chapter)
+        chapter_widget = self._create_chapter_result_widget(
+            series_frame, item_id, chapter
+        )
         self._result_widgets[item_id] = chapter_widget
 
         # Update count
@@ -245,10 +243,13 @@ class RichResultsTree(ctk.CTkFrame):
         # Update series count
         if chapter.book_series in self._series_widgets:
             series_frame = self._series_widgets[chapter.book_series]
-            if hasattr(series_frame, '_count_label'):
+            if hasattr(series_frame, "_count_label"):
                 # Count chapters in this series
-                count = sum(1 for c in self.chapter_results.values()
-                           if c.book_series == chapter.book_series)
+                count = sum(
+                    1
+                    for c in self.chapter_results.values()
+                    if c.book_series == chapter.book_series
+                )
                 series_frame._count_label.configure(text=f"({count} chapters)")
 
     def _create_chapter_result_widget(
@@ -256,13 +257,15 @@ class RichResultsTree(ctk.CTkFrame):
     ) -> ctk.CTkFrame:
         """Create a widget displaying a chapter-level result."""
         # Get content frame from series
-        content_frame = parent._content_frame if hasattr(parent, '_content_frame') else parent
+        content_frame = (
+            parent._content_frame if hasattr(parent, "_content_frame") else parent
+        )
 
         # Create chapter frame
         frame = ctk.CTkFrame(
             content_frame,
             fg_color=chapter.match_type.color if chapter.is_dedicated else "#2a2a2a",
-            corner_radius=4
+            corner_radius=4,
         )
         frame.pack(fill="x", padx=8, pady=2)
 
@@ -277,25 +280,18 @@ class RichResultsTree(ctk.CTkFrame):
             width=20,
             checkbox_width=18,
             checkbox_height=18,
-            command=lambda: self._toggle_selection(item_id, checkbox.get())
+            command=lambda: self._toggle_selection(item_id, checkbox.get()),
         )
         checkbox.pack(side="left")
         frame._checkbox = checkbox
 
         # Match type icon
-        icon_label = ctk.CTkLabel(
-            header,
-            text=chapter.display_icon,
-            font=("", 16)
-        )
+        icon_label = ctk.CTkLabel(header, text=chapter.display_icon, font=("", 16))
         icon_label.pack(side="left", padx=(4, 8))
 
         # Chapter title
         title_label = ctk.CTkLabel(
-            header,
-            text=chapter.display_name,
-            font=FONTS["body_bold"],
-            cursor="hand2"
+            header, text=chapter.display_name, font=FONTS["body_bold"], cursor="hand2"
         )
         title_label.pack(side="left", fill="x", expand=True, anchor="w")
         title_label.bind("<Button-1>", lambda e: self._on_chapter_click(item_id))
@@ -318,13 +314,17 @@ class RichResultsTree(ctk.CTkFrame):
             fg_color=badge_color,
             corner_radius=8,
             padx=6,
-            pady=2
+            pady=2,
         )
         badge.pack(side="right", padx=4)
 
         # Authority badge (if from primary source)
-        if hasattr(chapter, 'authority_score') and chapter.authority_score >= 80:
-            source_text = f"⭐ {chapter.index_source}" if hasattr(chapter, 'index_source') and chapter.index_source else "⭐ Primary"
+        if hasattr(chapter, "authority_score") and chapter.authority_score >= 80:
+            source_text = (
+                f"⭐ {chapter.index_source}"
+                if hasattr(chapter, "index_source") and chapter.index_source
+                else "⭐ Primary"
+            )
             authority_badge = ctk.CTkLabel(
                 header,
                 text=source_text,
@@ -332,15 +332,19 @@ class RichResultsTree(ctk.CTkFrame):
                 fg_color="#f39c12",
                 corner_radius=8,
                 padx=6,
-                pady=2
+                pady=2,
             )
             authority_badge.pack(side="right", padx=2)
 
         # Section type badge (if section detected)
-        if hasattr(chapter, 'matched_sections') and chapter.matched_sections:
+        if hasattr(chapter, "matched_sections") and chapter.matched_sections:
             # Get the first matched section type
             first_section = chapter.matched_sections[0]
-            section_type = first_section.section_type if hasattr(first_section, 'section_type') else str(first_section)
+            section_type = (
+                first_section.section_type
+                if hasattr(first_section, "section_type")
+                else str(first_section)
+            )
             section_badge = ctk.CTkLabel(
                 header,
                 text=f"📑 {section_type}",
@@ -348,7 +352,7 @@ class RichResultsTree(ctk.CTkFrame):
                 fg_color="#9b59b6",
                 corner_radius=8,
                 padx=6,
-                pady=2
+                pady=2,
             )
             section_badge.pack(side="right", padx=2)
 
@@ -359,7 +363,7 @@ class RichResultsTree(ctk.CTkFrame):
             width=24,
             height=24,
             font=FONTS["small"],
-            command=lambda: self._toggle_chapter_expand(item_id, frame)
+            command=lambda: self._toggle_chapter_expand(item_id, frame),
         )
         expand_btn.pack(side="right", padx=2)
         frame._expand_btn = expand_btn
@@ -409,7 +413,9 @@ class RichResultsTree(ctk.CTkFrame):
         self._item_figures[item_id] = figures
 
         # Create the result widget
-        result_widget = self._create_result_widget(chapter_frame, item_id, result, figures)
+        result_widget = self._create_result_widget(
+            chapter_frame, item_id, result, figures
+        )
         self._result_widgets[item_id] = result_widget
 
         self._update_count(len(self.results) + len(self.chapter_results))
@@ -422,7 +428,9 @@ class RichResultsTree(ctk.CTkFrame):
         display_name = config.KNOWN_SERIES.get(series_name, series_name)
 
         # Create series frame
-        series_frame = ctk.CTkFrame(self.results_frame, fg_color="#1e1e1e", corner_radius=6)
+        series_frame = ctk.CTkFrame(
+            self.results_frame, fg_color="#1e1e1e", corner_radius=6
+        )
         series_frame.pack(fill="x", pady=2, padx=2)
 
         # Series header
@@ -431,27 +439,21 @@ class RichResultsTree(ctk.CTkFrame):
 
         # Collapse button
         collapse_btn = ctk.CTkLabel(
-            header,
-            text="▼",
-            font=FONTS["body"],
-            cursor="hand2"
+            header, text="▼", font=FONTS["body"], cursor="hand2"
         )
         collapse_btn.pack(side="left")
-        collapse_btn.bind("<Button-1>", lambda e, sf=series_frame: self._toggle_series(sf))
+        collapse_btn.bind(
+            "<Button-1>", lambda e, sf=series_frame: self._toggle_series(sf)
+        )
 
         # Series title
-        ctk.CTkLabel(
-            header,
-            text=f"📚 {display_name}",
-            font=FONTS["body_bold"]
-        ).pack(side="left", padx=8)
+        ctk.CTkLabel(header, text=f"📚 {display_name}", font=FONTS["body_bold"]).pack(
+            side="left", padx=8
+        )
 
         # Series count (updated later)
         count_label = ctk.CTkLabel(
-            header,
-            text="(0)",
-            font=FONTS["small"],
-            text_color="gray"
+            header, text="(0)", font=FONTS["small"], text_color="gray"
         )
         count_label.pack(side="left")
         series_frame._count_label = count_label
@@ -476,7 +478,9 @@ class RichResultsTree(ctk.CTkFrame):
             series_frame._content_frame.pack_forget()
             series_frame._is_collapsed = True
 
-    def _get_or_create_chapter(self, series_frame: ctk.CTkFrame, chapter_key: str, result: SearchResult) -> ctk.CTkFrame:
+    def _get_or_create_chapter(
+        self, series_frame: ctk.CTkFrame, chapter_key: str, result: SearchResult
+    ) -> ctk.CTkFrame:
         """Get or create a chapter section within a series."""
         if chapter_key in self._chapter_widgets:
             return self._chapter_widgets[chapter_key]
@@ -492,10 +496,7 @@ class RichResultsTree(ctk.CTkFrame):
         header.pack(fill="x", padx=6, pady=3)
 
         ctk.CTkLabel(
-            header,
-            text=f"📄 {result.display_name}",
-            font=FONTS["body"],
-            anchor="w"
+            header, text=f"📄 {result.display_name}", font=FONTS["body"], anchor="w"
         ).pack(side="left", fill="x", expand=True)
 
         # Results content area
@@ -513,7 +514,9 @@ class RichResultsTree(ctk.CTkFrame):
         if not self.database:
             return []
         try:
-            figures = self.database.get_page_figures(result.pdf_path, result.page_number)
+            figures = self.database.get_page_figures(
+                result.pdf_path, result.page_number
+            )
             return figures
         except Exception:
             return []
@@ -523,13 +526,15 @@ class RichResultsTree(ctk.CTkFrame):
         parent: ctk.CTkFrame,
         item_id: str,
         result: SearchResult,
-        figures: list[dict]
+        figures: list[dict],
     ) -> ctk.CTkFrame:
         """Create a result widget with thumbnails and expandable context."""
         results_content = parent._results_content
 
         # Main result frame
-        result_frame = ctk.CTkFrame(results_content, fg_color="#2a2a2a", corner_radius=4)
+        result_frame = ctk.CTkFrame(
+            results_content, fg_color="#2a2a2a", corner_radius=4
+        )
         result_frame.pack(fill="x", pady=1)
 
         # Header row (always visible)
@@ -543,31 +548,30 @@ class RichResultsTree(ctk.CTkFrame):
             text="",
             variable=check_var,
             width=20,
-            command=lambda: self._toggle_selection(item_id, check_var.get())
+            command=lambda: self._toggle_selection(item_id, check_var.get()),
         )
         checkbox.pack(side="left")
         result_frame._checkbox = checkbox
         result_frame._check_var = check_var
 
         # Location icon (shows where match was found)
-        location_icon = result.location_icon if hasattr(result, 'location_icon') else "📄"
-        ctk.CTkLabel(
-            header_row,
-            text=location_icon,
-            font=FONTS["body"],
-            width=24
-        ).pack(side="left")
+        location_icon = (
+            result.location_icon if hasattr(result, "location_icon") else "📄"
+        )
+        ctk.CTkLabel(header_row, text=location_icon, font=FONTS["body"], width=24).pack(
+            side="left"
+        )
 
         # Page number
         ctk.CTkLabel(
             header_row,
             text=f"p.{result.page_number}",
             font=FONTS["body_bold"],
-            width=45
+            width=45,
         ).pack(side="left", padx=4)
 
         # Match count badge (if multiple matches on page)
-        match_count = getattr(result, 'match_count', 1)
+        match_count = getattr(result, "match_count", 1)
         if match_count > 1:
             ctk.CTkLabel(
                 header_row,
@@ -575,16 +579,13 @@ class RichResultsTree(ctk.CTkFrame):
                 font=FONTS["small"],
                 fg_color="#6c5ce7",
                 corner_radius=3,
-                padx=4
+                padx=4,
             ).pack(side="left", padx=2)
 
         # Match text preview
-        preview_text = result.match_text[:RICH_PREVIEW["context_preview_chars"]]
+        preview_text = result.match_text[: RICH_PREVIEW["context_preview_chars"]]
         text_label = ctk.CTkLabel(
-            header_row,
-            text=preview_text + "...",
-            font=FONTS["body"],
-            anchor="w"
+            header_row, text=preview_text + "...", font=FONTS["body"], anchor="w"
         )
         text_label.pack(side="left", fill="x", expand=True)
 
@@ -597,7 +598,7 @@ class RichResultsTree(ctk.CTkFrame):
                 font=FONTS["small"],
                 fg_color="#3498db",
                 corner_radius=3,
-                padx=6
+                padx=6,
             )
             fig_badge.pack(side="right", padx=4)
 
@@ -608,7 +609,7 @@ class RichResultsTree(ctk.CTkFrame):
             width=24,
             height=24,
             font=FONTS["small"],
-            command=lambda: self._toggle_expand(item_id, result_frame)
+            command=lambda: self._toggle_expand(item_id, result_frame),
         )
         expand_btn.pack(side="right", padx=2)
         result_frame._expand_btn = expand_btn
@@ -622,13 +623,17 @@ class RichResultsTree(ctk.CTkFrame):
             self._add_thumbnail_row(result_frame, item_id, figures)
 
         # Expandable context area (initially hidden)
-        context_frame = ctk.CTkFrame(result_frame, fg_color=RICH_PREVIEW_COLORS["context_bg"])
+        context_frame = ctk.CTkFrame(
+            result_frame, fg_color=RICH_PREVIEW_COLORS["context_bg"]
+        )
         result_frame._context_frame = context_frame
         result_frame._is_expanded = False
 
         return result_frame
 
-    def _add_thumbnail_row(self, result_frame: ctk.CTkFrame, item_id: str, figures: list[dict]):
+    def _add_thumbnail_row(
+        self, result_frame: ctk.CTkFrame, item_id: str, figures: list[dict]
+    ):
         """Add a row of inline thumbnails to a result."""
         thumb_row = ctk.CTkFrame(result_frame, fg_color="transparent")
         thumb_row.pack(fill="x", padx=50, pady=(0, 4))
@@ -654,7 +659,9 @@ class RichResultsTree(ctk.CTkFrame):
                 border_color = config.IMAGE_TYPE_COLORS.get(img_type, "#444444")
 
                 # Create thumbnail container
-                thumb_container = ctk.CTkFrame(thumb_row, fg_color=border_color, corner_radius=3)
+                thumb_container = ctk.CTkFrame(
+                    thumb_row, fg_color=border_color, corner_radius=3
+                )
                 thumb_container.pack(side="left", padx=2)
 
                 # Thumbnail label
@@ -663,7 +670,7 @@ class RichResultsTree(ctk.CTkFrame):
                     image=photo,
                     text="",
                     width=thumb_size[0] + 2,
-                    height=thumb_size[1] + 2
+                    height=thumb_size[1] + 2,
                 )
                 thumb_label.pack(padx=1, pady=1)
 
@@ -680,10 +687,7 @@ class RichResultsTree(ctk.CTkFrame):
         if len(figures) > max_thumbs:
             overflow = len(figures) - max_thumbs
             ctk.CTkLabel(
-                thumb_row,
-                text=f"+{overflow}",
-                font=FONTS["small"],
-                text_color="gray"
+                thumb_row, text=f"+{overflow}", font=FONTS["small"], text_color="gray"
             ).pack(side="left", padx=4)
 
     def _toggle_expand(self, item_id: str, result_frame: ctk.CTkFrame):
@@ -714,7 +718,11 @@ class RichResultsTree(ctk.CTkFrame):
             self._expanded_items.discard(item_id)
         else:
             # Expand
-            chapter = chapter_frame._chapter if hasattr(chapter_frame, '_chapter') else self.chapter_results.get(item_id)
+            chapter = (
+                chapter_frame._chapter
+                if hasattr(chapter_frame, "_chapter")
+                else self.chapter_results.get(item_id)
+            )
             if chapter:
                 self._populate_chapter_context(chapter_frame._context_frame, chapter)
             chapter_frame._context_frame.pack(fill="x", padx=6, pady=(0, 4))
@@ -722,7 +730,9 @@ class RichResultsTree(ctk.CTkFrame):
             chapter_frame._is_expanded = True
             self._expanded_items.add(item_id)
 
-    def _populate_chapter_context(self, context_frame: ctk.CTkFrame, chapter: ChapterResult):
+    def _populate_chapter_context(
+        self, context_frame: ctk.CTkFrame, chapter: ChapterResult
+    ):
         """Populate the expanded context area for a chapter result."""
         # Clear previous content
         for widget in context_frame.winfo_children():
@@ -734,7 +744,7 @@ class RichResultsTree(ctk.CTkFrame):
             font=FONTS["context_preview"],
             wrap="word",
             height=80,
-            fg_color="#1a1a1a"
+            fg_color="#1a1a1a",
         )
         context_text.pack(fill="x", padx=4, pady=4)
 
@@ -752,7 +762,9 @@ class RichResultsTree(ctk.CTkFrame):
         context_text.insert("1.0", text)
         context_text.configure(state="disabled")
 
-    def _populate_expanded_context(self, context_frame: ctk.CTkFrame, result: SearchResult):
+    def _populate_expanded_context(
+        self, context_frame: ctk.CTkFrame, result: SearchResult
+    ):
         """Populate the expanded context area with full text."""
         # Clear previous content
         for widget in context_frame.winfo_children():
@@ -764,7 +776,7 @@ class RichResultsTree(ctk.CTkFrame):
             font=FONTS["context_preview"],
             wrap="word",
             height=100,
-            fg_color="#1a1a1a"
+            fg_color="#1a1a1a",
         )
         context_text.pack(fill="x", padx=4, pady=4)
 
@@ -790,6 +802,7 @@ class RichResultsTree(ctk.CTkFrame):
             subprocess.run(["open", image_path])
         elif sys.platform == "win32":
             import os
+
             os.startfile(image_path)
         else:
             subprocess.run(["xdg-open", image_path])
@@ -816,7 +829,7 @@ class RichResultsTree(ctk.CTkFrame):
             self.selected_items.add(item_id)
             if item_id in self._result_widgets:
                 widget = self._result_widgets[item_id]
-                if hasattr(widget, '_check_var'):
+                if hasattr(widget, "_check_var"):
                     widget._check_var.set(True)
 
         # Select chapter-level results
@@ -824,7 +837,7 @@ class RichResultsTree(ctk.CTkFrame):
             self.selected_items.add(item_id)
             if item_id in self._result_widgets:
                 widget = self._result_widgets[item_id]
-                if hasattr(widget, '_checkbox'):
+                if hasattr(widget, "_checkbox"):
                     widget._checkbox.select()
 
         self._update_selection_label()
@@ -836,9 +849,9 @@ class RichResultsTree(ctk.CTkFrame):
             if item_id in self._result_widgets:
                 widget = self._result_widgets[item_id]
                 # Handle both page-level (_check_var) and chapter-level (_checkbox)
-                if hasattr(widget, '_check_var'):
+                if hasattr(widget, "_check_var"):
                     widget._check_var.set(False)
-                if hasattr(widget, '_checkbox'):
+                if hasattr(widget, "_checkbox"):
                     widget._checkbox.deselect()
 
         self.selected_items.clear()
@@ -865,7 +878,7 @@ class RichResultsTree(ctk.CTkFrame):
     def _expand_all(self):
         """Expand all result contexts (page-level and chapter-level)."""
         for item_id, widget in self._result_widgets.items():
-            if hasattr(widget, '_is_expanded') and not widget._is_expanded:
+            if hasattr(widget, "_is_expanded") and not widget._is_expanded:
                 # Use appropriate toggle based on result type
                 if item_id in self.chapter_results:
                     self._toggle_chapter_expand(item_id, widget)
@@ -875,7 +888,7 @@ class RichResultsTree(ctk.CTkFrame):
     def _collapse_all(self):
         """Collapse all result contexts (page-level and chapter-level)."""
         for item_id, widget in self._result_widgets.items():
-            if hasattr(widget, '_is_expanded') and widget._is_expanded:
+            if hasattr(widget, "_is_expanded") and widget._is_expanded:
                 # Use appropriate toggle based on result type
                 if item_id in self.chapter_results:
                     self._toggle_chapter_expand(item_id, widget)
@@ -888,7 +901,7 @@ class RichResultsTree(ctk.CTkFrame):
 
         # Find and remove existing thumbnail row
         for child in widget.winfo_children():
-            if hasattr(child, '_is_thumb_row'):
+            if hasattr(child, "_is_thumb_row"):
                 child.destroy()
                 break
 
@@ -944,7 +957,9 @@ class RichResultsTree(ctk.CTkFrame):
         self._notify_selection_change()
         return selected_ids
 
-    def smart_select_high_confidence(self, threshold: float = 0.8) -> list[str]:  # noqa: ARG002
+    def smart_select_high_confidence(
+        self, threshold: float = 0.8
+    ) -> list[str]:  # noqa: ARG002
         """Select first 20 results including chapters (threshold kept for API compatibility)."""
         self._clear_selection()
         selected_ids = []
@@ -1001,10 +1016,10 @@ class RichResultsTree(ctk.CTkFrame):
             if item_id in self._result_widgets:
                 widget = self._result_widgets[item_id]
                 # Handle page-level results (use _check_var)
-                if hasattr(widget, '_check_var'):
+                if hasattr(widget, "_check_var"):
                     widget._check_var.set(True)
                 # Handle chapter-level results (use _checkbox)
-                elif hasattr(widget, '_checkbox'):
+                elif hasattr(widget, "_checkbox"):
                     widget._checkbox.select()
 
     # ==================== Context Menu ====================
@@ -1012,9 +1027,14 @@ class RichResultsTree(ctk.CTkFrame):
     def _create_context_menu(self):
         """Create the right-click context menu."""
         import tkinter as tk
+
         self.context_menu = tk.Menu(self, tearoff=0)
-        self.context_menu.add_command(label="Extract Images from PDF", command=self._handle_extract_images)
-        self.context_menu.add_command(label="Index Text (Background)", command=self._handle_index_text)
+        self.context_menu.add_command(
+            label="Extract Images from PDF", command=self._handle_extract_images
+        )
+        self.context_menu.add_command(
+            label="Index Text (Background)", command=self._handle_index_text
+        )
         self.context_menu.add_separator()
         self.context_menu.add_command(label="Open PDF", command=self._handle_open_pdf)
 
@@ -1050,4 +1070,3 @@ class RichResultsTree(ctk.CTkFrame):
     def update(self):
         """Refresh the display (compatibility method)."""
         pass  # All updates are immediate in this implementation
-

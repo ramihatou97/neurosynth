@@ -252,7 +252,9 @@ class ColPaliClient:
         image_paths = [e.image_path for e in to_embed if e.image_path is not None]
 
         # Generate embeddings (cast due to list invariance - all paths are Path type)
-        embeddings = await self.embed_images(cast(list[Image.Image | Path], image_paths))
+        embeddings = await self.embed_images(
+            cast(list[Image.Image | Path], image_paths)
+        )
 
         # Assign embeddings to elements
         for element, embedding in zip(to_embed, embeddings, strict=False):

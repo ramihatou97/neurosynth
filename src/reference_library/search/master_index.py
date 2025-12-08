@@ -3,44 +3,40 @@
 Parses the comprehensive neurosurgical index with 2,632 terms
 and provides authority-boosted search integration.
 """
+
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
-import re
-
 
 # Text abbreviations with authority scores (higher = more authoritative for topic)
 # Based on specificity and depth of coverage
 TEXT_AUTHORITY = {
     # Primary specialized texts (authority 100)
-    "L7": 100,   # Lawton Seven Aneurysms - definitive for aneurysms
-    "SA": 100,   # Samii Acoustic Neurinomas
-    "AM": 100,   # Al-Mefty Meningiomas
-    "OT": 100,   # Ojemann Epilepsy Surgery
-    "LM": 100,   # Lawton Seven AVMs
-    "SB": 100,   # Spetzler-Barrow Cerebrovascular
-
+    "L7": 100,  # Lawton Seven Aneurysms - definitive for aneurysms
+    "SA": 100,  # Samii Acoustic Neurinomas
+    "AM": 100,  # Al-Mefty Meningiomas
+    "OT": 100,  # Ojemann Epilepsy Surgery
+    "LM": 100,  # Lawton Seven AVMs
+    "SB": 100,  # Spetzler-Barrow Cerebrovascular
     # Major comprehensive references (authority 90)
-    "YW": 90,    # Youmans & Winn
-    "SS": 90,    # Schmidek & Sweet
-    "CN": 90,    # Connolly Operative Neurosurgery
-
+    "YW": 90,  # Youmans & Winn
+    "SS": 90,  # Schmidek & Sweet
+    "CN": 90,  # Connolly Operative Neurosurgery
     # Handbooks and atlases (authority 80)
-    "GH": 80,    # Greenberg Handbook
-    "RH": 85,    # Rhoton Anatomy (high for anatomy)
+    "GH": 80,  # Greenberg Handbook
+    "RH": 85,  # Rhoton Anatomy (high for anatomy)
     "AT-B": 80,  # Atlas Brain
     "AT-S": 80,  # Atlas Spine
-
     # Subspecialty texts (authority 85 in their domain)
-    "BS": 85,    # Benzel Spine
-    "AO1": 85,   # AO Spine Vol 1
-    "AO2": 85,   # AO Spine Vol 2
-    "FU": 85,    # Lozano Functional
-    "PN": 85,    # Albright Pediatric
-    "BT": 85,    # Brain Tumors
-    "EP": 85,    # Epilepsy Comprehensive
-    "CB": 85,    # Cerebrovascular
-
+    "BS": 85,  # Benzel Spine
+    "AO1": 85,  # AO Spine Vol 1
+    "AO2": 85,  # AO Spine Vol 2
+    "FU": 85,  # Lozano Functional
+    "PN": 85,  # Albright Pediatric
+    "BT": 85,  # Brain Tumors
+    "EP": 85,  # Epilepsy Comprehensive
+    "CB": 85,  # Cerebrovascular
     # Standard texts (authority 70)
     "DEFAULT": 70,
 }
@@ -49,6 +45,7 @@ TEXT_AUTHORITY = {
 @dataclass
 class IndexEntry:
     """A single entry from the master index."""
+
     term: str
     references: List[str]  # Full reference strings: ["L7 Ch.5", "CB Ch.17"]
     primary_sources: List[str]  # Just abbreviations: ["L7", "CB"]
@@ -87,7 +84,7 @@ class MasterIndex:
         """Parse COMPREHENSIVE.ini file."""
         in_index = False
 
-        for line in path.read_text(encoding='utf-8').splitlines():
+        for line in path.read_text(encoding="utf-8").splitlines():
             line = line.strip()
 
             # Skip empty lines and headers
@@ -104,22 +101,22 @@ class MasterIndex:
                 continue
 
             # Skip category headers like "  A  "
-            if re.match(r'^[A-Z]\s*$', line.strip()):
+            if re.match(r"^[A-Z]\s*$", line.strip()):
                 continue
 
             # Parse term line: "Term<TAB>Refs" or "Term — Refs"
             # Handle both TAB and em-dash separators
-            if '\t' in line:
-                parts = line.split('\t', 1)
-            elif ' — ' in line:
-                parts = line.split(' — ', 1)
-            elif '\u2014' in line:  # Unicode em-dash
-                parts = line.split('\u2014', 1)
+            if "\t" in line:
+                parts = line.split("\t", 1)
+            elif " — " in line:
+                parts = line.split(" — ", 1)
+            elif "\u2014" in line:  # Unicode em-dash
+                parts = line.split("\u2014", 1)
             else:
                 # No separator - might be a cross-reference
-                if ' - see ' in line.lower():
+                if " - see " in line.lower():
                     # Cross-reference: "Term - see OtherTerm"
-                    term = line.split(' - see ')[0].strip()
+                    term = line.split(" - see ")[0].strip()
                     self._add_entry(term, [], is_crossref=True)
                 continue
 
@@ -133,7 +130,7 @@ class MasterIndex:
                 continue
 
             # Parse references: "L7 Ch.5, CB Ch.17, GH p.1377-1382"
-            refs = [r.strip() for r in refs_str.split(',')]
+            refs = [r.strip() for r in refs_str.split(",")]
 
             self._add_entry(term, refs)
 
@@ -146,21 +143,25 @@ class MasterIndex:
         primary_sources = []
         for ref in refs[:3]:  # First 3 are usually most authoritative
             # Extract abbreviation (first word): "L7 Ch.5" -> "L7"
-            match = re.match(r'^([A-Z][A-Z0-9\-]+)', ref)
+            match = re.match(r"^([A-Z][A-Z0-9\-]+)", ref)
             if match:
                 primary_sources.append(match.group(1))
 
         # Calculate authority score (use highest)
-        authority = max(
-            TEXT_AUTHORITY.get(src, TEXT_AUTHORITY["DEFAULT"])
-            for src in primary_sources
-        ) if primary_sources else TEXT_AUTHORITY["DEFAULT"]
+        authority = (
+            max(
+                TEXT_AUTHORITY.get(src, TEXT_AUTHORITY["DEFAULT"])
+                for src in primary_sources
+            )
+            if primary_sources
+            else TEXT_AUTHORITY["DEFAULT"]
+        )
 
         entry = IndexEntry(
             term=term,
             references=refs,
             primary_sources=primary_sources,
-            authority=authority
+            authority=authority,
         )
 
         # Store by lowercase for case-insensitive lookup
@@ -170,7 +171,7 @@ class MasterIndex:
         """Build inverted index for word-based lookup."""
         for term_lower, entry in self.entries.items():
             # Extract words (alphanumeric only)
-            words = re.findall(r'[a-z0-9]+', term_lower)
+            words = re.findall(r"[a-z0-9]+", term_lower)
             for word in words:
                 if len(word) >= 3:  # Skip short words
                     if word not in self._term_index:
@@ -198,7 +199,7 @@ class MasterIndex:
                 matches.append(entry)
 
         # 3. Word-based match (any query word in term)
-        query_words = set(re.findall(r'[a-z0-9]+', query_lower))
+        query_words = set(re.findall(r"[a-z0-9]+", query_lower))
         for word in query_words:
             if word in self._term_index:
                 for term_lower in self._term_index[word]:
@@ -222,7 +223,7 @@ class MasterIndex:
 
         # Common filename patterns
         patterns = {
-            "lawton": 100,      # Lawton Seven
+            "lawton": 100,  # Lawton Seven
             "youmans": 90,
             "greenberg": 80,
             "rhoton": 85,
@@ -230,7 +231,7 @@ class MasterIndex:
             "benzel": 85,
             "sekhar": 80,
             "samii": 100,
-            "lumbar": 85, # High authority for validation library
+            "lumbar": 85,  # High authority for validation library
         }
 
         for pattern, authority in patterns.items():
@@ -253,7 +254,7 @@ class MasterIndex:
             List of related term strings
         """
         query_lower = query.lower().strip()
-        query_words = set(re.findall(r'[a-z0-9]+', query_lower))
+        query_words = set(re.findall(r"[a-z0-9]+", query_lower))
 
         # Skip very short queries
         if len(query_lower) < 3:
@@ -304,8 +305,13 @@ class MasterIndex:
 
         return [term for term, _ in related_with_auth[:max_terms]]
 
-    def expand_query(self, query: str, expand_synonyms: bool = True,
-                     expand_orthographic: bool = True, max_expansions: int = 10) -> List[str]:
+    def expand_query(
+        self,
+        query: str,
+        expand_synonyms: bool = True,
+        expand_orthographic: bool = True,
+        max_expansions: int = 10,
+    ) -> List[str]:
         """Expand query with synonyms and orthographic variants.
 
         Args:
@@ -323,20 +329,20 @@ class MasterIndex:
         # Orthographic variants (common medical spelling variations)
         if expand_orthographic:
             orthographic_pairs = [
-                ('disc', 'disk'),
-                ('haemorrhage', 'hemorrhage'),
-                ('anaesthesia', 'anesthesia'),
-                ('oedema', 'edema'),
-                ('tumour', 'tumor'),
-                ('colour', 'color'),
-                ('centre', 'center'),
-                ('fibre', 'fiber'),
-                ('grey', 'gray'),
-                ('oesophagus', 'esophagus'),
-                ('paediatric', 'pediatric'),
-                ('orthopaedic', 'orthopedic'),
-                ('foetus', 'fetus'),
-                ('caecum', 'cecum'),
+                ("disc", "disk"),
+                ("haemorrhage", "hemorrhage"),
+                ("anaesthesia", "anesthesia"),
+                ("oedema", "edema"),
+                ("tumour", "tumor"),
+                ("colour", "color"),
+                ("centre", "center"),
+                ("fibre", "fiber"),
+                ("grey", "gray"),
+                ("oesophagus", "esophagus"),
+                ("paediatric", "pediatric"),
+                ("orthopaedic", "orthopedic"),
+                ("foetus", "fetus"),
+                ("caecum", "cecum"),
             ]
 
             for brit, amer in orthographic_pairs:
@@ -351,7 +357,7 @@ class MasterIndex:
 
         # Synonym expansion from master index (use pre-indexed terms for speed)
         if expand_synonyms and len(expansions) < max_expansions:
-            query_words = set(re.findall(r'[a-z0-9]+', query_lower))
+            query_words = set(re.findall(r"[a-z0-9]+", query_lower))
 
             # Use the term_index to find related terms efficiently (O(1) lookups)
             seen = set(expansions)
@@ -363,7 +369,10 @@ class MasterIndex:
                         if term_lower in seen or term_lower == query_lower:
                             continue
                         # Only add if it's meaningfully different
-                        if query_lower not in term_lower and term_lower not in query_lower:
+                        if (
+                            query_lower not in term_lower
+                            and term_lower not in query_lower
+                        ):
                             expansions.append(term_lower)
                             seen.add(term_lower)
                             if len(expansions) >= max_expansions:
@@ -400,6 +409,7 @@ class MasterIndex:
 
 # Module-level singleton for easy access
 _master_index: Optional[MasterIndex] = None
+
 
 def get_master_index() -> MasterIndex:
     """Get the singleton MasterIndex instance."""

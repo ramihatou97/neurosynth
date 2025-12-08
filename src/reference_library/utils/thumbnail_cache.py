@@ -1,7 +1,9 @@
 """Thumbnail caching system for figure images."""
+
 import hashlib
 from pathlib import Path
 from typing import Optional
+
 from PIL import Image
 
 from reference_library import config
@@ -25,9 +27,7 @@ class ThumbnailCache:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def get_thumbnail_path(
-        self,
-        image_path: str,
-        size: tuple[int, int] = THUMB_SIZE_SMALL
+        self, image_path: str, size: tuple[int, int] = THUMB_SIZE_SMALL
     ) -> Path:
         """Get the cached thumbnail path for an image.
 
@@ -45,9 +45,7 @@ class ThumbnailCache:
         return self.cache_dir / thumb_name
 
     def get_or_create_thumbnail(
-        self,
-        image_path: str,
-        size: tuple[int, int] = THUMB_SIZE_SMALL
+        self, image_path: str, size: tuple[int, int] = THUMB_SIZE_SMALL
     ) -> Optional[Path]:
         """Get cached thumbnail or create if not exists.
 
@@ -68,9 +66,7 @@ class ThumbnailCache:
         return self.create_thumbnail(image_path, size)
 
     def create_thumbnail(
-        self,
-        image_path: str,
-        size: tuple[int, int] = THUMB_SIZE_SMALL
+        self, image_path: str, size: tuple[int, int] = THUMB_SIZE_SMALL
     ) -> Optional[Path]:
         """Create and cache a thumbnail.
 
@@ -90,14 +86,14 @@ class ThumbnailCache:
         try:
             with Image.open(source_path) as img:
                 # Convert to RGB if necessary (handles CMYK, RGBA, P, L, LA, etc.)
-                if img.mode not in ('RGB',):
-                    img = img.convert('RGB')
+                if img.mode not in ("RGB",):
+                    img = img.convert("RGB")
 
                 # Create thumbnail maintaining aspect ratio
                 img.thumbnail(size, Image.LANCZOS)
 
                 # Save as PNG for quality
-                img.save(thumb_path, 'PNG', optimize=True)
+                img.save(thumb_path, "PNG", optimize=True)
 
             return thumb_path
         except Exception as e:
@@ -108,7 +104,7 @@ class ThumbnailCache:
         self,
         image_paths: list[str],
         size: tuple[int, int] = THUMB_SIZE_SMALL,
-        progress_callback: Optional[callable] = None
+        progress_callback: Optional[callable] = None,
     ) -> dict[str, Optional[Path]]:
         """Create thumbnails for multiple images.
 
@@ -132,9 +128,7 @@ class ThumbnailCache:
         return results
 
     def has_thumbnail(
-        self,
-        image_path: str,
-        size: tuple[int, int] = THUMB_SIZE_SMALL
+        self, image_path: str, size: tuple[int, int] = THUMB_SIZE_SMALL
     ) -> bool:
         """Check if a thumbnail exists.
 
@@ -187,10 +181,7 @@ class ThumbnailCache:
         thumbs = list(self.cache_dir.glob("*.png"))
         total_size = sum(t.stat().st_size for t in thumbs)
 
-        return {
-            "count": len(thumbs),
-            "total_size_mb": total_size / (1024 * 1024)
-        }
+        return {"count": len(thumbs), "total_size_mb": total_size / (1024 * 1024)}
 
 
 # Global instance for convenience

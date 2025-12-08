@@ -4,8 +4,9 @@ from pathlib import Path
 
 import faiss
 import numpy as np
-from deep_dx.config import get_deepdx_settings
 from sentence_transformers import SentenceTransformer
+
+from deep_dx.config import get_deepdx_settings
 
 
 def main():

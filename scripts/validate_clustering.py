@@ -64,7 +64,9 @@ def generate_synthetic_chunks(n: int, n_topics: int = 10):
 
         chunk = ContentChunk(
             content=content,
-            source=SourceRef(path=Path(f"source_{topic_idx}.pdf"), title=f"Source {topic_idx}"),
+            source=SourceRef(
+                path=Path(f"source_{topic_idx}.pdf"), title=f"Source {topic_idx}"
+            ),
             chunk_index=i,
         )
         # Store ground truth topic for validation
@@ -276,7 +278,9 @@ def print_results(results, chunks):
 
     # FAISS-specific metrics
     if "faiss" in results and "search_time_ms" in results["faiss"]:
-        table.add_row("FAISS Search Time", "N/A", f"{results['faiss']['search_time_ms']:.1f}ms")
+        table.add_row(
+            "FAISS Search Time", "N/A", f"{results['faiss']['search_time_ms']:.1f}ms"
+        )
 
     console.print(table)
 
@@ -304,7 +308,9 @@ def print_results(results, chunks):
             for issue in issues:
                 console.print(f"  {issue}")
         else:
-            console.print(f"\n[green]{backend.upper()}: All quality checks passed ✓[/green]")
+            console.print(
+                f"\n[green]{backend.upper()}: All quality checks passed ✓[/green]"
+            )
 
 
 async def main():
@@ -349,7 +355,9 @@ async def main():
         )
         chunks = generate_synthetic_chunks(args.chunks, args.topics)
 
-    console.print(f"[blue]Running clustering with threshold={args.threshold}...[/blue]\n")
+    console.print(
+        f"[blue]Running clustering with threshold={args.threshold}...[/blue]\n"
+    )
 
     # Run clustering comparison
     results = await run_clustering_comparison(chunks, args.threshold)

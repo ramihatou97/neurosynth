@@ -26,6 +26,13 @@ from typing import Any, Dict, List, Optional, Tuple
 from models import Chunk, ExtractedImage, SearchResult
 
 from .database import Database
+
+try:
+    from neurosynth.ai.biomed_searcher import BiomedCLIPSearcher
+except ImportError:
+    BiomedCLIPSearcher = None
+
+# gap_detector imported lazily in __init__ to avoid circular import
 from .search import RetrievalResult, SearchEngine
 
 logger = logging.getLogger(__name__)
@@ -239,6 +246,15 @@ class PrecisionSearchEngine:
         except Exception as e:
             logger.warning(f"⚠️ Failed to init Metadata Manager or Source Map: {e}")
 
+        # Initialize AI Vision Embedder
+        self.vision_embedder = None
+        if BiomedCLIPSearcher:
+            try:
+                self.vision_embedder = BiomedCLIPSearcher()
+                logger.info("✓ BiomedCLIP Vision Search Connected")
+            except Exception as e:
+                logger.warning(f"AI Vision Init Failed: {e}")
+
         # Initialize Hybrid Search (BM25)
         self.bm25 = None
         # Lazy load or load on init? For 2000 chunks, load on init is fine.
@@ -257,6 +273,12 @@ class PrecisionSearchEngine:
             logger.info(f"✓ BM25 Index Built ({len(chunk_dicts)} documents)")
         except Exception as e:
             logger.warning(f"bm25 init failed: {e}")
+
+        # Phase 4: Gap Detection (lazy import to avoid circular dependency)
+        from .gap_detector import GapDetector
+
+        self.gap_detector = GapDetector(database=self.db)
+        logger.info("✓ Gap Detector initialized")
 
         # Compile patterns
         self._spatial_pattern = self._compile_pattern(SPATIAL_TERMS)
@@ -589,18 +611,39 @@ class PrecisionSearchEngine:
             if not has_safety:
                 warnings.append("Safety query but no contraindication content found")
 
+        # === PHASE 4: GAP DETECTION ===
+        gap_warnings = self.gap_detector.detect_gaps(
+            query=query, query_type=query_type, results=precision_results, top_k=top_k
+        )
+
+        # Convert GapWarning objects to strings and append to warnings
+        for gap in gap_warnings:
+            warnings.append(gap.message)
+        # === END PHASE 4 ===
+
         # Step 5: Calculate confidence
         confidence = self._calculate_confidence(precision_results, query_type)
         confidence_level = self._score_to_level(confidence)
 
-        # Step 6: Get related images
+        # Step 6: Get related images (Using AI Vision Integration)
         images = []
-        if include_images and precision_results:
-            source_ids = list(set(r.chunk.source_id for r in precision_results[:5]))
-            image_results = self.base_search.search_images(
-                query_embedding=query_embedding, top_k=20, source_ids=source_ids
-            )
-            images = [img for img, _ in image_results]
+        if include_images:
+            try:
+                # Primary: AI Semantic Search
+                images = self._search_images_ai(query, top_k=5)
+                systems_used.append("ai_vision_search")
+            except Exception as e:
+                logger.warning(f"AI Vision Search failed: {e}")
+                # Fallback: Legacy image search
+                if precision_results:
+                    source_ids = list(
+                        set(r.chunk.source_id for r in precision_results[:5])
+                    )
+                    image_results = self.base_search.search_images(
+                        query_embedding=query_embedding, top_k=20, source_ids=source_ids
+                    )
+                    images = [img for img, _ in image_results]
+                    systems_used.append("legacy_image_search_fallback")
 
         elapsed_ms = (time.time() - start_time) * 1000
 
@@ -620,6 +663,43 @@ class PrecisionSearchEngine:
             systems_used=systems_used,
             warnings=warnings,
         )
+
+    def _search_images_ai(self, query: str, top_k: int = 5) -> list[ExtractedImage]:
+        """Search for images using BiomedCLIP and Qdrant"""
+        if not self.vision_embedder or not self.qdrant or not self.qdrant.client:
+            raise RuntimeError("AI Vision components not initialized")
+
+        # 1. Embed query (Text -> Image Space)
+        vector = self.vision_embedder.embed_text(query)
+        if vector.size == 0:
+            return []
+
+        # 2. Search Qdrant
+        results = self.qdrant.client.search(
+            collection_name="neurosurgical_figures_hybrid",
+            query_vector=("biomed", vector[0].tolist()),
+            limit=top_k,
+            with_payload=True,
+        )
+
+        # 3. Convert to ExtractedImage
+        images = []
+        for hit in results:
+            payload = hit.payload
+            images.append(
+                ExtractedImage(
+                    id=payload.get("filename", str(hit.id)),
+                    source_id=payload.get("source_pdf", "unknown"),
+                    page=0,  # Page number might be missing in simple payload, can default to 0
+                    file_path=Path(payload.get("path", "")),
+                    caption=payload.get("caption", ""),
+                    surrounding_text=payload.get("context", ""),
+                    image_type=payload.get("modality", "unknown"),  # Simplified mapping
+                    width=0,
+                    height=0,
+                )
+            )
+        return images
 
     def _has_safety_content(self, text: str) -> bool:
         """Check if text contains safety-critical content"""
