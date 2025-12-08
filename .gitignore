@@ -26,7 +26,13 @@ test_run/
 test_manifest.json
 test_templates.py
 debug_*.py
+
+# Output directories (all synthesis/verification outputs)
 output/
+*_output/
+real_synthesis_output/
+verification_output/
+neurosynth_output/
 /neurosynth/
 
 # IDE
