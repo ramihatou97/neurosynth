@@ -3,7 +3,7 @@ from pathlib import Path
 
 manifest_path = Path("/Users/ramihatoum/neurosynth/real_synthesis_output/manifest.json")
 
-with open(manifest_path, "r") as f:
+with open(manifest_path) as f:
     data = json.load(f)
 
 print(

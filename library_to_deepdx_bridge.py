@@ -45,15 +45,15 @@ except ImportError as e:
 # =============================================================================
 
 # Source: Reference Library database
-SOURCE_DB_PATH = Path("reference-library/data/library.db")
+SOURCE_DB_PATH = Path("data/library.db")
 
 # Target: Deep-DX database
-TARGET_DB_PATH = Path("neurosynth.db")
+TARGET_DB_PATH = Path("data/neurosynth.db")
 
 # Vector store
 QDRANT_URL = "http://localhost:6333"
 COLLECTION_NAME = "deep_dx_collection"
-VECTOR_SIZE = 1024  # Voyage AI embedding dimension
+VECTOR_SIZE = 512  # Voyage AI embedding dimension (voyage-3-lite, voyage-3, voyage-large-2-instruct all use 512)
 
 # Chunking parameters
 CHUNK_SIZE = 1500  # Characters per chunk (~300-400 tokens)
@@ -123,7 +123,7 @@ def classify_specialty(title: str, path: str) -> Specialty:
     """Classify document specialty based on title and path."""
     text = f"{title} {path}".lower()
 
-    scores = {spec: 0 for spec in Specialty}
+    scores = dict.fromkeys(Specialty, 0)
     for specialty, keywords in SPECIALTY_KEYWORDS.items():
         for kw in keywords:
             if kw in text:
@@ -221,10 +221,10 @@ class LibraryToDeepDxBridge:
         self.skip_qdrant = skip_qdrant
 
         # Connections (lazy init)
-        self._source_conn: Optional[sqlite3.Connection] = None
-        self._target_db: Optional[Database] = None
-        self._qdrant: Optional[QdrantClient] = None
-        self._voyage: Optional[VoyageClient] = None
+        self._source_conn: sqlite3.Connection | None = None
+        self._target_db: Database | None = None
+        self._qdrant: QdrantClient | None = None
+        self._voyage: VoyageClient | None = None
 
         # Stats
         self.stats = {

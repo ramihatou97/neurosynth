@@ -21,8 +21,8 @@ class DeepDxSynthesizer:
     def __init__(
         self,
         search_engine: PrecisionSearchEngine,
-        ai_client: Union[AIClient, AsyncAIClient],
-        critic: Optional[DeepDxCritic] = None,
+        ai_client: AIClient | AsyncAIClient,
+        critic: DeepDxCritic | None = None,
     ):
         self.search_engine = search_engine
         self.ai = ai_client

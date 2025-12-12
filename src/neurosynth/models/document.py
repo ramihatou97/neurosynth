@@ -24,6 +24,7 @@ class ChunkKwargs(TypedDict, total=False):
     embedding: np.ndarray | None
     content_hash: str
     cluster_id: str | None
+    evidence_level: str
     visual_elements: list["VisualElement"]
 
 
@@ -137,41 +138,45 @@ class ContentChunk:
 
     # Processing metadata
     id: str = field(default_factory=lambda: str(uuid.uuid4())[:12])
-    word_count: int = 0
     embedding: np.ndarray | None = field(default=None, repr=False)
-
-    # Content hash for exact deduplication
-    content_hash: str = field(default="", repr=False)
-
-    # Cluster assignment (set during deduplication)
     cluster_id: str | None = None
+
+    # Validation/Quality
+    evidence_level: str = "unknown"
+
+    # Internal
+    _content_hash: str = field(init=False, repr=False)
+    _word_count: int = field(init=False, repr=False)
 
     # Visual elements associated with this chunk (extracted from nearby pages)
     visual_elements: list["VisualElement"] = field(default_factory=list)
 
     def __post_init__(self):
         """Calculate derived fields."""
-        self.word_count = len(self.content.split())
-        self.content_hash = hashlib.sha256(
-            self.content.strip().lower().encode()
-        ).hexdigest()[:16]
+        self._content_hash = hashlib.md5(self.content.encode("utf-8")).hexdigest()
+        self._word_count = len(self.content.split())
 
     @property
     def location_str(self) -> str:
         """Human-readable location string."""
-        parts = []
-        if self.chapter_title:
-            parts.append(f"Ch: {self.chapter_title}")
+        locs = []
+        if self.page_number is not None:
+            locs.append(f"p.{self.page_number}")
+        elif self.page_start is not None:
+            if self.page_end and self.page_end > self.page_start:
+                locs.append(f"pp.{self.page_start}-{self.page_end}")
+            else:
+                locs.append(f"p.{self.page_start}")
+
         if self.section_title:
-            parts.append(f"Sec: {self.section_title}")
-        if self.page_number:
-            parts.append(f"p. {self.page_number}")
-        return ", ".join(parts) if parts else "Unknown location"
+            locs.append(f"'{self.section_title}'")
+
+        return ", ".join(locs) if locs else "Unknown Location"
 
     @property
     def source_reference(self) -> str:
         """Short reference combining source and location."""
-        return f"{self.source.citation_key}, {self.location_str}"
+        return f"{self.source.title} ({self.location_str})"
 
     @property
     def has_visuals(self) -> bool:
@@ -185,10 +190,11 @@ class ContentChunk:
 
     def add_visual(self, visual: "VisualElement") -> None:
         """Add a visual element to this chunk."""
-        self.visual_elements.append(visual)
-        visual.associated_chunk_ids.append(self.id)
+        if visual not in self.visual_elements:
+            self.visual_elements.append(visual)
+            visual.associated_chunk_ids.append(self.id)
 
-    def to_dict(self, include_embedding: bool = True) -> dict:
+    def to_dict(self, include_embedding: bool = True) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization.
 
         Args:
@@ -199,16 +205,21 @@ class ContentChunk:
             "content": self.content,
             "source": self.source.to_dict(),
             "page_number": self.page_number,
+            "page_start": self.page_start,
+            "page_end": self.page_end,
             "section_title": self.section_title,
             "chapter_title": self.chapter_title,
             "id": self.id,
-            "word_count": self.word_count,
-            "content_hash": self.content_hash,
+            "word_count": self._word_count,
+            "content_hash": self._content_hash,
             "cluster_id": self.cluster_id,
-            "visual_element_ids": [v.id for v in self.visual_elements],
+            "evidence_level": self.evidence_level,
+            "visual_elements": [v.id for v in self.visual_elements],
         }
+
         if include_embedding and self.embedding is not None:
             data["embedding"] = self.embedding.tolist()
+
         return data
 
     @classmethod

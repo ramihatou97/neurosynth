@@ -15,6 +15,10 @@ class APISettings(BaseSettings):
     log_level: str = "info"
     cors_origins: list[str] = ["*"]
 
+    # AI API Keys (optional - used for AI client initialization)
+    voyage_api_key: str | None = None
+    anthropic_api_key: str | None = None
+
     class Config:
         env_prefix = ""
         case_sensitive = False

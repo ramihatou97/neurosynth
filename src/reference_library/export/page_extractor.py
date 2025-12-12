@@ -24,10 +24,10 @@ class ExtractedSource:
     original_source: str  # e.g., "Youmans Ch 26"
     pages: list[int]
     # Enhanced categorization fields
-    category_group: Optional[str] = None  # "Surgical/Anatomical" or "Theoretical"
-    category: Optional[str] = None  # Specific subcategory
-    confidence: Optional[float] = None  # AI confidence score 0.0-1.0
-    reasoning: Optional[str] = None  # AI categorization reasoning
+    category_group: str | None = None  # "Surgical/Anatomical" or "Theoretical"
+    category: str | None = None  # Specific subcategory
+    confidence: float | None = None  # AI confidence score 0.0-1.0
+    reasoning: str | None = None  # AI categorization reasoning
     context_excerpts: list[str] = field(default_factory=list)
     full_text: str = ""  # Full text content of extracted pages
     # Visual content fields
@@ -96,7 +96,7 @@ def _extract_pages_from_pdf(
     output_dir: Path,
     context_pages: int,
     database: Any | None = None,
-) -> Optional[ExtractedSource]:
+) -> ExtractedSource | None:
     """Extract pages from a single PDF.
 
     Uses try-finally to ensure document handles are always closed,
@@ -383,10 +383,8 @@ def generate_manifest(
     output_path: Path,
     search_query: str = "",
     search_mode: str = "keyword",
-    template_type: Optional[str] = None,  # Override auto-detection
-    query_intent: Optional[
-        str
-    ] = None,  # Detected intent (TECHNIQUE, COMPLICATION, etc.)
+    template_type: str | None = None,  # Override auto-detection
+    query_intent: str | None = None,  # Detected intent (TECHNIQUE, COMPLICATION, etc.)
 ) -> Path:
     """
     Generate an enhanced manifest.json file for NeuroSynth import.

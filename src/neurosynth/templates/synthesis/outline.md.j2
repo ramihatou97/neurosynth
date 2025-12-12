@@ -1,0 +1,440 @@
+{#
+  outline.md.j2 - Chapter Outline Generation Template v1.0
+  NeuroSynth Adaptive Outline Engine
+
+  Purpose: Generate structured chapter outlines from available content
+  Used by: OutlineGenerator, CategoryAwareOutlineGenerator
+
+  Expected Context Variables:
+    ctx.topic               -> The chapter topic/title
+    ctx.content_summaries   -> List of content summaries from knowledge clusters
+    ctx.template_type       -> COMPREHENSIVE / PROCEDURAL / THEORETICAL / ADAPTIVE
+    ctx.source_density      -> Optional: Ratio of Surgical/Anatomical to Theoretical (0.0-1.0)
+    ctx.available_figures   -> Optional: List of available figure types
+    ctx.word_budget         -> Optional: Total chapter word budget
+    ctx.required_sections   -> Optional: List of mandatory section titles
+#}
+---SYSTEM---
+You are structuring a comprehensive neurosurgical chapter following standard textbook format.
+
+Your task is to generate a logical chapter outline that:
+1. Follows established neurosurgical textbook conventions
+2. Adapts to the available content (don't include sections with no supporting material)
+3. Ensures logical flow from basic concepts to advanced techniques
+4. Balances depth appropriately across sections
+
+QUALITY STANDARDS:
+- Match organizational quality of Youmans & Winn, Schmidek & Sweet
+- Ensure each section has clear, non-overlapping scope
+- Progress from foundational knowledge to clinical application
+- Include appropriate subsections for complex topics
+
+---USER---
+# Chapter Outline Generation Request
+
+## Chapter Topic
+
+<topic>{{ ctx.topic }}</topic>
+
+{% if ctx.template_type %}
+## Template Type
+
+<template_type>{{ ctx.template_type }}</template_type>
+
+{% if ctx.template_type == 'PROCEDURAL' %}
+**PROCEDURAL Template**: Emphasize surgical technique, operative details, and anatomical considerations.
+- Allocate 40-50% of content to surgical sections
+- Include detailed step-by-step technique section
+- Minimize theoretical/epidemiological content
+{% elif ctx.template_type == 'THEORETICAL' %}
+**THEORETICAL Template**: Emphasize pathophysiology, evidence synthesis, and clinical decision-making.
+- Allocate 40-50% of content to disease understanding
+- Include comprehensive literature review
+- Surgical technique as supportive, not primary
+{% elif ctx.template_type == 'COMPREHENSIVE' %}
+**COMPREHENSIVE Template**: Balanced coverage of disease, anatomy, and surgery.
+- Equal emphasis across all major domains
+- Full epidemiology, pathophysiology, AND technique
+- Suitable for textbook chapters
+{% else %}
+**ADAPTIVE Template**: Adjust based on available content density.
+{% endif %}
+{% endif %}
+
+{% if ctx.source_density is defined %}
+## Source Composition
+
+<source_density>{{ (ctx.source_density * 100) | round(0) }}% Surgical/Anatomical content</source_density>
+
+{% if ctx.source_density >= 0.7 %}
+→ Heavy surgical content: Emphasize operative sections
+{% elif ctx.source_density <= 0.3 %}
+→ Heavy theoretical content: Emphasize pathophysiology and evidence
+{% else %}
+→ Balanced content: Full comprehensive outline
+{% endif %}
+{% endif %}
+
+---
+
+# Available Content Summaries
+
+<available_content>
+{% for summary in ctx.content_summaries %}
+{{ loop.index }}. {{ summary | truncate(250) }}
+{% endfor %}
+</available_content>
+
+---
+
+# STANDARD NEUROSURGICAL CHAPTER STRUCTURE
+
+Use this as a reference framework. Include sections only if supported by available content.
+
+| # | Section | Description | Word Target | Required |
+|---|---------|-------------|-------------|----------|
+| 1 | Introduction | Overview, importance, and scope | 500 | ✓ |
+| 2 | Historical Background | History and evolution of understanding | 400 | |
+| 3 | Epidemiology | Incidence, prevalence, demographics, risk factors | 600 | |
+| 4 | Anatomy and Neuroanatomy | Relevant anatomical structures and relationships | 1200 | |
+| 5 | Pathophysiology | Disease mechanisms and underlying processes | 1000 | |
+| 6 | Clinical Presentation | Signs, symptoms, and clinical findings | 800 | |
+| 7 | Diagnostic Workup | Imaging, laboratory, and clinical evaluation | 1000 | |
+| 8 | Classification | Grading, staging, and classification systems | 600 | |
+| 9 | Treatment Options | Overview of all management approaches | 800 | |
+| 10 | Surgical Indications | Criteria for operative intervention | 600 | |
+| 11 | Surgical Technique | Detailed operative approach and steps | 2000 | ✓ |
+| 12 | Complications and Management | Risks, prevention, and management | 1000 | |
+| 13 | Outcomes and Prognosis | Results, survival, functional outcomes | 800 | |
+| 14 | Controversies and Emerging Trends | Current debates and future directions | 600 | |
+| 15 | Conclusions | Summary and key points | 300 | ✓ |
+
+---
+
+# SECTION KEYWORD MAPPING
+
+Use these keywords to match available content to sections:
+
+| Section | Keywords |
+|---------|----------|
+| Introduction | introduction, overview, background, scope, importance |
+| Historical Background | history, historical, evolution, discovery, pioneer |
+| Epidemiology | epidemiology, incidence, prevalence, demographics, risk factor |
+| Anatomy | anatomy, anatomical, neuroanatomy, structure, region, landmark |
+| Pathophysiology | pathophysiology, mechanism, pathology, etiology, biology, molecular |
+| Clinical Presentation | clinical, presentation, symptoms, signs, examination, finding |
+| Diagnostic Workup | diagnostic, imaging, MRI, CT, workup, evaluation, laboratory |
+| Classification | classification, grading, staging, type, category, WHO |
+| Treatment Options | treatment, therapy, management, conservative, medical, radiation |
+| Surgical Indications | indication, criteria, selection, candidate, contraindication |
+| Surgical Technique | technique, surgical, operative, approach, procedure, step, positioning |
+| Complications | complication, risk, adverse, morbidity, mortality, failure |
+| Outcomes | outcome, prognosis, result, survival, follow-up, recurrence |
+| Controversies | controversy, debate, emerging, future, novel, promising |
+| Conclusions | conclusion, summary, key points, takeaway |
+
+---
+
+# OUTPUT FORMAT
+
+Return a JSON array of sections. Each section object must have:
+
+```json
+[
+  {
+    "title": "Section Title",
+    "level": 1,
+    "description": "What content belongs in this section",
+    "expected_clusters": ["keyword1", "keyword2"],
+    "word_target": 1000,
+    "tone": "descriptive",
+    "category_restriction": null
+  }
+]
+```
+
+**Field Definitions**:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `title` | string | Section heading |
+| `level` | int | 1 = main section, 2 = subsection |
+| `description` | string | Scope and purpose of section |
+| `expected_clusters` | array | Keywords for content matching |
+| `word_target` | int | Target word count |
+| `tone` | string | "descriptive" or "imperative" |
+| `category_restriction` | string/null | "Surgical/Anatomical", "Theoretical", or null |
+
+---
+
+# OUTLINE GENERATION RULES
+
+1. **Content-Driven**: Only include sections with supporting content in summaries
+2. **Logical Flow**: Ensure sections progress naturally (basic → advanced → application)
+3. **No Overlap**: Each section should have distinct, non-overlapping scope
+4. **Balanced Depth**: Allocate word targets proportionally to content availability
+5. **Required Sections**: Always include Introduction, Surgical Technique, and Conclusions
+6. **Subsection Logic**: Use level 2 only when a section exceeds 1500 words
+7. **Tone Matching**: Use "imperative" for surgical/technique sections, "descriptive" for others
+
+{% if ctx.required_sections %}
+**Mandatory Sections** (must include):
+{% for section in ctx.required_sections %}
+- {{ section }}
+{% endfor %}
+{% endif %}
+
+{% if ctx.word_budget %}
+**Total Word Budget**: {{ ctx.word_budget }} words
+Distribute proportionally across sections.
+{% endif %}
+
+---
+
+# GENERATE THE OUTLINE
+
+Based on the topic "{{ ctx.topic }}" and the available content summaries above, generate the chapter outline as a JSON array.
+
+Return ONLY valid JSON — no additional text or explanation.
+
+---
+
+# SPECIALIZED OUTLINE TEMPLATES
+
+{% if ctx.template_type == 'PROCEDURAL' %}
+## Procedural Chapter Template
+
+For procedure-focused chapters, use this enhanced structure:
+
+| # | Section | Description | Word Target | Tone |
+|---|---------|-------------|-------------|------|
+| 1 | Introduction | Procedure overview, indications, scope | 400 | descriptive |
+| 2 | Relevant Anatomy | Surgically-relevant anatomical structures | 1500 | descriptive |
+| 3 | Patient Selection | Indications, contraindications, workup | 600 | descriptive |
+| 4 | Preoperative Planning | Imaging review, surgical planning, consent | 500 | descriptive |
+| 5 | Operative Setup | Positioning, equipment, monitoring | 600 | imperative |
+| 6 | Surgical Technique | Step-by-step operative approach | 2500 | imperative |
+| 6.1 | → Phase 1: Exposure | Opening, approach, exposure | 600 | imperative |
+| 6.2 | → Phase 2: Core Procedure | Main operative steps | 1200 | imperative |
+| 6.3 | → Phase 3: Closure | Hemostasis, closure, dressing | 400 | imperative |
+| 7 | Intraoperative Decision Points | Variations, bailout strategies | 500 | imperative |
+| 8 | Complications | Prevention, recognition, management | 800 | descriptive |
+| 9 | Postoperative Care | Immediate and long-term management | 500 | descriptive |
+| 10 | Outcomes | Results, complications rates, prognosis | 600 | descriptive |
+| 11 | Conclusions | Summary and key pearls | 300 | descriptive |
+
+{% elif ctx.template_type == 'THEORETICAL' %}
+## Theoretical/Review Chapter Template
+
+For disease-focused or review chapters:
+
+| # | Section | Description | Word Target | Tone |
+|---|---------|-------------|-------------|------|
+| 1 | Introduction | Topic overview and clinical importance | 500 | descriptive |
+| 2 | Historical Perspective | Evolution of understanding and treatment | 500 | descriptive |
+| 3 | Epidemiology | Incidence, prevalence, risk factors | 800 | descriptive |
+| 4 | Genetics and Molecular Biology | Genetic basis, biomarkers, pathways | 800 | descriptive |
+| 5 | Pathophysiology | Disease mechanisms | 1000 | descriptive |
+| 6 | Natural History | Untreated course, prognostic factors | 600 | descriptive |
+| 7 | Clinical Presentation | Signs, symptoms, clinical syndromes | 700 | descriptive |
+| 8 | Diagnostic Evaluation | Imaging, laboratory, clinical workup | 900 | descriptive |
+| 9 | Classification Systems | Grading, staging, prognostic scoring | 600 | descriptive |
+| 10 | Treatment Overview | All modalities with evidence | 1200 | descriptive |
+| 10.1 | → Medical Management | Pharmacotherapy, observation | 500 | descriptive |
+| 10.2 | → Surgical Options | Operative approaches (overview) | 400 | descriptive |
+| 10.3 | → Radiation/Other | Adjuvant therapies | 300 | descriptive |
+| 11 | Outcomes and Prognosis | Survival, functional outcomes | 700 | descriptive |
+| 12 | Controversies | Current debates, emerging evidence | 500 | descriptive |
+| 13 | Future Directions | Novel therapies, ongoing trials | 400 | descriptive |
+| 14 | Conclusions | Summary and key points | 300 | descriptive |
+
+{% elif ctx.template_type == 'COMPREHENSIVE' %}
+## Comprehensive Encyclopedia Template
+
+For full encyclopedia-style entries:
+
+| # | Section | Description | Word Target | Tone | Category |
+|---|---------|-------------|-------------|------|----------|
+| 1 | Introduction | Complete topic overview | 600 | descriptive | None |
+| 2 | Epidemiology | Full epidemiological data | 700 | descriptive | Theoretical |
+| 3 | Genetics/Molecular | Genetic and molecular basis | 600 | descriptive | Theoretical |
+| 4 | Pathophysiology | Complete disease mechanisms | 900 | descriptive | Theoretical |
+| 5 | Natural History | Untreated course and prognosis | 500 | descriptive | Theoretical |
+| 6 | Clinical Presentation | Signs, symptoms, examination | 700 | descriptive | Theoretical |
+| 7 | Diagnostic Workup | Complete evaluation protocol | 800 | descriptive | Theoretical |
+| 8 | Classification | All grading/staging systems | 500 | descriptive | Theoretical |
+| 9 | Surgical Anatomy | Microsurgical anatomical detail | 1200 | descriptive | Surgical |
+| 10 | Treatment Decision | Algorithm for treatment selection | 600 | descriptive | None |
+| 11 | Surgical Technique | Complete operative approach | 2000 | imperative | Surgical |
+| 12 | Complications | Prevention and management | 900 | descriptive | Surgical |
+| 13 | Outcomes | All outcome measures | 700 | descriptive | None |
+| 14 | Controversies | Current debates | 500 | descriptive | None |
+| 15 | Conclusions | Summary and key points | 300 | descriptive | None |
+
+{% endif %}
+
+---
+
+# SUBSECTION EXPANSION RULES
+
+When a section has rich content (>1500 words expected), expand into subsections:
+
+## Anatomy Subsections
+```json
+{
+  "title": "Surgical Anatomy",
+  "level": 1,
+  "subsections": [
+    {"title": "Surface Anatomy and Landmarks", "level": 2},
+    {"title": "Osseous Structures", "level": 2},
+    {"title": "Vascular Anatomy", "level": 2},
+    {"title": "Neural Structures", "level": 2},
+    {"title": "Surgical Corridors", "level": 2}
+  ]
+}
+```
+
+## Surgical Technique Subsections
+```json
+{
+  "title": "Surgical Technique",
+  "level": 1,
+  "subsections": [
+    {"title": "Patient Positioning", "level": 2},
+    {"title": "Skin Incision and Exposure", "level": 2},
+    {"title": "Bone Work / Craniotomy", "level": 2},
+    {"title": "Dural Opening", "level": 2},
+    {"title": "Intradural Dissection", "level": 2},
+    {"title": "Core Procedure", "level": 2},
+    {"title": "Hemostasis and Closure", "level": 2}
+  ]
+}
+```
+
+## Treatment Options Subsections
+```json
+{
+  "title": "Treatment Options",
+  "level": 1,
+  "subsections": [
+    {"title": "Observation and Surveillance", "level": 2},
+    {"title": "Medical Management", "level": 2},
+    {"title": "Surgical Intervention", "level": 2},
+    {"title": "Radiation Therapy", "level": 2},
+    {"title": "Emerging Therapies", "level": 2}
+  ]
+}
+```
+
+---
+
+# CATEGORY-AWARE SECTION ASSIGNMENT
+
+When using category restrictions:
+
+| Section Type | Category Restriction | Rationale |
+|--------------|---------------------|-----------|
+| Introduction | None | Both categories contribute |
+| Epidemiology | Theoretical | Disease-focused content |
+| Pathophysiology | Theoretical | Mechanism-focused |
+| Anatomy | Surgical/Anatomical | Operative-relevant |
+| Surgical Technique | Surgical/Anatomical | Operative content only |
+| Complications | Surgical/Anatomical | Procedure-related |
+| Outcomes | None | Both contribute |
+| Conclusions | None | Synthesis of all |
+
+---
+
+# EXAMPLE OUTPUT
+
+```json
+[
+  {
+    "title": "Introduction",
+    "level": 1,
+    "description": "Overview of the topic, clinical significance, and chapter scope",
+    "expected_clusters": ["introduction", "overview", "background", "importance"],
+    "word_target": 500,
+    "tone": "descriptive",
+    "category_restriction": null
+  },
+  {
+    "title": "Epidemiology and Risk Factors",
+    "level": 1,
+    "description": "Incidence, prevalence, demographic distribution, and identified risk factors",
+    "expected_clusters": ["epidemiology", "incidence", "prevalence", "risk factor"],
+    "word_target": 700,
+    "tone": "descriptive",
+    "category_restriction": "Theoretical"
+  },
+  {
+    "title": "Surgical Anatomy",
+    "level": 1,
+    "description": "Anatomical structures relevant to surgical approach and technique",
+    "expected_clusters": ["anatomy", "anatomical", "landmark", "structure"],
+    "word_target": 1200,
+    "tone": "descriptive",
+    "category_restriction": "Surgical/Anatomical"
+  },
+  {
+    "title": "Surgical Technique",
+    "level": 1,
+    "description": "Step-by-step operative approach with technical details",
+    "expected_clusters": ["technique", "surgical", "operative", "step", "approach"],
+    "word_target": 2000,
+    "tone": "imperative",
+    "category_restriction": "Surgical/Anatomical"
+  },
+  {
+    "title": "Positioning and Setup",
+    "level": 2,
+    "description": "Patient positioning, head fixation, and equipment setup",
+    "expected_clusters": ["positioning", "setup", "equipment"],
+    "word_target": 400,
+    "tone": "imperative",
+    "category_restriction": "Surgical/Anatomical"
+  },
+  {
+    "title": "Outcomes and Prognosis",
+    "level": 1,
+    "description": "Surgical results, complication rates, and long-term outcomes",
+    "expected_clusters": ["outcome", "prognosis", "result", "complication rate"],
+    "word_target": 800,
+    "tone": "descriptive",
+    "category_restriction": null
+  },
+  {
+    "title": "Conclusions",
+    "level": 1,
+    "description": "Summary of key points and clinical recommendations",
+    "expected_clusters": ["conclusion", "summary", "key point"],
+    "word_target": 300,
+    "tone": "descriptive",
+    "category_restriction": null
+  }
+]
+```
+
+---
+
+# VALIDATION CHECKLIST
+
+Before returning the outline, verify:
+
+- [ ] Introduction section is first (level 1, required)
+- [ ] Conclusions section is last (level 1, required)
+- [ ] Surgical Technique section is present (level 1, required)
+- [ ] All level 2 sections have a parent level 1 section
+- [ ] Word targets sum to reasonable chapter length (8,000-15,000 words typical)
+- [ ] No duplicate section titles
+- [ ] Each section has distinct, non-overlapping keywords
+- [ ] Tone is "imperative" only for surgical/technique sections
+- [ ] Category restrictions align with section content type
+
+---
+
+# GENERATE THE OUTLINE NOW
+
+Topic: **{{ ctx.topic }}**
+
+Return ONLY the JSON array.

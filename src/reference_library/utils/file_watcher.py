@@ -1,8 +1,9 @@
 """File system watcher for detecting new PDFs in the library."""
 
 import threading
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Optional
 
 from watchdog.events import (
     FileCreatedEvent,
@@ -55,16 +56,16 @@ class FileWatcher:
     def __init__(
         self,
         library_path: Path,
-        on_new_file: Optional[Callable[[Path], None]] = None,
-        on_modified_file: Optional[Callable[[Path], None]] = None,
-        on_deleted_file: Optional[Callable[[Path], None]] = None,
+        on_new_file: Callable[[Path], None] | None = None,
+        on_modified_file: Callable[[Path], None] | None = None,
+        on_deleted_file: Callable[[Path], None] | None = None,
     ):
         self.library_path = library_path
         self.on_new_file = on_new_file or (lambda p: None)
         self.on_modified_file = on_modified_file or (lambda p: None)
         self.on_deleted_file = on_deleted_file or (lambda p: None)
 
-        self._observer: Optional[Observer] = None
+        self._observer: Observer | None = None
         self._running = False
 
     def start(self):

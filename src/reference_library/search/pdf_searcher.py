@@ -2,8 +2,9 @@
 
 import os
 import re
+from collections.abc import Callable, Generator
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Dict, Generator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 import fitz  # PyMuPDF
 
@@ -73,7 +74,7 @@ class PDFSearcher:
         self.library_path = library_path.resolve()
         self.database = database
         self.scanner = LibraryScanner(library_path, database)
-        self._semantic: Optional[SemanticSearcher] = None  # Lazy-loaded
+        self._semantic: SemanticSearcher | None = None  # Lazy-loaded
         self.enable_query_expansion = enable_query_expansion
         self._cancelled = False
 
@@ -83,10 +84,10 @@ class PDFSearcher:
         self._section_detector = None
 
         # Active search strategy (set per-search for strategy-aware behavior)
-        self._active_strategy: Optional[SearchStrategy] = None
+        self._active_strategy: SearchStrategy | None = None
 
         # Study Mode report (populated after BROAD mode search)
-        self._last_study_report: Optional["StudyModeReport"] = None
+        self._last_study_report: StudyModeReport | None = None
 
     @property
     def semantic(self) -> SemanticSearcher:
@@ -161,8 +162,8 @@ class PDFSearcher:
         self,
         query: str,
         mode: str = "keyword",
-        progress_callback: Optional[Callable[[SearchProgress], None]] = None,
-        category_filter: Optional[str] = None,
+        progress_callback: Callable[[SearchProgress], None] | None = None,
+        category_filter: str | None = None,
     ) -> Generator[SearchResult, None, None]:
         """
         Search entire library for query with page-level deduplication.
@@ -336,7 +337,7 @@ class PDFSearcher:
         self,
         query: str,
         strategy: str = "standard",
-        progress_callback: Optional[Callable[[SearchProgress], None]] = None,
+        progress_callback: Callable[[SearchProgress], None] | None = None,
         skip_study_mode: bool = False,
     ) -> Generator[ChapterResult, None, None]:
         """
@@ -1338,7 +1339,7 @@ class PDFSearcher:
             return 0
 
     def index_library_semantic(
-        self, progress_callback: Optional[Callable[[int, int], None]] = None
+        self, progress_callback: Callable[[int, int], None] | None = None
     ) -> int:
         """
         Build semantic index for entire library.
@@ -1378,7 +1379,7 @@ class PDFSearcher:
     def index_library_parallel(
         self,
         max_workers: int = 4,
-        progress_callback: Optional[Callable[[int, int, str], None]] = None,
+        progress_callback: Callable[[int, int, str], None] | None = None,
     ) -> int:
         """
         Build semantic index using multiple CPU cores.

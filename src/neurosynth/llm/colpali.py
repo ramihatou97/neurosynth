@@ -186,6 +186,20 @@ class ColPaliClient:
             else:
                 raise ValueError(f"Invalid image type: {type(img)}")
 
+        # SOL-003: Smart Resize to prevent ColPali token overflow
+        # ColPali maps image patches to tokens. Large images > 1024px can exceed 4096 context window.
+        MAX_COLPALI_DIM = 1024
+        for i in range(len(pil_images)):
+            img = pil_images[i]
+            if img.width > MAX_COLPALI_DIM or img.height > MAX_COLPALI_DIM:
+                ratio = min(MAX_COLPALI_DIM / img.width, MAX_COLPALI_DIM / img.height)
+                new_size = (int(img.width * ratio), int(img.height * ratio))
+                # Resize in-place in the list
+                pil_images[i] = img.resize(new_size, Image.Resampling.LANCZOS)
+                # Ensure it's still RGB (resize shouldn't change mode but safe to be sure)
+                if pil_images[i].mode != "RGB":
+                    pil_images[i] = pil_images[i].convert("RGB")
+
         if not pil_images:
             return []
 

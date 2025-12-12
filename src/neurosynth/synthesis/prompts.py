@@ -142,3 +142,120 @@ You MUST integrate these figures into your text where relevant by inserting the 
 - Do not invent figure IDs. Only use those provided in the source material.
 
 Write the section:"""
+
+
+# =============================================================================
+# 2-PASS SYNTHESIS PROMPTS (Priority 5: LLM Citation Loop)
+# =============================================================================
+
+PASS1_SYNTHESIS_PROMPT = """You are writing a section for a neurosurgical textbook chapter.
+
+Section: {section_title}
+Description: {section_description}
+Word Target: approximately {word_target} words
+
+Source Material:
+{source_content}
+
+WRITING STYLE:
+{tone_instruction}
+
+Requirements:
+- Synthesize the source material into coherent prose
+- Integrate citations naturally using the format provided in sources
+- Present evidence objectively
+- Ensure medical accuracy
+- Do not fabricate information not present in sources
+
+FIGURE REQUESTS (2-Pass Mode - Pass 1):
+As you write, identify WHERE you need visual support. Instead of citing specific figures,
+insert FIGURE REQUEST placeholders describing what image would best support the text:
+
+Format: [REQUEST_FIGURE: type="<type>" topic="<description>"]
+
+Types: surgical, anatomy, imaging, diagram, illustration
+Examples:
+- [REQUEST_FIGURE: type="surgical" topic="pterional craniotomy incision and exposure"]
+- [REQUEST_FIGURE: type="anatomy" topic="middle cerebral artery bifurcation"]
+- [REQUEST_FIGURE: type="imaging" topic="preoperative MRI showing tumor location"]
+
+Rules:
+- Insert at least 1 request for every 300 words
+- Be specific in your topic description (include anatomical structures, techniques, etc.)
+- Place requests at natural figure placement points (after describing a structure or step)
+- Do NOT invent figure IDs - only use REQUEST_FIGURE placeholders
+
+Write the section with figure requests:"""
+
+
+PASS2_SYNTHESIS_PROMPT = """You are refining a neurosurgical textbook section with resolved figures.
+
+Section: {section_title}
+
+ORIGINAL DRAFT (from Pass 1):
+{pass1_content}
+
+RESOLVED FIGURES:
+The following figures have been matched to your requests:
+{resolved_figures}
+
+YOUR TASK:
+1. Review the resolved figures and their captions
+2. Replace [REQUEST_FIGURE: ...] placeholders with actual [FIGURE: id] citations
+3. If a resolved figure doesn't match well, you may omit it
+4. Refine the surrounding text to naturally reference the figures
+5. Ensure figure citations flow naturally in the prose
+
+FIGURE CITATION FORMAT:
+- Use [FIGURE: <id>] to cite a figure
+- Place the tag at the end of the sentence that references the figure
+- Reference the figure content naturally (e.g., "as shown in Figure X" or "demonstrates...")
+
+Write the refined section with resolved figure citations:"""
+
+
+PASS1_IMPERATIVE_PROMPT = """You are writing a surgical technique section for a neurosurgical operative atlas.
+
+Section: {section_title}
+Description: {section_description}
+Word Target: approximately {word_target} words
+
+Source Material:
+{source_content}
+
+WRITING STYLE:
+Write in an imperative, active voice suitable for surgical instruction.
+- Use direct commands: "Position the patient...", "Make the incision..."
+- Be specific and actionable
+- This section should read like a surgical manual
+
+Requirements:
+- Present steps in logical operative sequence
+- Include specific measurements, angles, and landmarks
+- Emphasize key decision points and safety considerations
+- Include tips for avoiding complications
+
+FIGURE REQUESTS (2-Pass Mode - Pass 1):
+For each major step, insert FIGURE REQUEST placeholders:
+
+Format: [REQUEST_FIGURE: type="<type>" topic="<description>"]
+
+Types: surgical, anatomy, imaging, diagram, intraop
+Examples:
+- [REQUEST_FIGURE: type="surgical" topic="patient positioning for pterional approach"]
+- [REQUEST_FIGURE: type="intraop" topic="bone flap elevation showing dural exposure"]
+- [REQUEST_FIGURE: type="diagram" topic="pedicle screw trajectory angles"]
+
+Rules:
+- At least 1 figure request per major surgical step
+- Be specific about what the image should demonstrate
+- Include relevant anatomical landmarks in descriptions
+- Do NOT use actual figure IDs in Pass 1
+
+"WHY" INTEGRATION:
+For each major step, include the rationale:
+1. Anatomical Why (e.g., "We angle 15° medially because...")
+2. Safety Why (e.g., "This keeps us 3mm from...")
+3. Outcome Why (e.g., "Medial angulation increases pullout strength...")
+
+Write the section with figure requests:"""

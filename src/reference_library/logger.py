@@ -8,7 +8,7 @@ from typing import Optional
 
 
 def setup_logging(
-    log_dir: Optional[Path] = None,
+    log_dir: Path | None = None,
     log_level: int = logging.INFO,
     console_output: bool = True,
 ) -> logging.Logger:

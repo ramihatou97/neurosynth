@@ -1,0 +1,12 @@
+[ ] NAME:Current Task List DESCRIPTION:Root task for conversation __NEW_AGENT__
+-[x] NAME:Create comprehensive Jinja2 Migration Plan DESCRIPTION:Analyze current architecture and create tailored implementation plan for prompt migration
+-[/] NAME:Frontend-Backend Parity Fixes DESCRIPTION:Comprehensive fixes to achieve 100% UI-Backend integration for NeuroSynth Study Suite
+-[ ] NAME:P0: Fix app.py crash - missing library import DESCRIPTION:Add missing `from src.ui import library` to app.py line 19. Currently crashes when clicking Reference Library.
+-[ ] NAME:P0: Fix app.py navigation - broken switch_page DESCRIPTION:Replace `st.switch_page('app.py')` with proper session state navigation using st.rerun()
+-[ ] NAME:P1: synthesis_page.py - Use audience/standards in context DESCRIPTION:Pass collected `audience` and `standards` variables to template context instead of ignoring them
+-[ ] NAME:P1: synthesis_page.py - Dynamic template selection DESCRIPTION:Select template based on category (anatomy.md.j2, procedure.md.j2, etc.) instead of hardcoded section.md.j2
+-[ ] NAME:P1: synthesis_page.py - Move TemplateManager to session_state DESCRIPTION:Instantiate TemplateManager once in session_state instead of recreating inside synthesis loop
+-[ ] NAME:P2: brain.py - Use AIClient instead of direct API calls DESCRIPTION:Replace direct anthropic.Anthropic() and OpenAI() with src.ai.AIClient for unified auth and config
+-[x] NAME:P2: brain.py - Create Jinja2 templates for study prompts DESCRIPTION:Create oral_examiner.md.j2, mcq_generator.md.j2, audio_script.md.j2 in src/neurosynth/templates/study/
+-[ ] NAME:P3: brain.py - Connect to vector DB for semantic retrieval DESCRIPTION:Replace file-based load_exam_context() with Database + SearchEngine semantic search
+-[ ] NAME:P1: synthesis_page.py - Remove unused json import DESCRIPTION:Clean up unused import json on line 4

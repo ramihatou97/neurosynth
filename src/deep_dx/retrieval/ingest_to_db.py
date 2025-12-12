@@ -13,6 +13,7 @@ from ai.client import AIClient
 from deep_dx.config import get_deepdx_settings
 from index.database import Database
 from models import Chunk, ChunkType, DocumentType, SourceMetadata, Specialty
+from neurosynth.integration.evidence import EvidenceDetector
 
 
 class DeepDxIngestor:
@@ -22,6 +23,7 @@ class DeepDxIngestor:
         self.ai_client = AIClient()
         self.chunk_size = 1000  # chars ~ 200-300 tokens
         self.overlap = 200
+        self.evidence_detector = EvidenceDetector()
 
     def process_directory(self, source_dir: Path):
         print(f"📂 Scanning {source_dir}...")
@@ -113,6 +115,10 @@ class DeepDxIngestor:
 
             if len(chunk_text.strip()) > 50:
                 chunk_id = f"{source_id}_chunk_{chunk_idx}"
+
+                # Detect evidence level
+                evidence = self.evidence_detector.detect(chunk_text)
+
                 chunk = Chunk(
                     id=chunk_id,
                     source_id=source.id,
@@ -123,6 +129,7 @@ class DeepDxIngestor:
                     page_start=page_num,
                     page_end=page_num,
                     embedding=None,  # To be filled
+                    evidence_level=evidence.level.value,
                 )
                 chunks.append(chunk)
                 texts_to_embed.append(chunk_text)

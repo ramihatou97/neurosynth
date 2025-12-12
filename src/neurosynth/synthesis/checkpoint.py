@@ -50,23 +50,28 @@ class SynthesisCheckpoint:
     # Maximum number of recovery directories to keep
     MAX_RECOVERY_DIRS = 10
 
-    def __init__(self, topic: str, base_dir: Path | None = None):
+    def __init__(
+        self, topic: str, base_dir: Path | None = None, existing_dir: Path | None = None
+    ):
         """Initialize checkpoint manager.
 
         Args:
             topic: The synthesis topic (used in directory name)
             base_dir: Override base recovery directory (default: ~/.neurosynth/recovery)
+            existing_dir: Optional path to an existing recovery directory to resume from
         """
         self.topic = topic
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        # Sanitize topic for directory name
-        safe_topic = self._sanitize_name(topic)
-
-        # Set up recovery directory
-        self.base_dir = base_dir or (Path.home() / ".neurosynth" / "recovery")
-        self.recovery_dir = self.base_dir / f"{safe_topic}_{self.timestamp}"
-        self.recovery_dir.mkdir(parents=True, exist_ok=True)
+        if existing_dir:
+            self.recovery_dir = existing_dir
+            self.base_dir = existing_dir.parent
+            logger.info(f"Resuming checkpoint from: {self.recovery_dir}")
+        else:
+            self.base_dir = base_dir or (Path.home() / ".neurosynth" / "recovery")
+            safe_topic = self._sanitize_name(topic)
+            self.recovery_dir = self.base_dir / f"{safe_topic}_{self.timestamp}"
+            self.recovery_dir.mkdir(parents=True, exist_ok=True)
 
         # Create subdirectories
         self.sections_dir = self.recovery_dir / "sections"
@@ -164,6 +169,17 @@ class SynthesisCheckpoint:
 
         logger.debug(f"Saved section {index}: {path}")
         return path
+
+    def has_section(self, index: int) -> bool:
+        """Check if a section with the given index exists."""
+        return (self.sections_dir / f"section_{index:02d}.md").exists()
+
+    def get_section_content(self, index: int) -> str | None:
+        """Get content of an existing section."""
+        path = self.sections_dir / f"section_{index:02d}.md"
+        if path.exists():
+            return path.read_text(encoding="utf-8")
+        return None
 
     def _update_sections_index(self) -> None:
         """Update sections index file."""

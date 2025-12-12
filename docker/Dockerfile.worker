@@ -15,12 +15,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy dependency files
 COPY pyproject.toml requirements.txt* ./
-COPY src/ ./src/
 
 # Install all dependencies with increased timeout and retries
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir --timeout=300 --retries=10 -e . && \
-    pip install --no-cache-dir redis>=5.0.0
+# FIRST: Install dependencies from requirements.txt if it exists (cached unless requirements change)
+RUN if [ -f requirements.txt ]; then pip install --no-cache-dir --timeout=300 --retries=10 -r requirements.txt; fi
+
+# SECOND: Install heavy dependencies explicitly (cached)
+RUN pip install --no-cache-dir --timeout=300 --retries=10 \
+    typing-extensions \
+    annotated-types \
+    beautifulsoup4 \
+    colpali_engine \
+    peft \
+    "torch>=2.0.0" \
+    redis>=5.0.0
+
+# Copy source code LAST (so changes don't invalidate above layers)
+COPY src/ ./src/
+
+# Install the package itself
+RUN pip install --no-cache-dir -e .[visual]
 
 # Runtime stage
 FROM python:${PYTHON_VERSION}-slim
@@ -65,7 +79,7 @@ COPY src/ ./src/
 COPY pyproject.toml ./
 
 # Install the package (editable for worker module discovery)
-RUN pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir -e .[visual]
 
 # Create non-root user
 RUN groupadd -r neurosynth --gid=1000 && \

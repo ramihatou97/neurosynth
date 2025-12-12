@@ -43,7 +43,7 @@ class SectionDetector:
 
     # Regex patterns for section headers
     # Ordered by specificity (High confidence first)
-    PATTERNS: Dict[str, List[Tuple[str, MatchConfidence]]] = {
+    PATTERNS: dict[str, list[tuple[str, MatchConfidence]]] = {
         "Technique": [
             (
                 r"^\s*(?:[0-9]+(?:\.[0-9]+)*\.?|[IVX]+\.)?\s*SURGICAL\s+TECHNIQUE\s*$",
@@ -147,7 +147,7 @@ class SectionDetector:
         ],
     }
 
-    def detect_section_headers(self, text: str, page_num: int) -> List[DetectedSection]:
+    def detect_section_headers(self, text: str, page_num: int) -> list[DetectedSection]:
         """Detect section headers on a single page."""
         # print(f"[DEBUG] ENTERING detect_section_headers for page {page_num}. Text len: {len(text)}")
         detected = []
@@ -191,9 +191,9 @@ class SectionDetector:
     def get_safe_extraction_window(
         self,
         target_section: DetectedSection,
-        all_sections: List[DetectedSection],
+        all_sections: list[DetectedSection],
         total_pages: int,
-    ) -> Tuple[int, int]:
+    ) -> tuple[int, int]:
         """Calculate safe start and end pages for extraction.
 
         Guarantees Zero Data Loss by ensuring minimum page count.
@@ -242,7 +242,7 @@ class SectionDetector:
 
     def create_fallback_section(
         self, keyword_page: int, total_pages: int
-    ) -> Tuple[int, int]:
+    ) -> tuple[int, int]:
         """Create a fallback extraction window around a keyword match.
 
         Used when NO section header is found.
@@ -254,7 +254,7 @@ class SectionDetector:
 
 
 # Singleton
-_section_detector: Optional[SectionDetector] = None
+_section_detector: SectionDetector | None = None
 
 
 def get_section_detector() -> SectionDetector:

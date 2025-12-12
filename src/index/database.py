@@ -10,8 +10,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from config import settings
-from models import (
+from src.config import settings
+from src.models import (
     Chunk,
     ChunkType,
     DocumentType,
@@ -55,7 +55,17 @@ class Database:
         page_start INTEGER,
         page_end INTEGER,
         embedding BLOB,
-        FOREIGN KEY (source_id) REFERENCES sources(id)
+        image_ids TEXT,  -- JSON list of IDs
+        also_in_sources TEXT,  -- JSON list of source IDs
+        metadata TEXT,    -- JSON dictionary
+        evidence_level TEXT DEFAULT 'unknown',
+        FOREIGN KEY (source_id) REFERENCES sources(id) ON DELETE CASCADE
+    );
+
+    CREATE VIRTUAL TABLE IF NOT EXISTS chunk_search USING fts5(
+        content,
+        section_title,
+        source_title
     );
 
     -- Images (with context)
@@ -81,16 +91,38 @@ class Database:
     CREATE INDEX IF NOT EXISTS idx_sources_specialty ON sources(specialty);
     """
 
-    def __init__(self, db_path: Optional[Path] = None):
-        self.db_path = db_path or settings.database_path
+    def __init__(self, db_path: Path | None = None):
+        if db_path is None:
+            self.db_path = settings.database_path
+        else:
+            self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
 
     def _init_db(self):
         """Initialize database and create tables"""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.executescript(self.SCHEMA)
-            conn.commit()
+        conn = self._get_conn()
+        conn.executescript(self.SCHEMA)
+
+        # Check if evidence_level column exists (migration for existing DBs)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(chunks)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "evidence_level" not in columns:
+            cursor.execute(
+                "ALTER TABLE chunks ADD COLUMN evidence_level TEXT DEFAULT 'unknown'"
+            )
+
+        # Check for other new columns for migration
+        if "image_ids" not in columns:
+            cursor.execute("ALTER TABLE chunks ADD COLUMN image_ids TEXT")
+        if "also_in_sources" not in columns:
+            cursor.execute("ALTER TABLE chunks ADD COLUMN also_in_sources TEXT")
+        if "metadata" not in columns:
+            cursor.execute("ALTER TABLE chunks ADD COLUMN metadata TEXT")
+
+        conn.commit()
+        conn.close()
 
     def _get_conn(self) -> sqlite3.Connection:
         """Get database connection"""
@@ -104,94 +136,126 @@ class Database:
 
     def insert_source(self, metadata: SourceMetadata) -> None:
         """Insert or update a source document"""
-        with self._get_conn() as conn:
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO sources
-                (id, title, doc_type, file_path, authors, year, specialty, total_pages, processed_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT OR REPLACE INTO sources
+            (id, title, doc_type, file_path, authors, year, specialty, total_pages, processed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-                (
-                    metadata.id,
-                    metadata.title,
-                    metadata.doc_type.value,
-                    str(metadata.file_path),
-                    metadata.authors,
-                    metadata.year,
-                    metadata.specialty.value,
-                    metadata.total_pages,
-                    (
-                        metadata.processed_at.isoformat()
-                        if metadata.processed_at
-                        else None
-                    ),
+            (
+                metadata.id,
+                metadata.title,
+                metadata.doc_type.value,
+                str(metadata.file_path),
+                metadata.authors,
+                metadata.year,
+                metadata.specialty.value,
+                metadata.total_pages,
+                (metadata.processed_at.isoformat() if metadata.processed_at else None),
+            ),
+        )
+        conn.commit()
+        conn.close()
+
+    def get_source(self, source_id: str) -> SourceMetadata | None:
+        """Get a source by ID"""
+        conn = self._get_conn()
+        row = conn.execute(
+            "SELECT * FROM sources WHERE id = ?", (source_id,)
+        ).fetchone()
+        conn.close()
+
+        if row:
+            return SourceMetadata(
+                id=row["id"],
+                title=row["title"],
+                doc_type=DocumentType(row["doc_type"]),
+                file_path=Path(row["file_path"]),
+                authors=row["authors"],
+                year=row["year"],
+                specialty=(
+                    Specialty(row["specialty"])
+                    if row["specialty"]
+                    else Specialty.GENERAL
+                ),
+                total_pages=row["total_pages"],
+                processed_at=(
+                    datetime.fromisoformat(row["processed_at"])
+                    if row["processed_at"]
+                    else None
                 ),
             )
-            conn.commit()
-
-    def get_source(self, source_id: str) -> Optional[SourceMetadata]:
-        """Get a source by ID"""
-        with self._get_conn() as conn:
-            row = conn.execute(
-                "SELECT * FROM sources WHERE id = ?", (source_id,)
-            ).fetchone()
-
-            if row:
-                return SourceMetadata(
-                    id=row["id"],
-                    title=row["title"],
-                    doc_type=DocumentType(row["doc_type"]),
-                    file_path=Path(row["file_path"]),
-                    authors=row["authors"],
-                    year=row["year"],
-                    specialty=(
-                        Specialty(row["specialty"])
-                        if row["specialty"]
-                        else Specialty.GENERAL
-                    ),
-                    total_pages=row["total_pages"],
-                    processed_at=(
-                        datetime.fromisoformat(row["processed_at"])
-                        if row["processed_at"]
-                        else None
-                    ),
-                )
-            return None
+        return None
 
     def get_all_sources(self) -> list[SourceMetadata]:
         """Get all sources"""
-        with self._get_conn() as conn:
-            rows = conn.execute("SELECT * FROM sources ORDER BY title").fetchall()
-            return [
-                SourceMetadata(
-                    id=row["id"],
-                    title=row["title"],
-                    doc_type=DocumentType(row["doc_type"]),
-                    file_path=Path(row["file_path"]),
-                    authors=row["authors"],
-                    year=row["year"],
-                    specialty=(
-                        Specialty(row["specialty"])
-                        if row["specialty"]
-                        else Specialty.GENERAL
-                    ),
-                    total_pages=row["total_pages"],
-                    processed_at=(
-                        datetime.fromisoformat(row["processed_at"])
-                        if row["processed_at"]
-                        else None
-                    ),
-                )
-                for row in rows
-            ]
+        conn = self._get_conn()
+        rows = conn.execute("SELECT * FROM sources ORDER BY title").fetchall()
+        conn.close()
+        return [
+            SourceMetadata(
+                id=row["id"],
+                title=row["title"],
+                doc_type=DocumentType(row["doc_type"]),
+                file_path=Path(row["file_path"]),
+                authors=row["authors"],
+                year=row["year"],
+                specialty=(
+                    Specialty(row["specialty"])
+                    if row["specialty"]
+                    else Specialty.GENERAL
+                ),
+                total_pages=row["total_pages"],
+                processed_at=(
+                    datetime.fromisoformat(row["processed_at"])
+                    if row["processed_at"]
+                    else None
+                ),
+            )
+            for row in rows
+        ]
 
     def source_exists(self, source_id: str) -> bool:
         """Check if a source exists"""
-        with self._get_conn() as conn:
-            row = conn.execute(
-                "SELECT 1 FROM sources WHERE id = ?", (source_id,)
-            ).fetchone()
-            return row is not None
+        conn = self._get_conn()
+        row = conn.execute(
+            "SELECT 1 FROM sources WHERE id = ?", (source_id,)
+        ).fetchone()
+        conn.close()
+        return row is not None
+
+    def update_source_specialty(self, source_id: str, specialty: "Specialty") -> None:
+        """Update the specialty classification for a source"""
+        conn = self._get_conn()
+        conn.execute(
+            "UPDATE sources SET specialty = ? WHERE id = ?",
+            (specialty.value, source_id),
+        )
+        conn.commit()
+        conn.close()
+
+    def update_source_doctype(self, source_id: str, doc_type: "DocumentType") -> None:
+        """Update the document type for a source"""
+        conn = self._get_conn()
+        conn.execute(
+            "UPDATE sources SET doc_type = ? WHERE id = ?", (doc_type.value, source_id)
+        )
+        conn.commit()
+        conn.close()
+
+    def delete_source(self, source_id: str) -> None:
+        """Delete a source and all associated chunks and images"""
+        conn = self._get_conn()
+        # Delete images first (foreign key constraint)
+        conn.execute("DELETE FROM images WHERE source_id = ?", (source_id,))
+        # Delete chunks
+        conn.execute("DELETE FROM chunks WHERE source_id = ?", (source_id,))
+        # Delete source
+        conn.execute("DELETE FROM sources WHERE id = ?", (source_id,))
+        conn.commit()
+        conn.close()
 
     # ========================================================================
     # Chunks
@@ -199,18 +263,54 @@ class Database:
 
     def insert_chunk(self, chunk: Chunk) -> None:
         """Insert a chunk"""
-        with self._get_conn() as conn:
+        conn = self._get_conn()
+        cursor = conn.cursor()
+
+        embedding_blob = None
+        if chunk.embedding:
+            embedding_blob = self._serialize_embedding(chunk.embedding)
+
+        cursor.execute(
+            """
+            INSERT OR REPLACE INTO chunks
+            (id, source_id, source_title, section_title, content, chunk_type,
+             page_start, page_end, embedding, image_ids, also_in_sources, metadata, evidence_level)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                chunk.id,
+                chunk.source_id,
+                chunk.source_title,
+                chunk.section_title,
+                chunk.content,
+                chunk.chunk_type.value,
+                chunk.page_start,
+                chunk.page_end,
+                embedding_blob,
+                json.dumps(chunk.image_ids),
+                json.dumps(chunk.also_in_sources),
+                json.dumps(chunk.metadata),
+                chunk.evidence_level,
+            ),
+        )
+        conn.commit()
+        conn.close()
+
+    def insert_chunks(self, chunks: list[Chunk]) -> None:
+        """Insert multiple chunks efficiently"""
+        if not chunks:
+            return
+
+        conn = self._get_conn()
+        cursor = conn.cursor()
+
+        data = []
+        for chunk in chunks:
             embedding_blob = None
             if chunk.embedding:
                 embedding_blob = self._serialize_embedding(chunk.embedding)
 
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO chunks
-                (id, source_id, source_title, section_title, content, chunk_type,
-                 page_start, page_end, embedding)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
+            data.append(
                 (
                     chunk.id,
                     chunk.source_id,
@@ -221,78 +321,83 @@ class Database:
                     chunk.page_start,
                     chunk.page_end,
                     embedding_blob,
-                ),
-            )
-            conn.commit()
-
-    def insert_chunks(self, chunks: list[Chunk]) -> None:
-        """Insert multiple chunks efficiently"""
-        with self._get_conn() as conn:
-            for chunk in chunks:
-                embedding_blob = None
-                if chunk.embedding:
-                    embedding_blob = self._serialize_embedding(chunk.embedding)
-
-                conn.execute(
-                    """
-                    INSERT OR REPLACE INTO chunks
-                    (id, source_id, source_title, section_title, content, chunk_type,
-                     page_start, page_end, embedding)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                    (
-                        chunk.id,
-                        chunk.source_id,
-                        chunk.source_title,
-                        chunk.section_title,
-                        chunk.content,
-                        chunk.chunk_type.value,
-                        chunk.page_start,
-                        chunk.page_end,
-                        embedding_blob,
-                    ),
+                    json.dumps(chunk.image_ids),
+                    json.dumps(chunk.also_in_sources),
+                    json.dumps(chunk.metadata),
+                    chunk.evidence_level,
                 )
-            conn.commit()
+            )
+
+        cursor.executemany(
+            """
+            INSERT OR REPLACE INTO chunks
+            (id, source_id, source_title, section_title, content, chunk_type,
+             page_start, page_end, embedding, image_ids, also_in_sources, metadata, evidence_level)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            data,
+        )
+        conn.commit()
+        conn.close()
 
     def get_chunks_by_source(self, source_id: str) -> list[Chunk]:
         """Get all chunks for a source"""
-        with self._get_conn() as conn:
-            rows = conn.execute(
-                "SELECT * FROM chunks WHERE source_id = ?", (source_id,)
-            ).fetchall()
-            return [self._row_to_chunk(row) for row in rows]
+        conn = self._get_conn()
+        rows = conn.execute(
+            "SELECT * FROM chunks WHERE source_id = ?", (source_id,)
+        ).fetchall()
+        conn.close()
+        return [self._row_to_chunk(row) for row in rows]
 
     def get_all_chunks(self) -> list[Chunk]:
         """Get all chunks (without embeddings if possible to save memory, but _row_to_chunk deserializes)"""
-        with self._get_conn() as conn:
-            # We don't strictly need embeddings for BM25, but row_to_chunk reads them.
-            # Optimized query could skip embedding blob
-            rows = conn.execute("SELECT * FROM chunks").fetchall()
-            return [self._row_to_chunk(row) for row in rows]
+        conn = self._get_conn()
+        rows = conn.execute("SELECT * FROM chunks").fetchall()
+        conn.close()
+        return [self._row_to_chunk(row) for row in rows]
 
     def get_all_chunks_with_embeddings(self) -> list[tuple[Chunk, list[float]]]:
         """Get all chunks with their embeddings for vector search"""
-        with self._get_conn() as conn:
-            rows = conn.execute(
-                "SELECT * FROM chunks WHERE embedding IS NOT NULL"
-            ).fetchall()
+        conn = self._get_conn()
+        rows = conn.execute(
+            "SELECT * FROM chunks WHERE embedding IS NOT NULL"
+        ).fetchall()
+        conn.close()
 
-            results = []
-            for row in rows:
-                chunk = self._row_to_chunk(row)
-                embedding = self._deserialize_embedding(row["embedding"])
-                results.append((chunk, embedding))
+        results = []
+        for row in rows:
+            chunk = self._row_to_chunk(row)
+            embedding = self._deserialize_embedding(row["embedding"])
+            results.append((chunk, embedding))
 
-            return results
+        return results
 
     def count_chunks(self) -> int:
         """Count total chunks"""
-        with self._get_conn() as conn:
-            row = conn.execute("SELECT COUNT(*) as count FROM chunks").fetchone()
-            return row["count"]
+        conn = self._get_conn()
+        row = conn.execute("SELECT COUNT(*) as count FROM chunks").fetchone()
+        conn.close()
+        return row["count"]
 
     def _row_to_chunk(self, row: sqlite3.Row) -> Chunk:
         """Convert database row to Chunk object"""
+        # Helper to safely get column if it exists (for migration support)
+        evidence = "unknown"
+        if "evidence_level" in row.keys():
+            evidence = row["evidence_level"]
+
+        image_ids = []
+        if "image_ids" in row.keys() and row["image_ids"]:
+            image_ids = json.loads(row["image_ids"])
+
+        also_in_sources = []
+        if "also_in_sources" in row.keys() and row["also_in_sources"]:
+            also_in_sources = json.loads(row["also_in_sources"])
+
+        metadata = {}
+        if "metadata" in row.keys() and row["metadata"]:
+            metadata = json.loads(row["metadata"])
+
         return Chunk(
             id=row["id"],
             source_id=row["source_id"],
@@ -311,6 +416,10 @@ class Database:
                 if row["embedding"]
                 else None
             ),
+            image_ids=image_ids,
+            also_in_sources=also_in_sources,
+            metadata=metadata,
+            evidence_level=evidence,
         )
 
     # ========================================================================
@@ -374,6 +483,40 @@ class Database:
                         embedding_blob,
                     ),
                 )
+            conn.commit()
+
+    def get_all_images(self) -> list[ExtractedImage]:
+        """Get all images"""
+        with self._get_conn() as conn:
+            rows = conn.execute("SELECT * FROM images").fetchall()
+            return [self._row_to_image(row) for row in rows]
+
+    def get_images_without_embeddings(self) -> list[ExtractedImage]:
+        """Get images that need embeddings (backfill)"""
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM images WHERE embedding IS NULL"
+            ).fetchall()
+            return [self._row_to_image(row) for row in rows]
+
+    def get_image_by_id(self, image_id: str) -> ExtractedImage | None:
+        """Get a single image by ID"""
+        with self._get_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM images WHERE id = ?", (image_id,)
+            ).fetchone()
+            return self._row_to_image(row) if row else None
+
+    def update_image_embedding(self, image_id: str, embedding: list[float]) -> None:
+        """Update an image's embedding"""
+        blob = self._serialize_embedding(embedding)
+        with self._get_conn() as conn:
+            conn.execute(
+                """
+                UPDATE images SET embedding = ? WHERE id = ?
+                """,
+                (blob, image_id),
+            )
             conn.commit()
 
     def get_images_by_source(self, source_id: str) -> list[ExtractedImage]:
@@ -460,8 +603,16 @@ class Database:
         return list(struct.unpack(f"{n_floats}f", blob))
 
     # ========================================================================
-    # Statistics
+    # Statistics & Helpers
     # ========================================================================
+
+    def get_image_counts_per_source(self) -> dict[str, int]:
+        """Get mapping of source_id to number of extracted images"""
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                "SELECT source_id, COUNT(*) as c FROM images GROUP BY source_id"
+            ).fetchall()
+            return {row["source_id"]: row["c"] for row in rows}
 
     def get_stats(self) -> dict:
         """Get database statistics"""
@@ -482,4 +633,28 @@ class Database:
                 "chunks": chunks,
                 "images": images,
                 "by_specialty": {row["specialty"]: row["c"] for row in specialties},
+            }
+
+    def reset_all_data(self) -> dict:
+        """
+        Clear all indexed data from the database.
+        Returns counts of deleted records.
+        """
+        with self._get_conn() as conn:
+            # Get counts before deletion
+            sources_count = conn.execute("SELECT COUNT(*) FROM sources").fetchone()[0]
+            chunks_count = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+            images_count = conn.execute("SELECT COUNT(*) FROM images").fetchone()[0]
+
+            # Delete in order (respect foreign keys)
+            conn.execute("DELETE FROM chunk_search")
+            conn.execute("DELETE FROM images")
+            conn.execute("DELETE FROM chunks")
+            conn.execute("DELETE FROM sources")
+            conn.commit()
+
+            return {
+                "sources_deleted": sources_count,
+                "chunks_deleted": chunks_count,
+                "images_deleted": images_count,
             }

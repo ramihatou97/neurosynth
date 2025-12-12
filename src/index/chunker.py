@@ -9,8 +9,8 @@ import hashlib
 import re
 from typing import List, Optional
 
-from config import settings
-from models import Chunk, ChunkType, ProcessedDocument, Section
+from src.config import settings
+from src.models import Chunk, ChunkType, ProcessedDocument, Section
 
 
 class SemanticChunker:

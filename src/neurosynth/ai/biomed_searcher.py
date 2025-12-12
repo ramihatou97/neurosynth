@@ -21,7 +21,7 @@ class BiomedCLIPSearcher:
     # Using the HF Hub ID supported by open_clip
     MODEL_NAME = "hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224"
 
-    def __init__(self, device: Optional[str] = None):
+    def __init__(self, device: str | None = None):
         if not open_clip:
             logger.error(
                 "open_clip_torch not installed. Please pip install open_clip_torch"
@@ -55,7 +55,7 @@ class BiomedCLIPSearcher:
         norm = np.linalg.norm(vector)
         return vector / norm if norm > 0 else vector
 
-    def embed_text(self, text: Union[str, list[str]]) -> np.ndarray:
+    def embed_text(self, text: str | list[str]) -> np.ndarray:
         if isinstance(text, str):
             text = [text]
         try:
@@ -72,7 +72,7 @@ class BiomedCLIPSearcher:
             return np.array([])
 
     def embed_image(
-        self, image_input: Union[str, Path, list[Union[str, Path, Image.Image]]]
+        self, image_input: str | Path | list[str | Path | Image.Image]
     ) -> np.ndarray:
         images = []
         try:

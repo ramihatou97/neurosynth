@@ -16,7 +16,7 @@ from typing import Any, Dict, List
 # Hierarchical organization of neurosurgical anatomy
 # Used to infer region from query and find relevant foundations
 
-NEUROSURGICAL_REGIONS: Dict[str, Dict[str, Any]] = {
+NEUROSURGICAL_REGIONS: dict[str, dict[str, Any]] = {
     "spine": {
         "keywords": [
             "spine",
@@ -481,7 +481,7 @@ NEUROSURGICAL_REGIONS: Dict[str, Dict[str, Any]] = {
 # =============================================================================
 # Categories of knowledge with detection patterns and priorities
 
-KNOWLEDGE_CATEGORIES: Dict[str, Dict[str, Any]] = {
+KNOWLEDGE_CATEGORIES: dict[str, dict[str, Any]] = {
     "anatomy": {
         "priority": 1,  # Highest priority - foundational
         "patterns": [
@@ -608,7 +608,7 @@ KNOWLEDGE_CATEGORIES: Dict[str, Dict[str, Any]] = {
 # Maps procedure-specific keywords to their anatomical region
 # Used when region isn't explicit in query
 
-PROCEDURE_TO_REGION: Dict[str, str] = {
+PROCEDURE_TO_REGION: dict[str, str] = {
     # Spine procedures
     "discectomy": "spine",
     "diskectomy": "spine",
@@ -675,7 +675,7 @@ PROCEDURE_TO_REGION: Dict[str, str] = {
 # For each region, define search terms that find foundational chapters
 # These are used to supplement BROAD mode results
 
-REGION_FOUNDATIONS: Dict[str, Dict[str, List[str]]] = {
+REGION_FOUNDATIONS: dict[str, dict[str, list[str]]] = {
     "spine": {
         "anatomy": [
             "spinal anatomy",

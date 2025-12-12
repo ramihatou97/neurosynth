@@ -22,9 +22,7 @@ def test_import_reference_library(repo_root):
     # Config and logger
     from reference_library.config import DATA_DIR
     from reference_library.logger import get_logger
-    from reference_library.ui.app import run_app
 
-    assert callable(run_app)
     assert callable(get_logger)
     assert DATA_DIR.name == "data"
 
@@ -87,10 +85,8 @@ def test_package_structure(repo_root):
     assert (src / "reference_library").exists(), "src/reference_library/ missing"
     assert (src / "bridges").exists(), "src/bridges/ missing"
 
-    # Entry points
-    apps = repo_root / "apps"
-    assert apps.exists(), "apps/ directory missing"
-    assert (apps / "reference-library.py").exists(), "apps/reference-library.py missing"
+    # Entry points - Streamlit app is the main entry point
+    assert (repo_root / "app.py").exists(), "app.py (Streamlit) missing"
 
 
 def test_docker_configs(repo_root):

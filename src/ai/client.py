@@ -24,7 +24,7 @@ from tenacity import (
     wait_exponential,
 )
 
-from config import settings
+from src.config import settings
 
 logger = structlog.get_logger(__name__)
 
@@ -49,8 +49,8 @@ class AsyncAIClient:
 
     def __init__(
         self,
-        voyage_api_key: Optional[str] = None,
-        anthropic_api_key: Optional[str] = None,
+        voyage_api_key: str | None = None,
+        anthropic_api_key: str | None = None,
         timeout: float = 60.0,
     ):
         self.voyage_key = (
@@ -95,9 +95,7 @@ class AsyncAIClient:
     # Embeddings
     # ========================================================================
 
-    async def get_embedding(
-        self, text: str, model: Optional[str] = None
-    ) -> list[float]:
+    async def get_embedding(self, text: str, model: str | None = None) -> list[float]:
         """
         Get embedding for a single text.
 
@@ -112,7 +110,7 @@ class AsyncAIClient:
         return embeddings[0]
 
     async def get_embeddings(
-        self, texts: list[str], model: Optional[str] = None
+        self, texts: list[str], model: str | None = None
     ) -> list[list[float]]:
         """
         Get embeddings for multiple texts.
@@ -195,10 +193,10 @@ class AsyncAIClient:
     async def synthesize(
         self,
         prompt: str,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
         max_tokens: int = 4096,
         temperature: float = 0.3,
-        model: Optional[str] = None,
+        model: str | None = None,
     ) -> str:
         """
         Generate synthesized content using Claude (with retry).

@@ -67,7 +67,7 @@ class ProjectDirectory:
 
 
 def _create_project_directory(
-    topic: str, base_dir: Optional[Path] = None
+    topic: str, base_dir: Path | None = None
 ) -> ProjectDirectory:
     """Create a persistent project directory for the given topic.
 
@@ -150,8 +150,8 @@ class SynthesisResult:
     """Result of a synthesis operation."""
 
     success: bool
-    output_path: Optional[Path] = None
-    error: Optional[str] = None
+    output_path: Path | None = None
+    error: str | None = None
     log: str = ""
 
 
@@ -160,8 +160,8 @@ class NeuroSynthBridge:
 
     def __init__(
         self,
-        neurosynth_path: Optional[Path] = None,
-        neurosynth_venv: Optional[Path] = None,
+        neurosynth_path: Path | None = None,
+        neurosynth_venv: Path | None = None,
         database: Optional["Database"] = None,
         pdf_searcher: Optional["PDFSearcher"] = None,
     ):
@@ -183,13 +183,13 @@ class NeuroSynthBridge:
         self,
         topic: str,
         results: list,  # list[SearchResult]
-        output_dir: Optional[Path] = None,
-        on_progress: Optional[Callable[[str], None]] = None,
+        output_dir: Path | None = None,
+        on_progress: Callable[[str], None] | None = None,
         context_pages: int = 1,
         search_query: str = "",
         search_mode: str = "keyword",
         template_type: str = None,
-        query_intent: Optional[str] = None,  # NEW: Detected query intent
+        query_intent: str | None = None,  # NEW: Detected query intent
     ) -> SynthesisResult:
         """
         Synthesize a chapter from selected search results.
@@ -401,8 +401,8 @@ class NeuroSynthBridge:
         topic: str,
         sources_dir: Path,
         output_path: Path,
-        manifest_path: Optional[Path] = None,
-        on_progress: Optional[Callable[[str], None]] = None,
+        manifest_path: Path | None = None,
+        on_progress: Callable[[str], None] | None = None,
     ) -> SynthesisResult:
         """Run the NeuroSynth CLI."""
         # Build command
@@ -580,9 +580,9 @@ class NeuroSynthBridge:
         search_query: str,
         search_mode: str,
         extracted: list[ExtractedSource],
-        output_path: Optional[Path],
+        output_path: Path | None,
         result: SynthesisResult,
-        manifest_path: Optional[Path] = None,
+        manifest_path: Path | None = None,
     ):
         """Log synthesis to the database history."""
         if not self.database:

@@ -28,6 +28,12 @@ class Section:
     inline_figures: list["VisualElement"] = field(default_factory=list)
     figure_plate: "FigurePlate | None" = None
 
+    # Image pipeline integration (assigned medical images from vision search)
+    images: list[Any] = field(default_factory=list)
+
+    # Source tracking (sources used in synthesis)
+    sources_used: list[Any] = field(default_factory=list)
+
     # Metadata
     word_count: int = 0
     citation_count: int = 0

@@ -29,7 +29,7 @@ from .extracted_dictionaries import (
 # =============================================================================
 
 # Tumor/Pathology Synonyms
-TUMOR_SYNONYMS: Dict[str, List[str]] = {
+TUMOR_SYNONYMS: dict[str, list[str]] = {
     "acoustic neuroma": [
         "vestibular schwannoma",
         "VS",
@@ -60,7 +60,7 @@ TUMOR_SYNONYMS: Dict[str, List[str]] = {
 }
 
 # Vascular Pathology Synonyms
-VASCULAR_SYNONYMS: Dict[str, List[str]] = {
+VASCULAR_SYNONYMS: dict[str, list[str]] = {
     "aneurysm": ["cerebral aneurysm", "intracranial aneurysm", "berry aneurysm"],
     "AVM": ["arteriovenous malformation", "cerebral AVM", "brain AVM"],
     "cavernoma": ["cavernous malformation", "cavernous angioma", "cerebral cavernoma"],
@@ -78,7 +78,7 @@ VASCULAR_SYNONYMS: Dict[str, List[str]] = {
 }
 
 # Spinal Pathology Synonyms
-SPINAL_SYNONYMS: Dict[str, List[str]] = {
+SPINAL_SYNONYMS: dict[str, list[str]] = {
     "herniated disc": [
         "disc herniation",
         "HNP",
@@ -94,7 +94,7 @@ SPINAL_SYNONYMS: Dict[str, List[str]] = {
 }
 
 # Surgical Approach Synonyms
-APPROACH_SYNONYMS: Dict[str, List[str]] = {
+APPROACH_SYNONYMS: dict[str, list[str]] = {
     "pterional": ["frontotemporal", "pterional craniotomy", "frontotemporal approach"],
     "retrosigmoid": ["lateral suboccipital", "retromastoid", "retrosigmoid approach"],
     "orbitozygomatic": ["OZ approach", "orbitozygomatic craniotomy"],
@@ -109,7 +109,7 @@ APPROACH_SYNONYMS: Dict[str, List[str]] = {
 }
 
 # Surgical Procedure Synonyms
-PROCEDURE_SYNONYMS: Dict[str, List[str]] = {
+PROCEDURE_SYNONYMS: dict[str, list[str]] = {
     "craniotomy": ["cranial opening", "bone flap", "skull opening"],
     "craniectomy": ["decompressive craniectomy", "bone removal", "DC"],
     "aneurysm clipping": [
@@ -138,7 +138,7 @@ PROCEDURE_SYNONYMS: Dict[str, List[str]] = {
 }
 
 # Anatomical Structure Synonyms
-ANATOMY_SYNONYMS: Dict[str, List[str]] = {
+ANATOMY_SYNONYMS: dict[str, list[str]] = {
     "sylvian fissure": ["lateral sulcus", "Sylvian cistern"],
     "circle of Willis": ["cerebral arterial circle", "Willis polygon"],
     "foramen magnum": ["FM", "craniocervical junction"],
@@ -152,7 +152,7 @@ ANATOMY_SYNONYMS: Dict[str, List[str]] = {
 }
 
 # Clinical Condition Synonyms
-CLINICAL_SYNONYMS: Dict[str, List[str]] = {
+CLINICAL_SYNONYMS: dict[str, list[str]] = {
     "hydrocephalus": ["ventriculomegaly", "enlarged ventricles", "CSF accumulation"],
     "trigeminal neuralgia": ["TN", "tic douloureux", "facial pain"],
     "hemifacial spasm": ["HFS", "facial spasm"],
@@ -163,7 +163,7 @@ CLINICAL_SYNONYMS: Dict[str, List[str]] = {
 }
 
 # Diagnostic/Imaging Synonyms
-IMAGING_SYNONYMS: Dict[str, List[str]] = {
+IMAGING_SYNONYMS: dict[str, list[str]] = {
     "MRI": ["magnetic resonance imaging", "brain MRI", "MR imaging"],
     "CT": ["computed tomography", "CAT scan", "CT scan"],
     "angiography": ["DSA", "digital subtraction angiography", "cerebral angiogram"],
@@ -176,7 +176,7 @@ IMAGING_SYNONYMS: Dict[str, List[str]] = {
 # =============================================================================
 
 # Original domain-specific synonyms
-DOMAIN_SYNONYMS: Dict[str, List[str]] = {
+DOMAIN_SYNONYMS: dict[str, list[str]] = {
     **TUMOR_SYNONYMS,
     **VASCULAR_SYNONYMS,
     **SPINAL_SYNONYMS,
@@ -188,7 +188,7 @@ DOMAIN_SYNONYMS: Dict[str, List[str]] = {
 }
 
 # Extracted procedural/technical synonyms
-PROCEDURAL_SYNONYMS: Dict[str, List[str]] = {
+PROCEDURAL_SYNONYMS: dict[str, list[str]] = {
     **INSTRUMENT_SYNONYMS,
     **POSITIONING_TERMS,
     **HEMOSTATIC_AGENTS,
@@ -198,7 +198,7 @@ PROCEDURAL_SYNONYMS: Dict[str, List[str]] = {
 }
 
 # Combine all synonym dictionaries (for backward compatibility)
-ALL_SYNONYMS: Dict[str, List[str]] = {
+ALL_SYNONYMS: dict[str, list[str]] = {
     **DOMAIN_SYNONYMS,
     **PROCEDURAL_SYNONYMS,
 }
@@ -215,7 +215,7 @@ def expand_query(
     include_orthographic: bool = True,
     include_monitoring: bool = True,
     include_complications: bool = True,
-) -> List[str]:
+) -> list[str]:
     """
     Expand a query with neurosurgical synonyms (enhanced version).
 
@@ -282,7 +282,7 @@ def expand_query(
     return expanded[: max_expansions + 1]  # Limit total expansions
 
 
-def expand_query_simple(query: str, max_expansions: int = 3) -> List[str]:
+def expand_query_simple(query: str, max_expansions: int = 3) -> list[str]:
     """
     Simple query expansion (original behavior for backward compatibility).
 
@@ -306,7 +306,7 @@ def expand_query_simple(query: str, max_expansions: int = 3) -> List[str]:
     return expanded[: max_expansions + 1]
 
 
-def get_all_terms_for_query(query: str, include_orthographic: bool = True) -> Set[str]:
+def get_all_terms_for_query(query: str, include_orthographic: bool = True) -> set[str]:
     """
     Get all related terms (original + all synonyms) for a query.
 
@@ -357,7 +357,7 @@ def is_neurosurgical_term(term: str) -> bool:
     term_lower = term.lower()
 
     # Check if it's a key
-    if term_lower in [k.lower() for k in ALL_SYNONYMS.keys()]:
+    if term_lower in [k.lower() for k in ALL_SYNONYMS]:
         return True
 
     # Check if it's a synonym
@@ -376,7 +376,7 @@ def is_neurosurgical_term(term: str) -> bool:
     return False
 
 
-def get_orthographic_expansion(query: str) -> List[str]:
+def get_orthographic_expansion(query: str) -> list[str]:
     """
     Get only orthographic (spelling) variations of a query.
 
@@ -407,7 +407,7 @@ def get_orthographic_expansion(query: str) -> List[str]:
     return expansions
 
 
-def get_instrument_synonyms(instrument: str) -> List[str]:
+def get_instrument_synonyms(instrument: str) -> list[str]:
     """Get synonyms for a surgical instrument."""
     instrument_lower = instrument.lower()
     if instrument_lower in INSTRUMENT_SYNONYMS:
@@ -415,7 +415,7 @@ def get_instrument_synonyms(instrument: str) -> List[str]:
     return [instrument]
 
 
-def get_monitoring_expansion(acronym: str) -> Dict:
+def get_monitoring_expansion(acronym: str) -> dict:
     """
     Get full expansion for a neuromonitoring acronym.
 

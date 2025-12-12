@@ -10,10 +10,11 @@ project_root = Path(__file__).parent
 sys.path.append(str(project_root / "src"))
 sys.path.append(str(project_root / "reference-library"))
 
-from neurosynth.config import get_settings
-from neurosynth.parsers.image_extractor import ImageExtractor
 from src.export.page_extractor import ExtractedSource
 from src.integration.neurosynth_bridge import NeuroSynthBridge
+
+from neurosynth.config import get_settings
+from neurosynth.parsers.image_extractor import ImageExtractor
 
 # Setup paths
 TEST_PDF = (
@@ -151,7 +152,7 @@ def test_bridge_integration(visuals):
     print(f"Source figures count: {len(source.figures)}")
     if len(source.figures) > 0:
         fig = source.figures[0]
-        print(f"Sample Manifest Entry:")
+        print("Sample Manifest Entry:")
         print(f"  - Keywords: {fig.get('keywords')}")
         print(f"  - Is Procedural: {fig.get('is_procedural')}")
 

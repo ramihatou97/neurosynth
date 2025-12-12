@@ -45,8 +45,8 @@ class Settings(BaseSettings):
         description="Claude model for synthesis",
     )
     voyage_model: str = Field(
-        default="voyage-large-2-instruct",
-        description="Voyage model for embeddings",
+        default="voyage-3-lite",
+        description="Voyage model for embeddings (voyage-3-lite=512dim, voyage-3=1024dim)",
     )
 
     # Processing Configuration
@@ -81,7 +81,7 @@ class Settings(BaseSettings):
         description="ColPali model identifier from HuggingFace",
     )
     colpali_batch_size: int = Field(
-        default=4,
+        default=2,
         description="Batch size for ColPali embedding generation",
     )
     include_all_relevant_visuals: bool = Field(
@@ -90,9 +90,9 @@ class Settings(BaseSettings):
     )
 
     # Qdrant Configuration
-    qdrant_path: Path = Field(
-        default=Path.home() / ".neurosynth" / "qdrant",
-        description="Path for embedded Qdrant database storage",
+    qdrant_path: Path | None = Field(
+        default=None,
+        description="Path for local Qdrant storage. If None, uses Docker/HTTP (localhost:6333).",
     )
     qdrant_collection_name: str = Field(
         default="neurosynth_visuals",
@@ -165,6 +165,46 @@ class Settings(BaseSettings):
     enable_procedural_detection: bool = Field(
         default=False,
         description="Enable procedural sequence detection",
+    )
+
+    # Advanced RAG Features (Phase 3+)
+    enable_proposition_chunker: bool = Field(
+        default=True,
+        description="Use PropositionChunker (small-to-big) instead of SemanticChunker",
+    )
+    enable_raptor: bool = Field(
+        default=False,
+        description="Enable RAPTOR recursive summarization during ingestion",
+    )
+    enable_graph_rag: bool = Field(
+        default=False,
+        description="Enable GraphRAG knowledge graph extraction during ingestion",
+    )
+    enable_vlm_verification: bool = Field(
+        default=False,
+        description="Enable VLM-based image-text verification",
+    )
+    vlm_confidence_threshold: float = Field(
+        default=0.7,
+        description="Minimum confidence for VLM verification",
+    )
+
+    # Advanced Vision Features (Phase 4+)
+    enable_layout_analysis: bool = Field(
+        default=False,
+        description="Enable LayoutLMv3 document layout analysis during ingestion",
+    )
+    layout_model: str = Field(
+        default="microsoft/layoutlmv3-base",
+        description="LayoutLMv3 model identifier from HuggingFace",
+    )
+    enable_object_detection: bool = Field(
+        default=False,
+        description="Enable YOLO object detection in extracted figures",
+    )
+    yolo_model: str = Field(
+        default="yolov8m.pt",
+        description="YOLO model variant (yolov8n.pt, yolov8s.pt, yolov8m.pt)",
     )
 
     # Paths

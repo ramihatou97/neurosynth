@@ -2,9 +2,10 @@
 
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from queue import Empty, Queue
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 
 class BackgroundTaskManager:
@@ -57,7 +58,7 @@ class TaskQueue:
     def __init__(self):
         self.queue = Queue()
         self._running = False
-        self._worker_thread: Optional[threading.Thread] = None
+        self._worker_thread: threading.Thread | None = None
 
     def start(self, callback: Callable[[Any], None]):
         """Start processing queue with callback."""

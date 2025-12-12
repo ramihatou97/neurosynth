@@ -34,6 +34,9 @@ class SectionBlueprint:
     tone_instruction: str  # "descriptive" or "imperative"
     required: bool = False
     word_target: int = 1000
+    preferred_image_types: list[str] = field(
+        default_factory=list
+    )  # e.g. ["surgical_photo", "diagram"]
 
 
 @dataclass
@@ -47,6 +50,7 @@ class OutlineNode:
     tone: str
     word_target: int
     assigned_sources: list[dict] = field(default_factory=list)
+    assigned_images: list = field(default_factory=list)  # List[ExtractedImage]
     has_content: bool = False
 
 
@@ -78,6 +82,7 @@ class CategoryAwareOutlineGenerator:
             List of OutlineNode objects with sources assigned
         """
         sources = manifest.get("sources", [])
+        images = manifest.get("images", [])  # Phase 3: Retrieve images from manifest
         manifest.get("topic", "Chapter")
 
         # Step 1: Analyze density
@@ -91,7 +96,7 @@ class CategoryAwareOutlineGenerator:
         blueprint = self.templates[template_name]
 
         # Step 3: Assign sources to blueprint sections
-        outline = self._assign_content_to_blueprint(sources, blueprint)
+        outline = self._assign_content_to_blueprint(sources, blueprint, images)
 
         # Step 4: Filter empty sections (except required ones)
         outline = self._filter_empty_sections(outline)
@@ -141,9 +146,13 @@ class CategoryAwareOutlineGenerator:
             return OutlineTemplate.COMPREHENSIVE_CHAPTER
 
     def _assign_content_to_blueprint(
-        self, sources: list[dict], blueprint: list[SectionBlueprint]
+        self,
+        sources: list[dict],
+        blueprint: list[SectionBlueprint],
+        images: list = None,
     ) -> list[OutlineNode]:
-        """Assign sources to sections respecting category restrictions."""
+        """Assign sources and images to sections respecting category restrictions."""
+        images = images or []
         # Create outline nodes from blueprint
         nodes = []
         for bp in blueprint:
@@ -220,14 +229,61 @@ class CategoryAwareOutlineGenerator:
                     node.has_content = True
                     break
 
+        # Pass 3: Assign Images (Phase 3 Harmonization)
+        # We assign images to nodes based on:
+        # 1. Caption keyword matching
+        # 2. Image Type preference (if we had modality info)
+        for img in images:
+            # Check ExtractedImage attributes
+            caption = getattr(img, "caption", "").lower()
+            img_type = getattr(img, "image_type", None)
+            if img_type:
+                img_type = (
+                    str(img_type.value).lower()
+                    if hasattr(img_type, "value")
+                    else str(img_type).lower()
+                )
+
+            # Find best node
+            best_node = None
+            max_img_score = 0
+
+            for node in nodes:
+                # Get blueprint for keywords/preferences
+                # We need to find the specific blueprint that created this node
+                # Since nodes are created linearly from blueprint, we can index or search
+                # Currently nodes match blueprint order 1:1
+                bp_keywords = []
+                bp_prefs = []
+                for bp in blueprint:
+                    if bp.title == node.title:
+                        bp_keywords = bp.keywords
+                        bp_prefs = bp.preferred_image_types
+                        break
+
+                score = 0
+                # Keyword match
+                if any(k in caption for k in bp_keywords):
+                    score += 2
+
+                # Type Preference
+                if img_type and bp_prefs:
+                    if any(p.lower() in img_type for p in bp_prefs):
+                        score += 3
+
+                if score > max_img_score:
+                    max_img_score = score
+                    best_node = node
+
+            if best_node and max_img_score > 0:
+                best_node.assigned_images.append(img)
+
         return nodes
 
-    def _matches_keywords(
-        self, source_text: str, source_category: str, keywords: list[str]
-    ) -> bool:
+    def _matches_keywords(self, text: str, category: str, keywords: list[str]) -> bool:
         """Check if source matches section keywords."""
         for keyword in keywords:
-            if keyword.lower() in source_text or keyword.lower() in source_category:
+            if keyword.lower() in text or keyword.lower() in category:
                 return True
         return False
 
@@ -559,3 +615,95 @@ class CategoryAwareOutlineGenerator:
                 "Use third person and passive voice where appropriate: 'The incidence is...', "
                 "'Studies have shown...'. Maintain scholarly tone with proper citations."
             )
+
+
+def assign_images_to_outline(
+    nodes: list["OutlineNode"],
+    db: "Database",
+    vision_searcher: "BiomedCLIPSearcher",
+    top_k: int = 3,
+    score_threshold: float = 0.20,
+) -> list["OutlineNode"]:
+    """
+    Assign relevant images to outline nodes using semantic similarity.
+
+    For each node:
+    1. Embed title + description using BiomedCLIP
+    2. Compare against all image embeddings
+    3. Assign top-k images above threshold
+    """
+    import logging
+    from collections import defaultdict
+
+    import numpy as np
+
+    logger = logging.getLogger(__name__)
+
+    all_images_with_emb = db.get_all_images_with_embeddings()
+    if not all_images_with_emb:
+        logger.warning("No embedded images available")
+        return nodes
+
+    image_usage = defaultdict(int)
+    max_reuse = 2
+
+    for node in nodes:
+        query = f"{node.title}. {node.description or ''}"
+
+        try:
+            # embed_text returns a list of arrays (batch mode), we take the first
+            embed_result = vision_searcher.embed_text(query)
+            if len(embed_result) == 0:
+                continue
+            query_vec = np.array(embed_result[0])
+        except Exception as e:
+            logger.warning(f"Embed failed for '{node.title}': {e}")
+            continue
+
+        scored = []
+        for img, embedding in all_images_with_emb:
+            if image_usage[img.id] >= max_reuse:
+                continue
+            if not embedding:
+                continue
+
+            img_vec = np.array(embedding)
+            # Manual cosine similarity
+            similarity = float(
+                np.dot(query_vec, img_vec)
+                / (np.linalg.norm(query_vec) * np.linalg.norm(img_vec) + 1e-8)
+            )
+
+            if similarity >= score_threshold:
+                scored.append((img, similarity))
+
+        scored.sort(key=lambda x: x[1], reverse=True)
+
+        for img, score in scored[:top_k]:
+            # Add to assigned_sources as a special "image" type source
+            node.assigned_sources.append(
+                {
+                    "type": "image",  # Distinction from 'text' sources
+                    "id": img.id,
+                    "source_id": img.source_id,
+                    "page": img.page,
+                    "file_path": str(img.file_path),
+                    "caption": img.caption or "",
+                    "relevance_score": round(score, 3),
+                    "image_type": (
+                        str(img.image_type.value)
+                        if hasattr(img.image_type, "value")
+                        else str(img.image_type)
+                    ),
+                    # We also populate 'figures' key to match existing structure in some places,
+                    # but 'type'='image' is the primary flag.
+                    "figures": [],
+                }
+            )
+
+            # Also add to assigned_images list for explicit tracking
+            node.assigned_images.append(img)
+
+            image_usage[img.id] += 1
+
+    return nodes

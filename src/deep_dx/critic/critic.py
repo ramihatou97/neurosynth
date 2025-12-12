@@ -30,7 +30,7 @@ class DeepDxCritic:
     Supports both sync (using Anthropic SDK) and async (using httpx) modes.
     """
 
-    def __init__(self, async_client: Optional[httpx.AsyncClient] = None):
+    def __init__(self, async_client: httpx.AsyncClient | None = None):
         self.settings = get_deepdx_settings()
         self.ns_settings = get_neurosynth_settings()
 

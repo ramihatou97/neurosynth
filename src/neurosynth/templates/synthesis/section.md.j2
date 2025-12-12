@@ -1,0 +1,528 @@
+{#
+  section.md.j2 - Section-Level Synthesis Template v1.0
+  NeuroSynth Incremental Synthesis Engine
+
+  Purpose: Synthesize individual chapter sections (not full chapters)
+  Used by: SectionSynthesizer for incremental/parallel synthesis
+
+  Expected Context Variables:
+    ctx.section_title       -> The section title/heading
+    ctx.section_description -> Description of section scope and purpose
+    ctx.section_type        -> DESCRIPTIVE / IMPERATIVE / CATEGORY_AWARE
+    ctx.word_target         -> Target word count for this section
+    ctx.tone                -> "descriptive" or "imperative"
+    ctx.allowed_categories  -> Optional category restriction (Surgical/Anatomical, Theoretical, None)
+    ctx.sources             -> List[TemplateSource] with source_id, source_name, content, figures
+    ctx.figures             -> List[TemplateFigure] with id, image_type, caption
+    ctx.chapter_context     -> Optional: Chapter topic for context
+    ctx.preceding_sections  -> Optional: List of prior section titles for flow
+#}
+---SYSTEM---
+You are synthesizing a section for a neurosurgical textbook chapter.
+
+{% if ctx.section_type == 'IMPERATIVE' %}
+WRITING STYLE: IMPERATIVE/PRESCRIPTIVE
+Write in an active, direct voice suitable for surgical instruction:
+- Use direct commands: "Position the patient...", "Make the incision..."
+- Be specific and actionable: "Identify the superficial temporal artery and protect it during dissection."
+- Include precise measurements, angles, and landmarks
+- This section should read like a surgical manual
+
+Include "WHY" Integration for major steps:
+1. **Anatomical Why**: "We angle 15° medially because the pedicle axis deviates..."
+2. **Safety Why**: "This keeps us 3mm from the vertebral artery..."
+3. **Outcome Why**: "Medial angulation increases pullout strength by 40%..."
+{% elif ctx.section_type == 'CATEGORY_AWARE' %}
+CONTENT RESTRICTIONS:
+This section should ONLY use content from the {{ ctx.allowed_categories | default('all categories') }}.
+{% if ctx.allowed_categories == 'Surgical/Anatomical' %}
+- Focus on operative technique, anatomical detail, surgical approaches
+- Use imperative/prescriptive voice for technical content
+- Do NOT include epidemiology, molecular biology, or theoretical content
+{% elif ctx.allowed_categories == 'Theoretical' %}
+- Focus on pathophysiology, epidemiology, natural history, evidence
+- Use descriptive/academic voice
+- Do NOT include step-by-step surgical technique
+{% endif %}
+{% else %}
+WRITING STYLE: DESCRIPTIVE/ACADEMIC
+Write in a scholarly, academic voice suitable for medical literature:
+- Use third person and passive voice where appropriate
+- Example: "The incidence of this condition is approximately..."
+- Example: "Studies have demonstrated that..."
+- Maintain scholarly tone with proper citation integration
+- Present evidence objectively, acknowledge conflicting data
+{% endif %}
+
+CRITICAL TEXTBOOK STANDARDS:
+- Match quality of Youmans & Winn, Schmidek & Sweet
+- All claims require source attribution
+- Present conflicting evidence fairly
+- Do not fabricate information not in sources
+- Maintain medical accuracy and precision
+
+---USER---
+# Section Synthesis Request
+
+## Section Information
+
+| Parameter | Value |
+|-----------|-------|
+| **Section Title** | {{ ctx.section_title }} |
+| **Section Description** | {{ ctx.section_description | default('Not specified') }} |
+| **Word Target** | {{ ctx.word_target | default(1000) }} words |
+| **Writing Tone** | {{ ctx.tone | default('descriptive') }} |
+{% if ctx.chapter_context %}
+| **Chapter Context** | {{ ctx.chapter_context }} |
+{% endif %}
+{% if ctx.allowed_categories %}
+| **Category Restriction** | {{ ctx.allowed_categories }} only |
+{% endif %}
+
+{% if ctx.preceding_sections %}
+## Preceding Sections (for flow/continuity)
+
+{% for section in ctx.preceding_sections %}
+- {{ section }}
+{% endfor %}
+
+Ensure this section flows logically from the preceding content.
+{% endif %}
+
+---
+
+# Source Material
+
+<source_material>
+{% for source in ctx.sources %}
+--- Source {{ loop.index }}: {{ source.source_name }} (ID: {{ source.source_id }}) ---
+{% if source.category %}
+[Category: {{ source.category }}]
+{% endif %}
+{% if source.pages %}
+[Pages: {{ source.pages | join(', ') }}]
+{% endif %}
+
+{{ source.content }}
+
+{% if source.figures %}
+AVAILABLE FIGURES FROM THIS SOURCE:
+{% for fig in source.figures %}
+- [FIGURE_ID: {{ fig.id }}] Type: {{ fig.image_type }}, Caption: {{ fig.caption | default('No caption') | replace('\n', ' ') | truncate(100) }}
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+</source_material>
+
+---
+
+# Available Figures Catalog
+
+Each figure includes rich metadata to help you select the most appropriate images:
+- **ID**: Use this exact ID in `[FIGURE: <id>]` tags
+- **Type/Modality**: Image classification (surgical, radiology, diagram, etc.)
+- **Regions**: Anatomical regions shown in the image (if detected)
+- **Caption**: Original caption from source document
+
+{% for fig in ctx.figures %}
+### Figure: {{ fig.id }}
+- **Type**: {{ fig.image_type }} | **Modality**: {{ fig.modality | default('unknown') }}
+- **Caption**: {{ fig.caption | default('No caption') | replace('\n', ' ') | truncate(150) }}
+{% if fig.detected_regions and fig.detected_regions | length > 0 %}
+- **Anatomical Regions**: {{ fig.detected_regions | join(', ') }}
+{% endif %}
+{% if fig.ocr_caption %}
+- **OCR Caption**: {{ fig.ocr_caption | replace('\n', ' ') | truncate(100) }}
+{% endif %}
+{% if fig.context_snippet %}
+- **Context**: {{ fig.context_snippet | replace('\n', ' ') | truncate(100) }}...
+{% endif %}
+
+{% endfor %}
+
+---
+
+# FIGURE INTEGRATION PROTOCOL
+
+**MANDATORY**: Integrate figures from the catalog above into your synthesis.
+
+**Density Target**: 1 figure per 300 words minimum
+- {{ ctx.word_target | default(1000) }} words → minimum {{ ((ctx.word_target | default(1000)) / 300) | round(0, 'ceil') | int }} figures
+
+**Selection Guidance**:
+1. **Match Anatomical Regions**: Prefer figures whose `detected_regions` match the section's anatomical focus
+2. **Match Modality**: Choose figures with appropriate modality for the content type
+3. **Use Caption Context**: The caption and context fields indicate what the figure depicts
+
+**Placement Rules**:
+1. Place `[FIGURE: <id>]` at the END of the sentence referencing the figure
+2. Choose figures that directly support the text content
+3. Do NOT invent figure IDs — only use those in the catalog
+4. Prefer figures with matching image_type for the section content
+
+**Figure Type Mapping**:
+| Section Content | Preferred Figure Types |
+|----------------|------------------------|
+| Anatomy descriptions | anatomical, surgical_anatomy, diagram |
+| Surgical technique | surgical_step, intraoperative, instrument |
+| Pathology | histological, pathological, imaging |
+| Imaging findings | radiological, mri, ct, angiogram |
+| Outcomes/data | chart, graph, table |
+
+---
+
+# SYNTHESIS REQUIREMENTS
+
+## Content Standards
+
+1. **Coherent Prose**: Synthesize source material into flowing, connected text
+2. **Citation Integration**: Use XML format: `<cite source="SOURCE_ID"/>` after each claim
+3. **Evidence Acknowledgment**: When sources conflict, present both perspectives
+4. **Medical Accuracy**: Do not extrapolate beyond source material
+5. **Topical Boundaries**: Stay within the section's defined scope
+
+## Structure Guidelines
+
+{% if ctx.section_type == 'IMPERATIVE' %}
+For surgical/procedural sections:
+- Use numbered steps for sequential techniques
+- Include equipment/instrument specifications
+- Specify measurements, angles, depths
+- Add safety callouts using this format:
+
+> **⚠️ HAZARD**: [Complication]
+> **Recognition**: [Signs]
+> **Prevention**: [Technique]
+
+- Add technical pearls using this format:
+
+> **💡 PEARL**: [Insight]
+> [Explanation]
+> **Source**: <cite source="SOURCE_ID"/>
+{% else %}
+For descriptive/theoretical sections:
+- Use subheadings to organize concepts
+- Include data tables where appropriate:
+
+| Parameter | Value | Source |
+|-----------|-------|--------|
+| [Data] | [Value] | <cite source="SOURCE_ID"/> |
+
+- Present evidence hierarchically (strongest first)
+- Acknowledge limitations and controversies
+{% endif %}
+
+---
+
+# OUTPUT FORMAT
+
+Write the complete section content in Markdown format.
+
+Include:
+- Section heading (## {{ ctx.section_title }})
+- Synthesized prose meeting the word target
+- Integrated figure references
+- Proper citations
+- Appropriate callout boxes
+
+Do NOT include:
+- Content from other sections
+- Information not supported by sources
+- Placeholder or template text
+- Meta-commentary about the writing process
+
+---
+
+## {{ ctx.section_title }}
+
+[Write the section content here, following all guidelines above]
+
+---
+
+# SPECIALIZED SECTION FORMATS
+
+{% if ctx.section_title | lower | regex_search('anatomy|anatomical') %}
+## Anatomical Section Requirements
+
+For anatomy-focused sections, include:
+
+### Layer Progression
+Progress systematically through anatomical layers:
+1. Surface (skin, landmarks)
+2. Muscular/Fascial
+3. Osseous (bone)
+4. Vascular (arteries → veins)
+5. Neural
+
+### Measurement Standards
+All measurements in: **Mean ± SD (range; n)**
+- Example: "The optic nerve measures 4.2 ± 0.8 mm (3.0-6.5; n=45)"
+
+### Anatomical Tables
+
+| Structure | Origin | Course | Terminal | Clinical Significance |
+|:----------|:-------|:-------|:---------|:----------------------|
+| [Name] | [From] | [Path] | [To] | [Surgical relevance] |
+
+### Variation Documentation
+
+| Structure | Variation | Prevalence | n | Surgical Impact |
+|:----------|:----------|:-----------|:--|:----------------|
+| [Name] | [Variant] | [% (95% CI)] | [n] | [Implication] |
+
+{% endif %}
+
+{% if ctx.section_title | lower | regex_search('surgical|technique|operative|procedure') %}
+## Surgical Technique Section Requirements
+
+### Step Format
+
+Each surgical step MUST include:
+
+```
+### Step [N]: [Step Name]
+
+**Objective**: [Goal of this step]
+
+**Technique**:
+1. [Substep with instrument and specifics]
+2. [Substep with measurements]
+3. [Substep]
+
+[FIGURE: step_N_image]
+
+**ENDPOINT**: [How to verify step is complete]
+
+> **🔴 ANATOMY AT RISK**: [Structure]
+> **Location**: [Where in field]
+> **Protection**: [Technique]
+```
+
+### Equipment Callout
+
+> **🔧 EQUIPMENT**
+> - [Instrument 1]: [Specification]
+> - [Instrument 2]: [Specification]
+
+### Decision Point Format
+
+> **🔀 DECISION**: [Scenario]
+> ```
+> IF [finding A]:
+>   → [Technique A]
+> IF [finding B]:
+>   → [Technique B]
+> ```
+
+{% endif %}
+
+{% if ctx.section_title | lower | regex_search('epidemiology|incidence|prevalence') %}
+## Epidemiology Section Requirements
+
+Include structured data tables:
+
+| Metric | Value | 95% CI | Population | Source |
+|:-------|:------|:-------|:-----------|:-------|
+| Incidence | [per 100,000] | [CI] | [Pop] | <cite source="X"/> |
+| Prevalence | [%] | [CI] | [Pop] | <cite source="Y"/> |
+
+### Demographic Breakdown
+
+| Subgroup | Rate | Relative Risk | 95% CI | Source |
+|:---------|:-----|:--------------|:-------|:-------|
+| [Age group] | [Value] | [RR] | [CI] | <cite source="X"/> |
+
+{% endif %}
+
+{% if ctx.section_title | lower | regex_search('treatment|management|therapy') %}
+## Treatment Section Requirements
+
+### Evidence-Graded Recommendations
+
+Use standard evidence classification:
+
+| Class | Definition | Recommendation Level |
+|:------|:-----------|:---------------------|
+| I | Randomized controlled trial | Standard |
+| II | Cohort study, poor RCT | Guideline |
+| III | Case series, expert opinion | Option |
+
+### Named Trial Format
+
+> **🔬 TRIAL**: [Trial Acronym/Name]
+> **Design**: [RCT/Cohort/etc] (n=[N])
+> **Population**: [Inclusion criteria]
+> **Intervention**: [Treatment arm]
+> **Control**: [Comparison]
+> **Primary Outcome**: [Result with p-value/CI]
+> **Conclusion**: [One-sentence takeaway]
+> **Source**: <cite source="X"/>
+
+### Drug Dosing Box
+
+> **💊 DRUG**: [Drug Name]
+> **Class**: [Pharmacological class]
+> **Dose**: [Adult dosing]
+> **Pediatric**: [mg/kg if applicable]
+> **Monitoring**: [Labs/levels required]
+> **Source**: <cite source="X"/>
+
+{% endif %}
+
+{% if ctx.section_title | lower | regex_search('complications|outcomes|results') %}
+## Outcomes/Complications Section Requirements
+
+### Complication Table
+
+| Complication | Rate | Risk Factors | Prevention | Management |
+|:-------------|:-----|:-------------|:-----------|:-----------|
+| [Complication] | [% (95% CI)] | [Factors] | [Prevention] | [Treatment] |
+
+### Critical Complication Callout
+Feature the most dangerous or common complication in a detailed callout:
+
+> **⚠️ CRITICAL COMPLICATION**: [Name]
+> **Incidence**: [%]
+> **Recognition**: [Key signs/symptoms]
+> **Immediate Action**: [First-line response]
+> **Prevention**: [Key technical step to avoid]
+> **Source**: <cite source="X"/>
+
+### Outcome Reporting
+
+| Outcome | Value | 95% CI | Follow-up Duration | Source |
+|:--------|:------|:-------|:-------------------|:-------|
+| [Outcome measure] | [%] | [CI] | [Duration] | <cite source="X"/> |
+
+{% endif %}
+
+{% if ctx.section_title | lower | regex_search('differential|diagnosis|dx') %}
+## Differential Diagnosis Requirements
+
+### Comparison Matrix
+
+| Condition | Key Distinguisher | Confirmatory Test | Gold Standard |
+|:----------|:------------------|:------------------|:--------------|
+| [Dx 1] | [What makes it different] | [Test] | [Gold Standard] |
+| [Dx 2] | [What makes it different] | [Test] | [Gold Standard] |
+
+### Distinguishing Features
+For each major differential:
+1. **Clinical**: How presentation differs
+2. **Radiographic**: Key imaging differences (with figure references)
+3. **Pathological**: Histological differences (if applicable)
+
+{% endif %}
+
+{% if ctx.section_title | lower | regex_search('clinical|presentation|symptoms|history') %}
+## Clinical Presentation Requirements
+
+### Symptom Frequency Table
+
+| Symptom/Sign | Frequency | Pathophysiology | Discriminating Value |
+|:-------------|:----------|:----------------|:---------------------|
+| [Symptom] | [%] | [Mechanism] | [Specificity] |
+
+### Clinical Vignette
+Include a "Typical Presentation" box:
+
+> **📝 TYPICAL VIGNETTE**
+> [2-3 sentence description of a classic case]
+> **Key Pattern**: [Takeaway teaching point]
+
+### Red Flags
+Highlight urgent findings:
+
+> **🔴 RED FLAG**: [Sign/Symptom]
+> **Implication**: [Urgent pathology]
+> **Action**: [Immediate step]
+
+{% endif %}
+
+{% if ctx.section_title | lower | regex_search('diagnostic|evaluation|imaging|workup') %}
+## Diagnostic Evaluation Requirements
+
+### Imaging Protocol
+
+| Modality | Sequence/Protocol | Key Findings | Sensitivity/Specificity |
+|:---------|:------------------|:-------------|:------------------------|
+| [MRI/CT] | [T1/T2/etc] | [What to look for] | [%/%] |
+
+### Diagnostic Criteria
+If formal criteria exist (e.g., McDonald, NF1), format as:
+
+> **📋 DIAGNOSTIC CRITERIA**: [Name]
+> Definite diagnosis requires:
+> - [ ] [Criterion 1]
+> - [ ] [Criterion 2]
+
+{% endif %}
+
+---
+
+# QUALITY METRICS
+
+| Metric | Target | Requirement |
+|:-------|:-------|:------------|
+| Word count | {{ ctx.word_target | default(1000) }} ± 10% | Mandatory |
+| Figure density | 1 per 300 words | Mandatory |
+| Citations | Every factual claim | Mandatory |
+| Tables | ≥1 per 500 words | Recommended |
+| Callout boxes | ≥1 per section | Recommended |
+| Subheadings | Every 200-400 words | Recommended |
+
+---
+
+# CONFLICT HANDLING
+
+When sources present conflicting information:
+
+1. **Quantitative Differences**: Present as range
+   - "Reported rates range from X% to Y% <cite source="A"/><cite source="B"/>"
+
+2. **Contradictory Claims**: Present both perspectives
+   - "While [Author A] reports...<cite source="A"/>, [Author B] found...<cite source="B"/>"
+
+3. **Methodological Differences**: Acknowledge study design
+   - "In a retrospective series...<cite source="A"/> compared to prospective data...<cite source="B"/>"
+
+---
+
+# SECTION ENHANCEMENT PROTOCOL
+
+For enhanced sections (when called with enhancement request):
+
+**Current Content to Enhance**:
+{% if ctx.current_content %}
+{{ ctx.current_content }}
+{% else %}
+[No existing content - generating from scratch]
+{% endif %}
+
+**Enhancement Requirements**:
+- Expand on key points with additional detail from sources
+- Add supporting data tables
+- Integrate additional figure references
+- Strengthen citations
+- Maintain existing structure and flow
+
+---
+
+# SUBSECTION GENERATION
+
+When section exceeds 800 words, consider logical subsections:
+
+**Automatic Subsection Triggers**:
+- Anatomy sections → by layer or region
+- Surgical sections → by phase (Exposure, Intradural, Closure)
+- Epidemiology → by demographic or geographic factors
+- Treatment → by modality (Medical, Surgical, Radiation)
+- Outcomes → by outcome type (Survival, Functional, Complications)
+
+**Subsection Format**:
+```markdown
+### [Subsection Title]
+
+[Content for this subsection]
+```

@@ -1,0 +1,1600 @@
+{#
+  encyclopedia.md.j2 - Comprehensive Encyclopedia Template v4.0
+  NeuroSynth Ultimate Textbook Edition
+
+  Architecture: Youmans (encyclopedic) + Schmidek (operative) + Rhoton (anatomical) + Greenberg (rapid reference)
+  Figure Target: 1 per 150 words; 120-180 figures per encyclopedia entry
+
+  Expected Context Variables:
+    ctx.section_title     -> The encyclopedia topic ({{TOPIC}})
+    ctx.anatomy_depth     -> MINIMAL / STANDARD / COMPREHENSIVE
+    ctx.content_emphasis  -> DISORDER / SURGICAL / BALANCED
+    ctx.sources           -> List[TemplateSource] with source_id, source_name, content
+    ctx.figures           -> List[TemplateFigure] with id, image_type, caption
+    ctx.word_target       -> Target word count (default: ~15000 for full entry)
+    ctx.use_xml_citations -> Whether to use XML citation format
+#}
+---SYSTEM---
+You are creating the definitive neurosurgical encyclopedia entry for {{ ctx.section_title }}. This entry must serve as a complete reference integrating:
+
+1. **Disease Understanding** (Youmans depth) — Pathophysiology, natural history, evidence-based treatment selection
+2. **Surgical Technique** (Schmidek precision) — Step-by-step operative technique with decision points
+3. **Microsurgical Anatomy** (Rhoton quality) — Surgically-relevant anatomical detail
+4. **Rapid Reference** (Greenberg utility) — Boxes, algorithms, and quick-lookup tables
+
+The output should allow a neurosurgery resident to:
+- Understand the disease completely
+- Select appropriate treatment
+- Plan and execute surgery safely
+- Manage complications
+- Counsel patients on outcomes
+
+CRITICAL TEXTBOOK STANDARDS INTEGRATION:
+
+**From Youmans & Winn**:
+- Molecular/genetic basis of disease
+- Named clinical trials for treatment evidence
+- Comprehensive natural history data
+- Systematic review of treatment outcomes
+
+**From Schmidek & Sweet**:
+- Numbered surgical steps with endpoints
+- Equipment specifications
+- Complication prevention and management
+- Results with statistical detail
+
+**From Rhoton**:
+- Layer-by-layer anatomical progression
+- All measurements: Mean ± SD (range; n)
+- Variations with prevalence percentages
+- Multiple viewing angles
+
+**From Greenberg**:
+- Quick reference boxes (📕📋💊🔴⚠️)
+- Drug dosing tables
+- Classification systems with management implications
+- Red flags and emergency protocols
+
+---USER---
+# Neurosurgical Encyclopedia Synthesis Prompt v4.0 — Ultimate Textbook Edition
+
+# Reference Materials
+
+<reference_materials>
+{% for source in ctx.sources %}
+### Source {{ loop.index }}: {{ source.source_name }} (ID: {{ source.source_id }})
+{{ source.content }}
+
+{% endfor %}
+</reference_materials>
+
+# Encyclopedia Topic
+
+<topic>{{ ctx.section_title }}</topic>
+
+<anatomy_depth>{{ ctx.anatomy_depth | default('STANDARD') }}</anatomy_depth>
+
+<content_emphasis>{{ ctx.content_emphasis | default('BALANCED') }}</content_emphasis>
+
+**CONTENT_EMPHASIS Options**:
+- **DISORDER**: 50% Part I (Disease), 25% Part II (Anatomy), 25% Part III (Procedure)
+- **SURGICAL**: 25% Part I, 25% Part II, 50% Part III
+- **BALANCED**: 33% each
+
+---
+
+# FIGURE INTEGRATION PROTOCOL
+
+## Density Requirements
+- **Minimum**: 1 figure per 150 words
+- **Target**: 120-180 figures for comprehensive encyclopedia entry
+- **Integration**: Figures link disease, anatomy, and procedure
+
+## Figure Triggers by Section
+
+### Part I (Disorder)
+- Pathophysiology mechanisms
+- Classification grade examples
+- Imaging findings (all modalities)
+- Treatment algorithms
+- Outcome graphs
+
+### Part II (Anatomy)
+- Every named structure
+- Multiple viewing angles
+- Surgical corridors
+- Variations
+
+### Part III (Procedure)
+- Every surgical step (2-4 figures each)
+- Instrument positioning
+- Anatomical relationships during surgery
+- Complications
+
+## Figure Format
+`[FIGURE: exact_figure_id_from_catalog]`
+
+---
+
+# CORE PRINCIPLES
+
+## 1. Evidence Classification
+
+| Class | Study Design | Recommendation Level |
+|-------|--------------|---------------------|
+| **I** | High-quality RCT, meta-analysis | **Standard** |
+| **II** | Lesser RCT, prospective cohort | **Guideline** |
+| **III** | Case series, retrospective | **Option** |
+
+## 2. Measurement Standards
+
+- Anatomical: Mean ± SD (range; n)
+- Variations: Prevalence % (95% CI; n)
+- Outcomes: Rate % (95% CI)
+- Comparisons: OR/RR (95% CI), p-value
+
+## 3. Integrated Callout System
+
+{% include "macros/callout_boxes.j2" %}
+
+---
+
+# Available Figures Catalog
+
+| ID | Type | Caption |
+|----|------|---------|
+{% for fig in ctx.figures %}
+| {{ fig.id }} | {{ fig.image_type }} | {{ fig.caption | default('No caption') | replace('\n', ' ') | truncate(100) }} |
+{% endfor %}
+
+---
+
+# ENCYCLOPEDIA SCHEMA
+
+---
+
+# {{ ctx.section_title | upper }} — Comprehensive Neurosurgical Reference
+
+## Executive Summary
+
+[FIGURE: topic_comprehensive_overview]
+
+> **📕 DEFINITION**
+> [One-sentence authoritative definition from WHO or standard classification]
+> **Source**: [Reference]
+
+### The Complete Picture (60-Second Brief)
+
+[3-4 sentences capturing: What is it → Who gets it → How it presents → How we treat it → What outcomes to expect]
+
+### Essential Numbers
+
+| Category | Parameter | Value | Source |
+|:---------|:----------|:------|:-------|
+| **Epidemiology** | Incidence | [/100,000/year (95% CI)] | [Source] |
+| **Natural History** | Annual event rate | [% (95% CI)] | [Source] |
+| **Treatment** | Success rate | [% (definition)] | [Source] |
+| **Surgery** | Major complication | [%] | [Source] |
+| **Anatomy** | Key dimension | [Mean ± SD mm] | [Source] |
+
+---
+
+## Quick Reference Card
+
+### At-a-Glance Table
+
+| Parameter | Value | Source |
+|:----------|:------|:-------|
+| **ICD-10** | [Code] | — |
+| **Synonyms** | [Names] | — |
+| **Incidence** | [Rate] | [Source] |
+| **Peak Age** | [Years] | [Source] |
+| **M:F** | [Ratio] | [Source] |
+| **Pathognomonic** | [Finding] | [Source] |
+| **Gold Standard Dx** | [Test] | [Source] |
+| **First-Line Rx** | [Treatment] | [Source] |
+| **Surgical Approach** | [Approach] | [Source] |
+| **Success Rate** | [%] | [Source] |
+
+> **🎯 KEY POINT**
+> [Single most important fact for this topic]
+> **Source**: [Reference]
+
+> **🔴 RED FLAGS**
+> - [Flag 1] → [Action required]
+> - [Flag 2] → [Action required]
+> - [Flag 3] → [Action required]
+
+[FIGURE: quick_reference_visual]
+
+---
+
+# PART I: THE DISORDER
+
+---
+
+## 1.1 Disease Definition & Classification
+
+[FIGURE: classification_overview]
+
+### WHO/Standard Definition
+
+> **📕 DEFINITION**
+> [Precise pathological definition from authoritative source]
+> **Source**: [WHO/Reference]
+
+### Classification Systems
+
+#### [Primary Classification Name]
+
+| Grade/Type | Criteria | Clinical Implication | Source |
+|:-----------|:---------|:---------------------|:-------|
+| [I] | [Features] | [Management approach] | [Source] |
+| [II] | [Features] | [Management approach] | [Source] |
+| [III] | [Features] | [Management approach] | [Source] |
+| [IV] | [Features] | [Management approach] | [Source] |
+
+[FIGURE: classification_each_grade]
+
+### Classification Application Algorithm
+
+```
+IF [Finding A] AND [Finding B]:
+  → Grade I → [Management path]
+IF [Finding C]:
+  → Grade II → [Management path]
+IF [Finding D] OR [Finding E]:
+  → Grade III → [Management path]
+...
+```
+
+[FIGURE: classification_algorithm]
+
+---
+
+## 1.2 Epidemiology
+
+[FIGURE: epidemiology_overview]
+
+### Incidence & Prevalence
+
+| Population | Incidence | Prevalence | 95% CI | n | Source |
+|:-----------|:----------|:-----------|:-------|:--|:-------|
+| Overall | [/100,000/yr] | [/100,000] | [CI] | [n] | [Source] |
+| Male | [Rate] | [Rate] | [CI] | [n] | [Source] |
+| Female | [Rate] | [Rate] | [CI] | [n] | [Source] |
+| Pediatric (<18) | [Rate] | [Rate] | [CI] | [n] | [Source] |
+| Elderly (>65) | [Rate] | [Rate] | [CI] | [n] | [Source] |
+
+[FIGURE: incidence_trends]
+[FIGURE: demographic_distribution]
+
+### Risk Factors
+
+| Factor | OR/RR | 95% CI | Modifiable | Evidence Class | Source |
+|:-------|:------|:-------|:-----------|:---------------|:-------|
+| [Factor 1] | [Value] | [CI] | Yes/No | [I/II/III] | [Source] |
+| [Factor 2] | [Value] | [CI] | Yes/No | [I/II/III] | [Source] |
+| [Factor 3] | [Value] | [CI] | Yes/No | [I/II/III] | [Source] |
+
+[FIGURE: risk_factors_forest_plot]
+
+---
+
+## 1.3 Genetics & Molecular Biology
+
+[FIGURE: molecular_pathway]
+
+### Genetic Basis
+
+| Gene | Locus | Protein | Mutation Type | Frequency | Source |
+|:-----|:------|:--------|:--------------|:----------|:-------|
+| [Gene 1] | [Chr location] | [Protein name] | [Germline/Somatic] | [%] | [Source] |
+| [Gene 2] | [Chr location] | [Protein name] | [Germline/Somatic] | [%] | [Source] |
+
+[FIGURE: genetic_pathway_schematic]
+
+### Hereditary Syndromes
+
+| Syndrome | Gene | Inheritance | Features | Screening | Source |
+|:---------|:-----|:------------|:---------|:----------|:-------|
+| [Syndrome] | [Gene] | [AD/AR/X-linked] | [Clinical features] | [Recommendation] | [Source] |
+
+> **📋 GUIDELINE** — Level [II/III]
+> **Genetic Testing**: [When indicated]
+> **Source**: [Society, Year]
+
+### Molecular Markers
+
+| Marker | Significance | Testing | Source |
+|:-------|:-------------|:--------|:-------|
+| [Marker] | [Prognostic/diagnostic value] | [Method] | [Source] |
+
+[FIGURE: molecular_markers]
+
+---
+
+## 1.4 Pathophysiology
+
+[FIGURE: pathophysiology_overview]
+
+### Mechanism: Molecular → Clinical
+
+[Prose connecting basic science to clinical manifestations — how the genetic/molecular abnormality leads to the disease phenotype]
+
+[FIGURE: mechanism_molecular]
+[FIGURE: mechanism_cellular]
+[FIGURE: mechanism_tissue]
+
+### Pathological Features
+
+**Gross Pathology**:
+[Description of macroscopic appearance]
+
+[FIGURE: gross_specimen]
+
+**Histopathology**:
+
+| Feature | Description | Significance | Source |
+|:--------|:------------|:-------------|:-------|
+| [Feature 1] | [Description] | [Diagnostic value] | [Source] |
+| [Feature 2] | [Description] | [Diagnostic value] | [Source] |
+| [Feature 3] | [Description] | [Prognostic value] | [Source] |
+
+[FIGURE: histology_low_power]
+[FIGURE: histology_high_power]
+
+**Immunohistochemistry**:
+
+| Marker | Pattern | Sensitivity | Specificity | Source |
+|:-------|:--------|:------------|:------------|:-------|
+| [Marker] | [+/-] | [%] | [%] | [Source] |
+
+[FIGURE: ihc_staining]
+
+> **🎯 KEY POINT**: Pathophysiology Core Concept
+> [The essential "why" of this disease — single most important mechanism]
+> **Source**: [Reference]
+
+---
+
+## 1.5 Natural History
+
+[FIGURE: natural_history_timeline]
+
+### Untreated Course
+
+[Description of disease progression without intervention, with typical timeframes]
+
+### Event Rates
+
+| Event | Annual Rate | 95% CI | Risk Period | Source |
+|:------|:------------|:-------|:------------|:-------|
+| [Event 1 — e.g., rupture] | [%/year] | [CI] | [When highest] | [Source] |
+| [Event 2 — e.g., progression] | [%/year] | [CI] | [When highest] | [Source] |
+| [Event 3 — e.g., death] | [%/year] | [CI] | [When highest] | [Source] |
+
+[FIGURE: event_rate_curves]
+
+### Risk Stratification
+
+| Risk Category | Criteria | Annual Event Rate | Management | Source |
+|:--------------|:---------|:------------------|:-----------|:-------|
+| Low | [Criteria] | [%] | [Approach] | [Source] |
+| Intermediate | [Criteria] | [%] | [Approach] | [Source] |
+| High | [Criteria] | [%] | [Approach] | [Source] |
+
+[FIGURE: risk_stratification_schema]
+
+### Validated Prognostic Scores
+
+| Score | Components | Range | Interpretation | Source |
+|:------|:-----------|:------|:---------------|:-------|
+| [Score name] | [Variables] | [Range] | [Categories and meaning] | [Source] |
+
+[FIGURE: prognostic_nomogram]
+
+---
+
+## 1.6 Clinical Presentation
+
+[FIGURE: presentation_overview]
+
+### Typical Presentation
+
+> **📝 CLINICAL VIGNETTE**
+> [2-3 sentence classic presentation — the "textbook case"]
+
+### Symptom Analysis
+
+| Symptom | Frequency | Mechanism | Onset Pattern | Source |
+|:--------|:----------|:----------|:--------------|:-------|
+| [Symptom 1] | [%] | [Why occurs] | [Acute/subacute/chronic] | [Source] |
+| [Symptom 2] | [%] | [Why occurs] | [Onset pattern] | [Source] |
+| [Symptom 3] | [%] | [Why occurs] | [Onset pattern] | [Source] |
+
+[FIGURE: symptom_distribution]
+
+### Physical Examination
+
+| Finding | Sensitivity | Specificity | LR+ | Source |
+|:--------|:------------|:------------|:----|:-------|
+| [Finding 1] | [%] | [%] | [Value] | [Source] |
+| [Finding 2] | [%] | [%] | [Value] | [Source] |
+
+[FIGURE: exam_findings]
+
+> **🔴 RED FLAG**: [Critical Clinical Finding]
+> **Means**: [Diagnosis or complication it indicates]
+> **Action**: [Required immediate response]
+> **Source**: [Reference]
+
+> **🔴 RED FLAG**: [Second Critical Finding]
+> **Means**: [What it indicates]
+> **Action**: [Required response]
+> **Source**: [Reference]
+
+---
+
+## 1.7 Diagnostic Evaluation
+
+[FIGURE: diagnostic_algorithm]
+
+### Imaging
+
+#### MRI Protocol
+
+| Sequence | Findings | Sensitivity | Specificity | Source |
+|:---------|:---------|:------------|:------------|:-------|
+| T1 | [Findings — iso/hypo/hyper] | [%] | [%] | [Source] |
+| T2 | [Findings] | [%] | [%] | [Source] |
+| FLAIR | [Findings] | [%] | [%] | [Source] |
+| T1+Gad | [Enhancement pattern] | [%] | [%] | [Source] |
+| DWI/ADC | [Findings — restriction?] | [%] | [%] | [Source] |
+| SWI/GRE | [Findings — blood products?] | [%] | [%] | [Source] |
+| MRA/MRV | [Vascular findings] | [%] | [%] | [Source] |
+
+[FIGURE: mri_typical_all_sequences]
+
+#### CT Protocol
+
+| Protocol | Findings | When Preferred | Source |
+|:---------|:---------|:---------------|:-------|
+| Non-contrast | [Findings — density, calcification] | [Acute, contraindication to MRI] | [Source] |
+| CTA | [Vascular findings] | [Vascular pathology] | [Source] |
+| CT Perfusion | [Perfusion patterns] | [Ischemia assessment] | [Source] |
+
+[FIGURE: ct_typical]
+
+#### Angiography
+
+| Technique | Findings | Indication | Source |
+|:----------|:---------|:-----------|:-------|
+| DSA | [Classic findings] | [When needed] | [Source] |
+
+[FIGURE: angiography_findings]
+
+### Laboratory Studies
+
+| Test | Expected Finding | Sensitivity | Source |
+|:-----|:-----------------|:------------|:-------|
+| [Lab test] | [Abnormality] | [%] | [Source] |
+
+### Diagnostic Criteria
+
+> **📕 DIAGNOSTIC CRITERIA**
+>
+> **Definite {{ ctx.section_title }}**:
+> - [ ] [Criterion 1 — clinical]
+> - [ ] [Criterion 2 — imaging]
+> - [ ] [Criterion 3 — pathological if applicable]
+>
+> **Probable {{ ctx.section_title }}**:
+> - [ ] [Modified criteria]
+>
+> **Source**: [Society, Year]
+
+### Differential Diagnosis
+
+> **📊 DIFFERENTIAL**
+>
+> | Condition | Distinguishing Feature | Key Test | Source |
+> |:----------|:-----------------------|:---------|:-------|
+> | [Dx 1] | [How it differs] | [Differentiating test] | [Source] |
+> | [Dx 2] | [How it differs] | [Differentiating test] | [Source] |
+> | [Dx 3] | [How it differs] | [Differentiating test] | [Source] |
+>
+> [FIGURE: differential_comparison]
+
+---
+
+## 1.8 Treatment Decision Framework
+
+[FIGURE: treatment_decision_algorithm]
+
+### Observation Criteria
+
+**Observe if ALL of the following are met**:
+- [ ] [Criterion 1 — e.g., small size]
+- [ ] [Criterion 2 — e.g., asymptomatic]
+- [ ] [Criterion 3 — e.g., low-risk features]
+
+**Surveillance Protocol**:
+
+| Interval | Assessment | Imaging | Source |
+|:---------|:-----------|:--------|:-------|
+| [3 months] | [Clinical evaluation] | [MRI] | [Source] |
+| [6 months] | [Clinical evaluation] | [MRI] | [Source] |
+| [12 months] | [Full evaluation] | [MRI] | [Source] |
+| [Annually thereafter] | [Evaluation] | [MRI] | [Source] |
+
+### Treatment Indications
+
+> **📋 GUIDELINE** — Level [I/II/III]
+> **Treat if any of the following**:
+> - [Indication 1 — e.g., symptomatic]
+> - [Indication 2 — e.g., growth]
+> - [Indication 3 — e.g., high-risk features]
+> **Source**: [Society, Year]
+
+### Treatment Selection Matrix
+
+| Scenario | Preferred Treatment | Alternative | Avoid | Evidence | Source |
+|:---------|:--------------------|:------------|:------|:---------|:-------|
+| [Scenario 1] | [Treatment] | [Option] | [Contraindicated] | [Class] | [Source] |
+| [Scenario 2] | [Treatment] | [Option] | [Contraindicated] | [Class] | [Source] |
+| [Scenario 3] | [Treatment] | [Option] | [Contraindicated] | [Class] | [Source] |
+
+[FIGURE: treatment_selection_matrix]
+
+> **🔀 DECISION POINT**: Treatment Selection
+> ```
+> IF [symptomatic] AND [surgically accessible]:
+>   → Surgery preferred
+> IF [deep location] OR [elderly/comorbid]:
+>   → Consider radiosurgery or observation
+> IF [rapidly progressive]:
+>   → Urgent intervention
+> ```
+
+---
+
+## 1.9 Medical Management
+
+[FIGURE: medical_management_overview]
+
+### First-Line Pharmacotherapy
+
+> **💊 [PRIMARY DRUG NAME]**
+> - **Class**: [Drug category]
+> - **Mechanism**: [How it works]
+> - **Indication**: [When to use for this condition]
+> - **Adult Dose**: [mg, frequency, duration]
+> - **Pediatric**: [mg/kg/day, divided doses, max]
+> - **Renal Adjustment**: [CrCl < X: dose adjust]
+> - **Hepatic Adjustment**: [If applicable]
+> - **Monitoring**: [Labs, levels, side effects to watch]
+> - **Key Interactions**: [Important drug interactions]
+> - **Black Box Warning**: [If applicable]
+> **Source**: [Reference]
+
+### Second-Line Therapy
+
+> **💊 [SECOND-LINE DRUG]**
+> - **Class**: [Category]
+> - **Indication**: [When first-line fails/contraindicated]
+> - **Adult Dose**: [mg, frequency]
+> - **Monitoring**: [Requirements]
+> **Source**: [Reference]
+
+### Medical Management Algorithm
+
+```
+First-line: [Drug A] [dose]
+  → Inadequate response after [2-4 weeks]:
+    → Add [Drug B] OR switch to [Drug C]
+
+If refractory to monotherapy:
+  → Combination: [Drug D] + [Drug E]
+
+If medically refractory:
+  → Surgical evaluation recommended
+```
+
+[FIGURE: medical_algorithm]
+
+---
+
+# PART II: SURGICAL ANATOMY
+
+*Scaled to {{ ctx.anatomy_depth | default('STANDARD') }}*
+
+---
+
+## 2.1 Regional Overview
+
+[FIGURE: regional_anatomy_3d]
+
+### Anatomical Boundaries
+
+| Boundary | Structure | Surgical Implication | Source |
+|:---------|:----------|:---------------------|:-------|
+| Superior | [Structure] | [Relevance] | [Source] |
+| Inferior | [Structure] | [Relevance] | [Source] |
+| Anterior | [Structure] | [Relevance] | [Source] |
+| Posterior | [Structure] | [Relevance] | [Source] |
+| Medial | [Structure] | [Relevance] | [Source] |
+| Lateral | [Structure] | [Relevance] | [Source] |
+
+[FIGURE: boundaries_3d]
+
+### Neighboring Regions
+
+| Region | Relationship | Access | Source |
+|:-------|:-------------|:-------|:-------|
+| [Region] | [Direction from target] | [Approach through] | [Source] |
+
+---
+
+## 2.2 Surface Landmarks
+
+[FIGURE: surface_landmarks]
+
+| Landmark | Definition | Surgical Use | Source |
+|:---------|:-----------|:-------------|:-------|
+| [Landmark 1] | [Description] | [What it localizes] | [Source] |
+| [Landmark 2] | [Description] | [What it localizes] | [Source] |
+| [Landmark 3] | [Description] | [What it localizes] | [Source] |
+
+> **📍 KEY LANDMARK**: [Most Important Landmark]
+> **Definition**: [Description]
+> **Identifies**: [Target structure]
+> **Relationship**: [Distance/direction to surgical target]
+> [FIGURE: landmark_detail]
+
+---
+
+## 2.3 Osseous Anatomy
+
+[FIGURE: bone_overview]
+
+| Structure | Dimensions | Surgical Note | Source |
+|:----------|:-----------|:--------------|:-------|
+| [Bone/Feature 1] | [Mean ± SD mm (range; n)] | [Drilling/exposure relevance] | [Source] |
+| [Bone/Feature 2] | [Mean ± SD mm (range; n)] | [Relevance] | [Source] |
+| [Bone/Feature 3] | [Mean ± SD mm (range; n)] | [Relevance] | [Source] |
+
+[FIGURE: bone_measurements]
+
+### Foramina and Canals
+
+| Foramen | Dimensions | Contents | At-Risk During | Source |
+|:--------|:-----------|:---------|:---------------|:-------|
+| [Foramen 1] | [mm × mm] | [Structures] | [Step] | [Source] |
+| [Foramen 2] | [mm × mm] | [Structures] | [Step] | [Source] |
+
+[FIGURE: foramina_detail]
+
+---
+
+## 2.4 Vascular Anatomy
+
+[FIGURE: vascular_overview]
+
+### Arterial Supply
+
+| Artery | Origin | Diameter | Course | At Risk During | Source |
+|:-------|:-------|:---------|:-------|:---------------|:-------|
+| [Artery 1] | [Parent] | [Mean ± SD mm] | [Path] | [Step] | [Source] |
+| [Artery 2] | [Parent] | [Mean ± SD mm] | [Path] | [Step] | [Source] |
+
+[FIGURE: arterial_anatomy]
+
+### Perforating Arteries
+
+| Perforator Group | Number | Origin Segment | Territory | Source |
+|:-----------------|:-------|:---------------|:----------|:-------|
+| [Group 1] | [Mean ± SD (range; n)] | [Segment] | [Supply territory] | [Source] |
+| [Group 2] | [Mean ± SD (range; n)] | [Segment] | [Supply territory] | [Source] |
+
+[FIGURE: perforators]
+
+> **🔴 STRUCTURE AT RISK**: [Critical Perforator Group]
+> **Location**: [Position relative to surgical field]
+> **Consequence**: [Stroke location if injured]
+> **Protection**: [Surgical technique to preserve]
+> [FIGURE: perforator_protection]
+
+### Venous Drainage
+
+| Vein | Course | Drains To | Sacrifice Tolerance | Source |
+|:-----|:-------|:----------|:--------------------|:-------|
+| [Vein 1] | [Path] | [Destination] | [Safe/Unsafe/Conditional] | [Source] |
+| [Vein 2] | [Path] | [Destination] | [Safe/Unsafe] | [Source] |
+
+[FIGURE: venous_anatomy]
+
+> **🔴 STRUCTURE AT RISK**: [Critical Vein]
+> **Location**: [Position]
+> **Consequence**: [If sacrificed — venous infarct territory]
+> **Protection**: [Preservation technique]
+> [FIGURE: venous_protection]
+
+---
+
+## 2.5 Neural Structures
+
+[FIGURE: neural_overview]
+
+### Cranial Nerves at Risk
+
+| CN | Course Through Region | At Risk During | Consequence | Source |
+|:---|:----------------------|:---------------|:------------|:-------|
+| [CN III] | [Path] | [Step] | [Deficit] | [Source] |
+| [CN IV] | [Path] | [Step] | [Deficit] | [Source] |
+| [CN VI] | [Path] | [Step] | [Deficit] | [Source] |
+
+[FIGURE: cranial_nerve_detail]
+
+### Brain Parenchyma
+
+**Eloquent Cortex**:
+
+| Region | Function | Distance from Target | Source |
+|:-------|:---------|:---------------------|:-------|
+| [Region] | [Function] | [mm] | [Source] |
+
+[FIGURE: eloquent_cortex]
+
+**White Matter Tracts**:
+
+| Tract | Course | Function | At Risk | Source |
+|:------|:-------|:---------|:--------|:-------|
+| [Tract] | [Path] | [Function] | [Yes/No] | [Source] |
+
+[FIGURE: white_matter_tracts]
+[FIGURE: parenchymal_relationships]
+
+---
+
+## 2.6 Surgical Corridors
+
+[FIGURE: corridors_overview]
+
+> **🚪 CORRIDOR**: [Primary Surgical Corridor Name]
+> **Entry**: [Surface entry point]
+> **Trajectory**: [Direction and angle]
+> **Working Distance**: [mm from surface to target]
+> **Working Angle**: [degrees]
+> **Target Access**: [Structures that can be reached]
+> **At Risk Along Path**: [Structures traversed]
+> [FIGURE: corridor_detail]
+
+> **🚪 CORRIDOR**: [Alternative Corridor Name]
+> **Entry**: [Surface entry point]
+> **Trajectory**: [Direction]
+> **Working Distance**: [mm]
+> **Target Access**: [Structures reached]
+> **At Risk**: [Structures along path]
+> [FIGURE: alternative_corridor]
+
+---
+
+## 2.7 Anatomical Triangles
+
+[FIGURE: triangles_overview]
+
+> **🔺 TRIANGLE**: [Triangle Name]
+> **Boundaries**:
+> - Superior: [Structure]
+> - Inferior/Base: [Structure]
+> - Deep: [Structure]
+> **Dimensions**: [Base × Height mm]
+> **Contents**: [Structures within]
+> **Surgical Use**: [What access it provides]
+> [FIGURE: triangle_detail]
+
+> **🔺 TRIANGLE**: [Second Triangle]
+> **Boundaries**: [Three structures]
+> **Dimensions**: [mm]
+> **Contents**: [Structures]
+> **Surgical Use**: [Access]
+> [FIGURE: triangle_2_detail]
+
+---
+
+## 2.8 Safe Entry Zones
+
+[FIGURE: safe_zones]
+
+| Zone | Location | Dimensions | Avoids | Access To | Source |
+|:-----|:---------|:-----------|:-------|:----------|:-------|
+| [Zone 1] | [Position] | [mm × mm] | [Critical structures] | [Target] | [Source] |
+| [Zone 2] | [Position] | [mm × mm] | [Critical structures] | [Target] | [Source] |
+
+> **🟢 SAFE ZONE**: [Zone Name]
+> **Boundaries**: [Precise limits]
+> **Maximum Depth**: [mm]
+> **Structures Avoided**: [What's protected]
+> **Access Provided**: [What can be reached]
+> [FIGURE: safe_zone_detail]
+
+---
+
+## 2.9 Anatomical Variations
+
+[FIGURE: variations_overview]
+
+| Structure | Variation | Prevalence | 95% CI | n | Surgical Impact | Source |
+|:----------|:----------|:-----------|:-------|:--|:----------------|:-------|
+| [Structure 1] | [Variant] | [%] | [CI] | [n] | [Impact] | [Source] |
+| [Structure 2] | [Variant] | [%] | [CI] | [n] | [Impact] | [Source] |
+| [Structure 3] | [Variant] | [%] | [CI] | [n] | [Impact] | [Source] |
+
+> **🔀 CRITICAL VARIATION**: [High-Impact Variant Name]
+> **Prevalence**: [% (95% CI; n)]
+> **Recognition**: [How to identify — imaging, intraoperative]
+> **Surgical Adaptation**: [Modified technique required]
+> [FIGURE: variation_detail]
+
+---
+
+# PART III: SURGICAL PROCEDURE
+
+---
+
+## 3.1 Operative Planning
+
+[FIGURE: surgical_planning_overview]
+
+### Indications for Surgery (Summary)
+
+- [Indication 1]
+- [Indication 2]
+- [Indication 3]
+
+### Contraindications
+
+**Absolute**:
+- [Contraindication 1]
+- [Contraindication 2]
+
+**Relative**:
+- [Contraindication 1]
+- [Contraindication 2]
+
+### Preoperative Checklist
+
+- [ ] Imaging reviewed with key measurements documented
+- [ ] Surgical plan documented (approach, extent, goals)
+- [ ] Consent obtained with specific risks discussed
+- [ ] Blood products available
+- [ ] Equipment confirmed available
+- [ ] Neuromonitoring team notified
+
+[FIGURE: preop_imaging_annotated]
+
+---
+
+## 3.2 Operative Setup
+
+> **🏥 BOOKING THE CASE**
+> | Parameter | Specification |
+> |-----------|---------------|
+> | **Estimated Duration** | [X-X hours] |
+> | **Position** | [Specific position] |
+> | **Head Fixation** | [Pins/headrest/halo] |
+> | **Table** | [Configuration, rotation] |
+> | **Microscope** | [Yes/No, magnification settings] |
+> | **Endoscope** | [If applicable — angle, size] |
+> | **Navigation** | [Required/Optional — type] |
+> | **Neuromonitoring** | [SSEP/MEP/EMG/D-wave/BAEP] |
+> | **Blood Products** | [Type & screen/Crossmatch X units] |
+> | **Cell Saver** | [Required/Optional] |
+> | **Special Equipment** | [List specific items] |
+> [FIGURE: complete_or_setup]
+
+### Patient Positioning
+
+[FIGURE: positioning_overview]
+
+**Position**: [Detailed description]
+
+**Head Position**:
+
+| Parameter | Specification | Rationale | Source |
+|:----------|:--------------|:----------|:-------|
+| Rotation | [X° from midline] | [Why] | [Source] |
+| Flexion/Extension | [X°] | [Why] | [Source] |
+| Lateral tilt | [X°] | [Why] | [Source] |
+
+[FIGURE: positioning_detail]
+[FIGURE: head_position]
+
+> **⚠️ HAZARD**: Positioning Injuries
+> **Risks**: [Pressure injuries, nerve compression, VAE]
+> **Prevention**: [Padding, eye protection, arm positioning]
+> [FIGURE: positioning_safety]
+
+---
+
+## 3.3 Step-by-Step Technique
+
+### Phase 1: Exposure
+
+---
+
+#### Step 1: [Skin Incision/Initial Step]
+
+[FIGURE: step_1_setup]
+
+**Objective**: [Goal of this step]
+
+**Technique**:
+1. [Substep 1 with instrument and specifics]
+2. [Substep 2]
+3. [Substep 3]
+
+[FIGURE: step_1_execution]
+[FIGURE: step_1_complete]
+
+**ENDPOINT**: [How to verify step is complete]
+
+> **💡 PEARL**: [Technical Tip for This Step]
+> [Expert insight]
+> [FIGURE: step_1_pearl]
+> **Source**: [Reference]
+
+---
+
+#### Step 2: [Soft Tissue Dissection/Exposure]
+
+[FIGURE: step_2_setup]
+
+**Objective**: [Goal]
+
+**Technique**:
+1. [Substep]
+2. [Substep]
+3. [Substep]
+
+[FIGURE: step_2_execution]
+[FIGURE: step_2_anatomy]
+
+**ENDPOINT**: [Verification]
+
+> **🔴 STRUCTURE AT RISK**: [Structure]
+> **Location**: [Where in field]
+> **Consequence**: [If injured]
+> **Protection**: [Technique]
+> [FIGURE: step_2_hazard]
+
+---
+
+#### Step 3: [Bone Work/Craniotomy]
+
+[FIGURE: step_3_setup]
+
+**Objective**: [Goal]
+
+**Burr Holes** (if applicable):
+
+| Hole # | Location | Purpose | Source |
+|:-------|:---------|:--------|:-------|
+| 1 | [Anatomical location] | [Why here] | [Source] |
+| 2 | [Anatomical location] | [Why here] | [Source] |
+
+[FIGURE: burr_hole_placement]
+
+**Technique**:
+1. [Detailed substep]
+2. [Detailed substep]
+
+[FIGURE: step_3_execution]
+[FIGURE: step_3_complete]
+
+**ENDPOINT**: [Verification]
+
+> **⚠️ HAZARD**: [Bone Work Complication]
+> **Recognition**: [Signs]
+> **Prevention**: [Technique]
+> **Bailout**: [If occurs]
+> [FIGURE: step_3_hazard_management]
+
+---
+
+### Phase 2: Dural Opening
+
+---
+
+#### Step 4: [Dural Incision]
+
+[FIGURE: step_4_setup]
+
+**Objective**: [Goal — expose intradural contents]
+
+**Dural Opening Pattern**: [C-shaped/cruciate/linear]
+
+**Technique**:
+1. [Tack-up sutures]
+2. [Initial incision]
+3. [Extension and preservation of veins]
+
+[FIGURE: dural_incision_pattern]
+[FIGURE: dural_opening_complete]
+
+**ENDPOINT**: [Verification]
+
+---
+
+### Phase 3: Intradural Work
+
+---
+
+#### Steps 5-N: [Core Procedure Steps]
+
+[Continue same detailed format for each step...]
+
+Each step includes:
+- **Objective**
+- **Technique** (numbered substeps)
+- **Figures** (3-4 per step: setup, execution, complete, anatomy)
+- **ENDPOINT**
+- **Relevant callout boxes** (⚠️ Hazards, 🔴 Anatomy at Risk, 💡 Pearls)
+
+---
+
+### Phase 4: Closure
+
+---
+
+#### Step N-1: [Hemostasis & Dural Closure]
+
+[FIGURE: hemostasis_overview]
+
+**Hemostasis Technique**:
+1. [Systematic inspection]
+2. [Bipolar and hemostatics]
+3. [Valsalva check]
+
+[FIGURE: dural_closure_technique]
+
+**ENDPOINT**: [Watertight, dry field]
+
+---
+
+#### Step N: [Bone and Soft Tissue Closure]
+
+[FIGURE: closure_overview]
+
+**Closure by Layer**:
+
+| Layer | Material | Technique | Source |
+|:------|:---------|:----------|:-------|
+| Bone | [Plates/screws] | [Method] | [Source] |
+| Muscle/Fascia | [2-0 Vicryl] | [Interrupted] | [Source] |
+| Galea | [2-0 Vicryl] | [Running] | [Source] |
+| Skin | [Staples/suture] | [Everted] | [Source] |
+
+[FIGURE: layered_closure]
+
+**ENDPOINT**: [Skin edges everted, approximated]
+
+---
+
+## 3.4 Intraoperative Decision Points
+
+> **🔀 DECISION**: [Critical Intraoperative Scenario]
+> ```
+> IF [finding A — e.g., unexpected anatomy]:
+>   → [Technique A — modified approach]
+>   [FIGURE: decision_a]
+> IF [finding B — e.g., excessive bleeding]:
+>   → [Technique B — hemostatic maneuver]
+>   [FIGURE: decision_b]
+> IF unable to proceed safely:
+>   → [Bailout — staged procedure, biopsy only]
+> ```
+
+> **🔀 DECISION**: [Second Critical Scenario]
+> ```
+> IF [unfavorable finding]:
+>   → [Modified technique]
+> IF [favorable finding]:
+>   → Continue standard approach
+> ```
+
+---
+
+## 3.5 Neuromonitoring
+
+[FIGURE: monitoring_setup]
+
+### Modality Selection
+
+| Modality | Indication | Structures Monitored | Alert Criteria | Source |
+|:---------|:-----------|:---------------------|:---------------|:-------|
+| SSEP | [When used] | [Structures] | [>50% amplitude drop] | [Source] |
+| MEP | [When used] | [Structures] | [>50% amplitude or loss] | [Source] |
+| EMG | [When used] | [Specific nerves] | [Trains, bursts] | [Source] |
+| D-wave | [When used] | [CST integrity] | [>50% drop] | [Source] |
+| BAEP | [When used] | [Brainstem, CN VIII] | [Latency increase] | [Source] |
+
+### Alert Response Protocol
+
+> **⚠️ MONITORING ALERT PROTOCOL**
+> ```
+> IF significant change detected:
+>   1. STOP surgical manipulation
+>   2. Announce to team
+>   3. Release retractors
+>   4. Check: BP, temp, anesthetic depth
+>   5. Irrigate with warm saline
+>   6. Wait [X minutes] for recovery
+> IF no recovery:
+>   → Consider terminating procedure
+>   → Document changes
+> ```
+
+[FIGURE: monitoring_waveforms_normal]
+[FIGURE: monitoring_waveforms_alert]
+
+---
+
+# PART IV: POSTOPERATIVE MANAGEMENT
+
+---
+
+## 4.1 Immediate Postoperative Care
+
+[FIGURE: postop_protocol]
+
+| Parameter | Target/Protocol | Rationale | Source |
+|:----------|:----------------|:----------|:-------|
+| Position | [HOB elevation, specific position] | [Why] | [Source] |
+| BP Target | [SBP range] | [Why — prevent hyper/hypoperfusion] | [Source] |
+| Imaging | [CT/MRI at X hours] | [What to look for] | [Source] |
+| Neuro Checks | q[X] hours initially | [Key findings to monitor] | [Source] |
+| DVT Prophylaxis | [Start at X hours] | [SCDs immediately, heparin when] | [Source] |
+| Steroids | [Taper protocol] | [Duration] | [Source] |
+| Antibiotics | [Duration] | [Coverage] | [Source] |
+| Pain Management | [Protocol] | [Scheduled + PRN] | [Source] |
+
+[FIGURE: postop_imaging_normal]
+
+### Immediate Postop Red Flags
+
+> **🔴 RED FLAG**: [Postop Deterioration]
+> **Means**: [Hematoma, edema, ischemia]
+> **Action**: Stat CT, consider emergent return to OR
+> **Source**: [Reference]
+
+---
+
+## 4.2 Hospital Course
+
+### Expected Recovery Timeline
+
+| POD | Expected Status | Red Flags | Source |
+|:----|:----------------|:----------|:-------|
+| 0-1 | [Expected neuro status, activity] | [Concerning signs] | [Source] |
+| 2-3 | [Expected progress] | [Concerning signs] | [Source] |
+| 4-7 | [Expected progress] | [Concerning signs] | [Source] |
+
+### Discharge Criteria
+
+- [ ] Neurologically at baseline or improved
+- [ ] Adequate oral intake
+- [ ] Pain controlled with oral medications
+- [ ] Wound clean and dry, no evidence of CSF leak
+- [ ] [Procedure-specific criteria]
+- [ ] Follow-up appointments scheduled
+
+---
+
+## 4.3 Long-Term Follow-Up
+
+[FIGURE: followup_imaging_timeline]
+
+| Time | Clinical Evaluation | Imaging | Purpose | Source |
+|:-----|:--------------------|:--------|:--------|:-------|
+| 2 weeks | Wound check, neuro exam | None | Incision healing | [Source] |
+| 6 weeks | Full neuro exam | MRI with contrast | Residual assessment | [Source] |
+| 3 months | Functional assessment | MRI | Early recurrence | [Source] |
+| 6 months | Full evaluation | MRI | Surveillance | [Source] |
+| 1 year | Full evaluation | MRI | Surveillance | [Source] |
+| Annually | Full evaluation | MRI | Long-term surveillance | [Source] |
+
+---
+
+# PART V: OUTCOMES
+
+---
+
+## 5.1 Primary Outcomes
+
+[FIGURE: outcomes_overview]
+
+| Outcome | Definition | Rate | 95% CI | Follow-up Duration | Source |
+|:--------|:-----------|:-----|:-------|:-------------------|:-------|
+| [Success/Cure] | [How defined] | [%] | [CI] | [Duration] | [Source] |
+| [Improvement] | [How defined] | [%] | [CI] | [Duration] | [Source] |
+| [Stable] | [How defined] | [%] | [CI] | [Duration] | [Source] |
+| [Failure/Recurrence] | [How defined] | [%] | [CI] | [Duration] | [Source] |
+
+[FIGURE: outcome_comparison]
+
+---
+
+## 5.2 Complications
+
+[FIGURE: complications_overview]
+
+### Complication Rates
+
+| Complication | Rate | Risk Factors | Prevention | Management | Source |
+|:-------------|:-----|:-------------|:-----------|:-----------|:-------|
+| [CSF Leak] | [%] | [Factors] | [Technique] | [Treatment] | [Source] |
+| [Infection] | [%] | [Factors] | [Technique] | [Treatment] | [Source] |
+| [Hematoma] | [%] | [Factors] | [Technique] | [Treatment] | [Source] |
+| [New Deficit] | [%] | [Factors] | [Technique] | [Treatment] | [Source] |
+| [Death] | [%] | [Factors] | [Prevention] | — | [Source] |
+
+[FIGURE: complication_recognition]
+
+> **⚠️ CRITICAL COMPLICATION**: [Most Serious Complication]
+> **Incidence**: [%]
+> **Recognition**: [Signs and symptoms]
+> **Immediate Action**: [Steps 1-2-3]
+> **Source**: [Reference]
+
+### Complication Management Algorithms
+
+```
+IF [postop hematoma suspected]:
+  → Stat CT
+  → IF mass effect OR neuro decline:
+    → Emergent return to OR
+  → IF small, stable:
+    → Serial imaging, close observation
+
+IF [CSF leak recognized]:
+  → Mild (headache only):
+    → Bedrest, hydration, caffeine
+  → Moderate (wound drainage):
+    → Lumbar drain
+  → Severe (persistent, meningitis risk):
+    → Return to OR for repair
+```
+
+---
+
+## 5.3 Survival Analysis
+
+[FIGURE: kaplan_meier]
+
+| Metric | Value | 95% CI | Source |
+|:-------|:------|:-------|:-------|
+| 1-year survival | [%] | [CI] | [Source] |
+| 5-year survival | [%] | [CI] | [Source] |
+| 10-year survival | [%] | [CI] | [Source] |
+| Median survival | [Months/years] | [CI] | [Source] |
+
+[FIGURE: survival_by_subgroup]
+
+---
+
+## 5.4 Functional Outcomes
+
+| Scale | Preoperative | Postoperative | Change | p-value | Source |
+|:------|:-------------|:--------------|:-------|:--------|:-------|
+| [KPS] | [Mean ± SD] | [Mean ± SD] | [Δ] | [p] | [Source] |
+| [mRS] | [Mean ± SD] | [Mean ± SD] | [Δ] | [p] | [Source] |
+| [NANO] | [Mean ± SD] | [Mean ± SD] | [Δ] | [p] | [Source] |
+
+[FIGURE: functional_outcomes]
+
+---
+
+## 5.5 Prognostic Factors
+
+| Factor | HR/OR | 95% CI | p-value | Direction | Source |
+|:-------|:------|:-------|:--------|:----------|:-------|
+| [Factor 1] | [Value] | [CI] | [p] | [Better/Worse] | [Source] |
+| [Factor 2] | [Value] | [CI] | [p] | [Better/Worse] | [Source] |
+| [Factor 3] | [Value] | [CI] | [p] | [Better/Worse] | [Source] |
+
+[FIGURE: prognostic_forest_plot]
+
+---
+
+# PART VI: CONTROVERSIES & EMERGING CONCEPTS
+
+---
+
+## 6.1 Current Controversies
+
+### Controversy 1: [Topic — e.g., Observation vs. Early Treatment]
+
+**The Question**: [Frame the debate — What is being disputed?]
+
+| Position | Supporting Evidence | Evidence Class | Source |
+|:---------|:--------------------|:---------------|:-------|
+| Pro-[A] | [Key data] | [I/II/III] | [Source] |
+| Pro-[B] | [Key data] | [I/II/III] | [Source] |
+
+**Current Status**: [Where consensus stands, if any]
+
+[FIGURE: controversy_data]
+
+---
+
+### Controversy 2: [Second Controversial Topic]
+
+**The Question**: [Frame the debate]
+
+| Position | Evidence | Class | Source |
+|:---------|:---------|:------|:-------|
+| [Position A] | [Data] | [Class] | [Source] |
+| [Position B] | [Data] | [Class] | [Source] |
+
+**Current Status**: [Where consensus stands]
+
+---
+
+## 6.2 Emerging Technologies
+
+| Technology | Development Stage | Promise | Limitations | Source |
+|:-----------|:------------------|:--------|:------------|:-------|
+| [Technology 1] | [Phase I-III/In development] | [Potential benefit] | [Challenges] | [Source] |
+| [Technology 2] | [Stage] | [Potential] | [Challenges] | [Source] |
+
+---
+
+## 6.3 Ongoing Clinical Trials
+
+| Trial | NCT Number | Primary Question | Design | Status | Source |
+|:------|:-----------|:-----------------|:-------|:-------|:-------|
+| [Trial Name] | [NCT#] | [Primary endpoint] | [RCT/Cohort] | [Recruiting/Active] | [Source] |
+| [Trial Name 2] | [NCT#] | [Primary endpoint] | [Design] | [Status] | [Source] |
+
+---
+
+# PART VII: REFERENCE TABLES
+
+---
+
+## 7.1 All Anatomical Measurements
+
+| Parameter | Mean | SD | Range | n | Source |
+|:----------|:-----|:---|:------|:--|:-------|
+| [Structure dimension 1] | [Value] | [SD] | [Min-Max] | [n] | [Source] |
+| [Structure dimension 2] | [Value] | [SD] | [Min-Max] | [n] | [Source] |
+| [Distance A to B] | [Value] | [SD] | [Min-Max] | [n] | [Source] |
+| [All quantitative anatomical data] | | | | | |
+
+---
+
+## 7.2 All Anatomical Variations
+
+| Structure | Variation | Prevalence | 95% CI | n | Surgical Impact | Source |
+|:----------|:----------|:-----------|:-------|:--|:----------------|:-------|
+| [Structure 1] | [Variant] | [%] | [CI] | [n] | [Impact] | [Source] |
+| [Structure 2] | [Variant] | [%] | [CI] | [n] | [Impact] | [Source] |
+| [All variations consolidated] | | | | | | |
+
+---
+
+## 7.3 All Outcome Data
+
+| Outcome | Rate | 95% CI | Definition | Follow-up | Source |
+|:--------|:-----|:-------|:-----------|:----------|:-------|
+| [Outcome 1] | [%] | [CI] | [Definition] | [Duration] | [Source] |
+| [Outcome 2] | [%] | [CI] | [Definition] | [Duration] | [Source] |
+| [All outcome data consolidated] | | | | | |
+
+---
+
+## 7.4 All Drug Dosing
+
+| Drug | Class | Adult Dose | Pediatric | Monitoring | Source |
+|:-----|:------|:-----------|:----------|:-----------|:-------|
+| [Drug 1] | [Class] | [Dose, frequency] | [mg/kg] | [Labs/levels] | [Source] |
+| [Drug 2] | [Class] | [Dose, frequency] | [mg/kg] | [Labs/levels] | [Source] |
+
+---
+
+## 7.5 Surgical Parameters
+
+| Parameter | Value | Source |
+|:----------|:------|:-------|
+| Operative time | [Mean ± SD hours (range; n)] | [Source] |
+| Blood loss | [Mean ± SD mL (range; n)] | [Source] |
+| Hospital stay | [Mean ± SD days (range)] | [Source] |
+| ICU stay | [Mean ± SD days (range)] | [Source] |
+
+---
+
+# PART VIII: PEARLS & PITFALLS
+
+---
+
+## Clinical Pearls
+
+> **💡 PEARL 1**: Diagnosis
+> [Key diagnostic insight — what experienced clinicians know]
+> **Source**: [Reference]
+
+> **💡 PEARL 2**: Treatment Selection
+> [Key insight on choosing the right treatment]
+> **Source**: [Reference]
+
+> **💡 PEARL 3**: Timing
+> [Insight on optimal timing of intervention]
+> **Source**: [Reference]
+
+> **💡 PEARL 4**: Patient Counseling
+> [What patients need to understand]
+> **Source**: [Reference]
+
+> **💡 PEARL 5**: Prognosis
+> [Key prognostic insight]
+> **Source**: [Reference]
+
+[5-10 clinical pearls covering diagnosis, treatment selection, patient management]
+
+---
+
+## Technical/Surgical Pearls
+
+> **💡 PEARL**: Positioning
+> [Key surgical positioning insight]
+> [FIGURE: pearl_positioning]
+> **Source**: [Reference]
+
+> **💡 PEARL**: Exposure
+> [Key exposure technique insight]
+> [FIGURE: pearl_exposure]
+> **Source**: [Reference]
+
+> **💡 PEARL**: Core Technique
+> [Most important technical insight for the main procedure step]
+> [FIGURE: pearl_technique]
+> **Source**: [Reference]
+
+> **💡 PEARL**: Complication Avoidance
+> [Key insight for preventing the most common/serious complication]
+> [FIGURE: pearl_avoidance]
+> **Source**: [Reference]
+
+> **💡 PEARL**: Closure
+> [Closure technique that improves outcomes]
+> [FIGURE: pearl_closure]
+> **Source**: [Reference]
+
+[5-10 procedural pearls covering each surgical phase]
+
+---
+
+## Common Pitfalls
+
+| Category | Pitfall | Consequence | Prevention | Source |
+|:---------|:--------|:------------|:-----------|:-------|
+| **Diagnostic** | [Mistake — e.g., missing a variant] | [Result — e.g., delayed diagnosis] | [How to avoid] | [Source] |
+| **Treatment Selection** | [Mistake — e.g., wrong indication] | [Result] | [How to avoid] | [Source] |
+| **Surgical: Exposure** | [Mistake — e.g., inadequate exposure] | [Result] | [How to avoid] | [Source] |
+| **Surgical: Technique** | [Mistake] | [Result] | [How to avoid] | [Source] |
+| **Surgical: Closure** | [Mistake — e.g., inadequate dural closure] | [Result — CSF leak] | [How to avoid] | [Source] |
+| **Postoperative** | [Mistake — e.g., inadequate monitoring] | [Result] | [How to avoid] | [Source] |
+
+[FIGURE: pitfall_examples]
+
+> **🚫 PITFALL**: [Most Common/Serious Mistake]
+> **Mistake**: [What is done wrong]
+> **Consequence**: [What happens as a result]
+> **Prevention**: [How to avoid]
+> **Recovery**: [What to do if it happens]
+> **Source**: [Reference]
+
+---
+
+# PART IX: INFORMATION GAPS
+
+**MANDATORY SECTION** — *Not addressed in provided references*
+
+> **📐 CRITICAL INFORMATION GAPS**
+>
+> ### Epidemiology Gaps
+> - [Missing incidence/prevalence data]
+> - [Missing risk factor data]
+>
+> ### Pathophysiology Gaps
+> - [Missing mechanistic understanding]
+>
+> ### Treatment Gaps
+> - [Missing comparative effectiveness data]
+> - [Missing long-term outcome data]
+>
+> ### Surgical Gaps
+> - [Missing anatomical measurements]
+> - [Missing technique comparisons]
+>
+> ### Outcome Gaps
+> - [Missing complication rates]
+> - [Missing quality of life data]
+
+*The above gaps should be addressed through additional sources or explicitly acknowledged as unknown*
+
+---
+
+## Figure Index
+
+| Figure ID | Description | Part/Section | Source |
+|:----------|:------------|:-------------|:-------|
+{% for fig in ctx.figures %}
+| {{ fig.id }} | {{ fig.caption | default('No caption') | replace('\n', ' ') | truncate(80) }} | [Part/Section] | [Source] |
+{% endfor %}
+
+---
+
+## References
+
+[Complete source list organized by Part]
+
+{% for source in ctx.sources %}
+{{ loop.index }}. {{ source.source_name }} (ID: {{ source.source_id }})
+{% endfor %}
+
+---
+
+# SYNTHESIS PROCESS
+
+## Phase 1: Part Allocation
+Distribute content by {{ ctx.content_emphasis | default('BALANCED') }}:
+{% if ctx.content_emphasis == 'DISORDER' %}
+- **DISORDER emphasis**: 50% Part I, 25% Part II, 25% Part III
+{% elif ctx.content_emphasis == 'SURGICAL' %}
+- **SURGICAL emphasis**: 25% Part I, 25% Part II, 50% Part III
+{% else %}
+- **BALANCED**: 33% Part I, 33% Part II, 33% Part III
+{% endif %}
+
+## Phase 2: Figure Integration
+Map figures across all Parts ensuring cross-reference:
+- Disease figures → Part I
+- Anatomy figures → Part II
+- Surgical figures → Part III
+- Outcome figures → Part V
+
+## Phase 3: Decision Algorithm Construction
+Build integrated diagnostic → treatment → surgical decision tree
+
+## Phase 4: Outcome Integration
+Ensure Part V reflects both disease natural history and surgical outcomes
+
+## Phase 5: Completeness Check
+- [ ] All 9 Parts present
+- [ ] Figure density adequate (1/150 words)
+- [ ] All Greenberg boxes placed (📕📋💊🔴⚠️💡🚫🏥📐🔺🚪)
+- [ ] Information gaps documented
+- [ ] All measurements in Mean ± SD (range; n) format
+- [ ] All variations with prevalence % (95% CI; n)
+- [ ] All outcomes with 95% CI
+
+---
+
+## Quality Metrics
+
+| Metric | Target | Minimum |
+|:-------|:-------|:--------|
+| Total figures | 120-180 | 80 |
+| Figures per 1000 words | 6-7 | 5 |
+| Greenberg boxes (📕📋💊🔴⚠️💡🚫🏥) | 25-40 | 20 |
+| Decision algorithms | 3-5 | 2 |
+| Evidence-graded recommendations | 100% | 80% |
+| All 9 Parts complete | Yes | 8/9 |
+| Anatomical measurements with (n) | 100% | 80% |
+| Variations with prevalence % | 100% | 80% |
+| Clinical pearls | 10-15 | 8 |
+| Technical pearls | 5-10 | 5 |
+| Pitfalls documented | 5-10 | 5 |

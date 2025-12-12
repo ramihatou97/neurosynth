@@ -133,7 +133,7 @@ BROAD = SearchStrategy(
 
 
 # Strategy lookup dictionary
-STRATEGIES: Dict[str, SearchStrategy] = {
+STRATEGIES: dict[str, SearchStrategy] = {
     "strict": STRICT,
     "standard": STANDARD,
     "broad": BROAD,

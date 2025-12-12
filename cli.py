@@ -9,6 +9,7 @@ Commands:
     stats     - Show library statistics
 """
 
+import asyncio
 import sys
 from pathlib import Path
 from typing import Optional
@@ -47,7 +48,7 @@ def main():
 @main.command()
 @click.argument("library_path", type=click.Path(exists=True), required=False)
 @click.option("--force", "-f", is_flag=True, help="Reprocess already indexed documents")
-def ingest(library_path: Optional[str], force: bool):
+def ingest(library_path: str | None, force: bool):
     """
     Process PDF documents and build searchable index.
 
@@ -208,7 +209,7 @@ def ingest(library_path: Optional[str], force: bool):
     default="all",
     help="Output format",
 )
-def synthesize(topic: str, template: str, output: Optional[str], format: str):
+def synthesize(topic: str, template: str, output: str | None, format: str):
     """
     Generate a comprehensive chapter on a topic.
 
@@ -230,19 +231,19 @@ def synthesize(topic: str, template: str, output: Optional[str], format: str):
         console.print("[red]No documents indexed. Run 'ingest' first.[/red]")
         return
 
-    try:
-        ai = AIClient()
-    except ValueError as e:
-        console.print(f"[red]API key error: {e}[/red]")
-        return
-
     search = SearchEngine(db)
-    engine = SynthesisEngine(db, search, ai)
+    # AIClient is instantiated per-request in async context
+    engine = SynthesisEngine(db, search, ai_client=None)
 
     output_dir = Path(output) if output else settings.output_path
     renderer = ChapterRenderer(output_dir)
 
     formats = ["pdf", "docx", "md"] if format == "all" else [format]
+
+    # Define async synthesis function
+    async def run_synthesis():
+        async with AIClient() as ai:
+            return await engine.synthesize_chapter_async(topic, template, ai_client=ai)
 
     with Progress(
         SpinnerColumn(),
@@ -253,9 +254,9 @@ def synthesize(topic: str, template: str, output: Optional[str], format: str):
         # Retrieve
         task = progress.add_task("Retrieving relevant content...", total=None)
 
-        # Synthesize
+        # Synthesize (async)
         progress.update(task, description="Synthesizing chapter sections...")
-        chapter = engine.synthesize_chapter(topic, template)
+        chapter = asyncio.run(run_synthesis())
 
         # Render
         progress.update(task, description="Rendering output files...")
@@ -407,7 +408,7 @@ def stats():
 
 @main.command()
 @click.option("--specialty", "-s", help="Filter by specialty")
-def topics(specialty: Optional[str]):
+def topics(specialty: str | None):
     """List available topics based on indexed content."""
     from src.index import Database
 

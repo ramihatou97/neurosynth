@@ -44,20 +44,20 @@ class StudyModeReport:
     topic_source: TopicSource = TopicSource.TAXONOMY
 
     # What was suggested
-    ai_suggested_topics: List[str] = field(default_factory=list)
+    ai_suggested_topics: list[str] = field(default_factory=list)
 
     # What was found - maps topic to chapter/result identifier
-    matched_topics: Dict[str, str] = field(default_factory=dict)
+    matched_topics: dict[str, str] = field(default_factory=dict)
 
     # What's missing from library
-    missing_topics: List[str] = field(default_factory=list)
+    missing_topics: list[str] = field(default_factory=list)
 
     # Error tracking
-    error: Optional[str] = None
+    error: str | None = None
 
     # Analysis metadata
-    detected_region: Optional[str] = None
-    detected_subregion: Optional[str] = None
+    detected_region: str | None = None
+    detected_subregion: str | None = None
     confidence: float = 0.0
 
     @property
@@ -164,7 +164,7 @@ class StudyModeReport:
             lines.append("=" * 50)
             return "\n".join(lines)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
         return {
             "query": self.query,

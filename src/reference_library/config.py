@@ -93,6 +93,15 @@ def _get_library_path() -> Path:
     3. Environment variable NEUROSURGERY_LIBRARY_PATH
     4. Default path (will prompt if doesn't exist)
     """
+    # Priority 0: Main App Settings (Source of Truth)
+    try:
+        from src.config import settings
+
+        if settings.library_path.exists():
+            return settings.library_path
+    except ImportError:
+        pass
+
     # Check for locked library path first
     locked_path = get_locked_library_path()
     if locked_path and locked_path.exists():
@@ -117,8 +126,8 @@ def _get_library_path() -> Path:
             return path
 
     # Default path (may not exist - will trigger folder picker)
-    default_path = Path.home() / "Documents" / "NeurosurgeryLibrary"
-    return default_path
+    # Prefer data/library relative to project root if simpler defaults fail
+    return PROJECT_ROOT / "data" / "library"
 
 
 def prompt_for_library_path(lock: bool = True) -> Path | None:

@@ -11,10 +11,7 @@ from typing import List, Optional
 
 from .query_intent_lean import IntentDetector as LeanIntentDetector
 from .query_intent_lean import IntentResult as LeanIntentResult
-from .query_intent_lean import (
-    QueryIntent,
-    get_intent_detector,
-)
+from .query_intent_lean import QueryIntent, get_intent_detector
 
 
 @dataclass
@@ -24,7 +21,7 @@ class HybridIntentResult:
     original_query: str
     cleaned_query: str
     intent: QueryIntent
-    suggested_sections: List[str]
+    suggested_sections: list[str]
     confidence: float  # 0.0 - 1.0
     source: str  # "lean" or "ai"
     reasoning: str = ""
@@ -38,7 +35,7 @@ class HybridIntentResult:
 class HybridIntentClassifier:
     """Unified intent classifier with lean + AI fallback."""
 
-    def __init__(self, database=None, api_key: Optional[str] = None):
+    def __init__(self, database=None, api_key: str | None = None):
         """Initialize classifier.
 
         Args:
@@ -158,11 +155,11 @@ class HybridIntentClassifier:
 
 
 # Module-level singleton
-_hybrid_classifier: Optional[HybridIntentClassifier] = None
+_hybrid_classifier: HybridIntentClassifier | None = None
 
 
 def get_hybrid_classifier(
-    database=None, api_key: Optional[str] = None
+    database=None, api_key: str | None = None
 ) -> HybridIntentClassifier:
     """Get singleton HybridIntentClassifier."""
     global _hybrid_classifier

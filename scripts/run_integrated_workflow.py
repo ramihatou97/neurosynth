@@ -6,18 +6,20 @@ import os
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Optional
 
 # Add reference-library to path
 repo_root = Path(__file__).parent.parent
 sys.path.insert(0, str(repo_root / "reference-library"))
 
-import config
 from src.cache.database import Database
 from src.export.page_extractor import extract_relevant_pages, generate_manifest
 from src.integration.neurosynth_bridge import NeuroSynthBridge, SynthesisResult
 from src.search.pdf_searcher import PDFSearcher
+
+import config
 
 # Ensure src is in PYTHONPATH for the subprocess
 if "PYTHONPATH" not in os.environ:
@@ -43,8 +45,8 @@ class DockerBridge(NeuroSynthBridge):
         self,
         topic: str,
         results: list,
-        output_dir: Optional[Path] = None,
-        on_progress: Optional[Callable[[str], None]] = None,
+        output_dir: Path | None = None,
+        on_progress: Callable[[str], None] | None = None,
         context_pages: int = 1,
         search_query: str = "",
         search_mode: str = "keyword",

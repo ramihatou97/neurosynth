@@ -17,7 +17,7 @@ from neurosynth.api.routes import health_router, jobs_router
 logger = logging.getLogger(__name__)
 
 # Global AI client instance
-ai_client: Optional[AsyncAIClient] = None
+ai_client: AsyncAIClient | None = None
 
 
 @asynccontextmanager
@@ -25,15 +25,23 @@ async def lifespan(app: FastAPI):
     """Application lifespan handler - manage AI client and Redis pool."""
     global ai_client
 
-    # Startup: Initialize persistent AI client
+    # Startup: Initialize persistent AI client (optional - not used by stateless API)
     settings = get_settings()
-    logger.info("initializing_ai_client")
-    ai_client = AsyncAIClient(
-        voyage_api_key=settings.voyage_api_key,
-        anthropic_api_key=settings.anthropic_api_key,
-        timeout=60.0,
-    )
-    logger.info("ai_client_initialized")
+    if settings.voyage_api_key and settings.anthropic_api_key:
+        logger.info("initializing_ai_client")
+        try:
+            ai_client = AsyncAIClient(
+                voyage_api_key=settings.voyage_api_key,
+                anthropic_api_key=settings.anthropic_api_key,
+                timeout=60.0,
+            )
+            logger.info("ai_client_initialized")
+        except Exception as e:
+            logger.warning(f"ai_client_initialization_failed: {e}")
+            ai_client = None
+    else:
+        logger.info("ai_client_disabled: API keys not provided (optional)")
+        ai_client = None
 
     yield  # Application runs
 

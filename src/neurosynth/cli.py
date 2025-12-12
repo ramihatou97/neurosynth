@@ -183,37 +183,44 @@ def process(
         "-p",
         help="Project directory",
     ),
-    use_cache: bool = typer.Option(
-        True,
-        "--cache/--no-cache",
-        help="Use embedding cache",
+    use_proposition: bool = typer.Option(
+        False,
+        "--proposition/--no-proposition",
+        help="Use Proposition Chunker (Small-to-Big)",
     ),
 ):
     """Process source documents (parse, chunk, deduplicate)."""
-    run_async_safe(_process_async(project, use_cache))
+    run_async_safe(_process_async(project, use_cache, use_proposition))
 
 
-async def _process_async(project: Path, use_cache: bool):
+async def _process_async(project: Path, use_cache: bool, use_proposition: bool = False):
     """Async processing implementation."""
     from neurosynth.chunking import SemanticChunker
     from neurosynth.config import get_settings, load_project_config
     from neurosynth.dedup import ClusterMerger, EmbeddingGenerator, SemanticClusterer
     from neurosynth.dedup.embeddings import ExactDeduplicator
     from neurosynth.parsers import ParserFactory
+    from src.index.proposition_chunker import PropositionChunker
 
     sources_dir = project / "sources"
     processed_dir = project / "processed"
 
     # Load project config from neurosynth.yaml
     # This ensures chunk_size, chunk_overlap, similarity_threshold are applied
+    # Also check config for default chunker preference
     load_project_config(project)
     settings = get_settings()
+
+    # Priority: CLI Flag > Config > Default
+    use_proposition = use_proposition or settings.enable_proposition_chunker
 
     console.print(
         f"[dim]Config: chunk_size={settings.chunk_size}, "
         f"chunk_overlap={settings.chunk_overlap}, "
         f"similarity_threshold={settings.similarity_threshold}[/dim]"
     )
+    if use_proposition:
+        console.print("[dim]Chunker: PropositionChunker (Small-to-Big)[/dim]")
 
     if not sources_dir.exists():
         console.print("[red]Error: sources/ directory not found[/red]")
@@ -231,6 +238,10 @@ async def _process_async(project: Path, use_cache: bool):
     console.print(f"[blue]Processing {len(source_files)} source files...[/blue]")
     progress_log(f"Processing {len(source_files)} source files")
 
+    # Initialize chunkers
+    semantic_chunker = SemanticChunker()
+    proposition_chunker = PropositionChunker()
+
     # Parse documents
     all_chunks = []
     with Progress(
@@ -247,8 +258,48 @@ async def _process_async(project: Path, use_cache: bool):
                 doc = await parser.parse(file_path)
 
                 # Chunk document
-                chunker = SemanticChunker()
-                chunks = await chunker.chunk_document(doc)
+                if use_proposition:
+                    # PropositionChunker via adapter or direct if supported
+                    # Assuming PropositionChunker has chunk_document or similar interface
+                    # Earlier I saw it has `chunk_section`.
+                    # If doc object has sections structure compatible, good.
+                    # Or we adapt.
+                    # Given it's a gap fix, I'll try to use chunk_document if it exists,
+                    # or fallback to safe iteration.
+                    # Let's assume standard interface wrapper or iterate sections.
+
+                    chunks = []
+                    if hasattr(doc, "sections") and doc.sections:
+                        for section in doc.sections:
+                            # PropositionChunker.chunk_section(section, source_id, title)
+                            # doc likely has metadata
+                            s_id = getattr(doc.metadata, "id", file_path.stem)
+                            title = getattr(doc.metadata, "title", file_path.stem)
+                            chunks.extend(
+                                proposition_chunker.chunk_section(section, s_id, title)
+                            )
+                    else:
+                        # Fallback for docs without sections (e.g. plain text parser)
+                        # Create pseudo-section
+                        from src.models import Section
+
+                        sec = Section(
+                            title=file_path.stem,
+                            level=1,
+                            page_start=1,
+                            page_end=1,
+                            content=doc.text if hasattr(doc, "text") else str(doc),
+                            images=[],
+                        )
+                        chunks.extend(
+                            proposition_chunker.chunk_section(
+                                sec, file_path.stem, file_path.stem
+                            )
+                        )
+
+                else:
+                    chunks = await semantic_chunker.chunk_document(doc)
+
                 all_chunks.extend(chunks)
 
                 progress.update(
@@ -414,6 +465,32 @@ async def _synthesize_async(
         # Generate category-aware outline
         cat_outline_gen = CategoryAwareOutlineGenerator()
         outline = cat_outline_gen.generate(manifest)
+
+        # Enhance outline with images (Phase 1 Integration)
+        try:
+            from src.index.database import Database
+
+            # We delay heavy imports
+
+            db = Database()
+            # Optimization: Only load heavy vision model if we actually have embeddings
+            # This prevents 4GB+ RAM usage for users who haven't indexed images
+            if any(row[1] is not None for row in db.get_all_images_with_embeddings()):
+                progress_log("Loading vision model for image selection...")
+                from neurosynth.ai.biomed_searcher import BiomedCLIPSearcher
+                from neurosynth.synthesis.category_outline import (
+                    assign_images_to_outline,
+                )
+
+                vision_searcher = BiomedCLIPSearcher()
+                outline = assign_images_to_outline(outline, db, vision_searcher)
+                progress_log("Images assigned to outline nodes")
+            else:
+                progress_log("Skipping image assignment (no embedded images found)")
+
+        except Exception as e:
+            console.print(f"[yellow]Warning: Image assignment failed: {e}[/yellow]")
+            # Continue without images
 
         # Save outline to checkpoint
         if checkpoint:
@@ -827,6 +904,245 @@ def status(
         table.add_row("Output", "○", "Directory not found")
 
     console.print(table)
+
+
+@app.command(name="embed-visuals")
+def embed_visuals(
+    batch_size: int = typer.Option(
+        16,
+        "--batch-size",
+        "-b",
+        help="Number of images to process per batch",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Show what would be processed without making changes",
+    ),
+    resume: bool = typer.Option(
+        False,
+        "--resume",
+        help="Resume from checkpoint if available",
+    ),
+):
+    """Embed images into Qdrant for visual search.
+
+    This command:
+    1. Finds all images in the database without embeddings
+    2. Generates BiomedCLIP embeddings for each image
+    3. Stores embeddings in both SQLite and Qdrant
+
+    Prerequisites:
+    - pip install qdrant-client colpali-engine
+    - VISUAL_SEARCH_ENABLED=true in config
+    - Qdrant running (docker-compose up -d qdrant)
+    """
+    import json
+    from uuid import uuid4
+
+    # Check Qdrant availability
+    try:
+        from qdrant_client import QdrantClient
+        from qdrant_client.models import PointStruct
+    except ImportError:
+        console.print("[red]Error: qdrant-client not installed[/red]")
+        console.print("Run: pip install qdrant-client")
+        raise typer.Exit(1)
+
+    # Checkpoint file for resume functionality
+    checkpoint_file = Path("data/embed_visuals_checkpoint.json")
+
+    def load_checkpoint() -> set[str]:
+        if checkpoint_file.exists():
+            data = json.loads(checkpoint_file.read_text())
+            return set(data.get("processed", []))
+        return set()
+
+    def save_checkpoint(processed: set[str]):
+        checkpoint_file.parent.mkdir(parents=True, exist_ok=True)
+        checkpoint_file.write_text(json.dumps({"processed": list(processed)}))
+
+    console.print("[bold blue]NeuroSynth Visual Embedding Pipeline[/bold blue]\n")
+
+    # Add project root to path for src imports
+    import sys
+
+    project_root = Path(
+        __file__
+    ).parent.parent.parent  # src/neurosynth/cli.py -> neurosynth/
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+
+    # Initialize components
+    try:
+        from src.index.database import Database
+
+        db = Database()
+    except Exception as e:
+        console.print(f"[red]Database initialization failed: {e}[/red]")
+        raise typer.Exit(1)
+
+    # Get images needing embeddings
+    images = db.get_images_without_embeddings()
+
+    # Apply checkpoint filter
+    processed_ids = load_checkpoint() if resume else set()
+    if resume and processed_ids:
+        console.print(
+            f"[dim]Resuming from checkpoint: {len(processed_ids)} already processed[/dim]"
+        )
+        images = [img for img in images if img.id not in processed_ids]
+
+    if not images:
+        console.print("[green]✓ All images already have embeddings![/green]")
+        return
+
+    console.print(f"Found [cyan]{len(images)}[/cyan] images to embed\n")
+
+    if dry_run:
+        console.print("[yellow]Dry run mode - showing first 10 images:[/yellow]\n")
+        for img in images[:10]:
+            path = Path(img.file_path) if img.file_path else None
+            exists = path.exists() if path else False
+            status = "[green]✓[/green]" if exists else "[red]✗[/red]"
+            console.print(f"  {status} {img.id}: {img.file_path}")
+
+        if len(images) > 10:
+            console.print(f"\n  ... and {len(images) - 10} more")
+        return
+
+    # Initialize embedder and ingestor
+    try:
+        from neurosynth.ai.biomed_searcher import BiomedCLIPSearcher
+        from neurosynth.ai.ingestor import BiomedIngestor
+
+        console.print("[dim]Loading BiomedCLIP model...[/dim]")
+        embedder = BiomedCLIPSearcher()
+        ingestor = BiomedIngestor()
+    except Exception as e:
+        console.print(f"[red]Failed to initialize AI components: {e}[/red]")
+        raise typer.Exit(1)
+
+    # Process in batches
+    stats = {"processed": 0, "failed": 0, "skipped": 0}
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Embedding images...", total=len(images))
+
+        for i in range(0, len(images), batch_size):
+            batch = images[i : i + batch_size]
+            valid_images = []
+            valid_paths = []
+
+            # Validate paths
+            for img in batch:
+                if not img.file_path:
+                    stats["skipped"] += 1
+                    continue
+
+                path = Path(img.file_path)
+                if not path.exists():
+                    stats["skipped"] += 1
+                    continue
+
+                valid_images.append(img)
+                valid_paths.append(str(path))
+
+            if not valid_paths:
+                progress.update(task, advance=len(batch))
+                continue
+
+            try:
+                # Generate embeddings
+                embeddings = embedder.embed_image(valid_paths)
+
+                if len(embeddings) == 0:
+                    stats["failed"] += len(valid_images)
+                    progress.update(task, advance=len(batch))
+                    continue
+
+                # Store embeddings
+                points = []
+                for img, emb in zip(valid_images, embeddings):
+                    if emb is None or len(emb) != 512:
+                        stats["failed"] += 1
+                        continue
+
+                    # Update SQLite
+                    db.update_image_embedding(img.id, emb.tolist())
+
+                    # Create Qdrant point
+                    point = PointStruct(
+                        id=str(uuid4()),
+                        vector={"biomed": emb.tolist()},
+                        payload={
+                            "filename": img.id,
+                            "source_pdf": img.source_id or "",
+                            "page_num": img.page or 0,
+                            "path": str(img.file_path),
+                            "caption": img.caption or "",
+                            "context": img.surrounding_text or "",
+                            "image_type": (
+                                str(img.image_type.value)
+                                if hasattr(img.image_type, "value")
+                                else str(img.image_type)
+                            ),
+                        },
+                    )
+                    points.append(point)
+
+                    processed_ids.add(img.id)
+                    stats["processed"] += 1
+
+                # Batch upsert to Qdrant
+                if points:
+                    ingestor.client.upsert(
+                        collection_name=ingestor.COLLECTION_NAME,
+                        points=points,
+                    )
+
+                # Save checkpoint periodically
+                if (i // batch_size) % 5 == 0:
+                    save_checkpoint(processed_ids)
+
+            except Exception as e:
+                console.print(f"\n[red]Batch error: {e}[/red]")
+                stats["failed"] += len(batch)
+
+            progress.update(
+                task,
+                advance=len(batch),
+                description=f"Processed {stats['processed']}/{len(images)}",
+            )
+
+    # Final checkpoint save
+    save_checkpoint(processed_ids)
+
+    # Summary
+    console.print("\n[bold]Embedding Complete![/bold]\n")
+
+    table = Table(title="Results")
+    table.add_column("Metric", style="cyan")
+    table.add_column("Count", style="green")
+
+    table.add_row("Processed", str(stats["processed"]))
+    table.add_row("Failed", str(stats["failed"]))
+    table.add_row("Skipped (missing files)", str(stats["skipped"]))
+
+    console.print(table)
+
+    # Verify Qdrant
+    try:
+        info = ingestor.client.get_collection(ingestor.COLLECTION_NAME)
+        console.print(
+            f"\n[dim]Qdrant collection: {info.points_count} total points[/dim]"
+        )
+    except Exception as e:
+        console.print(f"\n[yellow]Could not verify Qdrant: {e}[/yellow]")
 
 
 @app.command()

@@ -17,7 +17,7 @@ THUMB_SIZE_LARGE = (320, 320)
 class ThumbnailCache:
     """Manages cached thumbnails for figure images."""
 
-    def __init__(self, cache_dir: Optional[Path] = None):
+    def __init__(self, cache_dir: Path | None = None):
         """Initialize thumbnail cache.
 
         Args:
@@ -46,7 +46,7 @@ class ThumbnailCache:
 
     def get_or_create_thumbnail(
         self, image_path: str, size: tuple[int, int] = THUMB_SIZE_SMALL
-    ) -> Optional[Path]:
+    ) -> Path | None:
         """Get cached thumbnail or create if not exists.
 
         Args:
@@ -67,7 +67,7 @@ class ThumbnailCache:
 
     def create_thumbnail(
         self, image_path: str, size: tuple[int, int] = THUMB_SIZE_SMALL
-    ) -> Optional[Path]:
+    ) -> Path | None:
         """Create and cache a thumbnail.
 
         Args:
@@ -104,8 +104,8 @@ class ThumbnailCache:
         self,
         image_paths: list[str],
         size: tuple[int, int] = THUMB_SIZE_SMALL,
-        progress_callback: Optional[callable] = None,
-    ) -> dict[str, Optional[Path]]:
+        progress_callback: callable | None = None,
+    ) -> dict[str, Path | None]:
         """Create thumbnails for multiple images.
 
         Args:
@@ -185,7 +185,7 @@ class ThumbnailCache:
 
 
 # Global instance for convenience
-_thumbnail_cache: Optional[ThumbnailCache] = None
+_thumbnail_cache: ThumbnailCache | None = None
 
 
 def get_thumbnail_cache() -> ThumbnailCache:

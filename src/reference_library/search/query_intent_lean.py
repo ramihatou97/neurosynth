@@ -28,7 +28,7 @@ class IntentResult:
     original_query: str
     cleaned_query: str  # Query with intent keywords removed
     intent: QueryIntent
-    suggested_sections: List[str]  # Section headers to prioritize
+    suggested_sections: list[str]  # Section headers to prioritize
 
 
 class IntentDetector:
@@ -36,7 +36,7 @@ class IntentDetector:
 
     # Keywords that signal specific intents
     # Only matched at the END of the query
-    INTENT_KEYWORDS: Dict[QueryIntent, Set[str]] = {
+    INTENT_KEYWORDS: dict[QueryIntent, set[str]] = {
         QueryIntent.TECHNIQUE: {
             "technique",
             "techniques",
@@ -104,7 +104,7 @@ class IntentDetector:
     }
 
     # Strong keywords that trigger intent regardless of position
-    STRONG_KEYWORDS: Dict[QueryIntent, Set[str]] = {
+    STRONG_KEYWORDS: dict[QueryIntent, set[str]] = {
         QueryIntent.TECHNIQUE: {"how to", "surgical steps", "operative steps"},
         QueryIntent.COMPLICATION: {
             "complication",
@@ -130,7 +130,7 @@ class IntentDetector:
     }
 
     # Map intents to likely section headers in textbooks
-    SECTION_MAP: Dict[QueryIntent, List[str]] = {
+    SECTION_MAP: dict[QueryIntent, list[str]] = {
         QueryIntent.TECHNIQUE: [
             "Surgical Technique",
             "Operative Technique",
@@ -164,7 +164,7 @@ class IntentDetector:
 
     # Keywords that should NOT be stripped even if they match an intent
     # e.g., "pterional approach" -> "approach" is part of the name
-    PROTECTED_PHRASES: Set[str] = {"approach", "approaches"}
+    PROTECTED_PHRASES: set[str] = {"approach", "approaches"}
 
     def detect(self, query: str) -> IntentResult:
         """Detect intent and return cleaned query."""
@@ -245,7 +245,7 @@ class IntentDetector:
 
 
 # Module-level singleton
-_detector: Optional[IntentDetector] = None
+_detector: IntentDetector | None = None
 
 
 def get_intent_detector() -> IntentDetector:

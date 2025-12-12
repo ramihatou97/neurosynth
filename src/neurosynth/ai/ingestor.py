@@ -61,7 +61,9 @@ class BiomedIngestor:
                 )
                 logger.info(f"Created Qdrant Collection: {self.COLLECTION_NAME}")
         except Exception as e:
-            logger.warning(f"Could not check/create collection: {e}")
+            logger.error(f"CRITICAL: Could not check/create Qdrant collection: {e}")
+            self.client = None
+            raise RuntimeError(f"Qdrant initialization failed: {e}") from e
 
     def ingest_figures(self, figures: list[object], batch_size: int = 32):
         """
@@ -103,6 +105,15 @@ class BiomedIngestor:
                 if i < len(classifications):
                     modality = classifications[i]["label"]
 
+                # Get enhancement fields (from SmartImageExtractor)
+                detected_regions = getattr(fig, "detected_regions", [])
+                region_confidence = getattr(fig, "region_confidence", 0.0)
+                ocr_caption = getattr(fig, "ocr_caption", "")
+                caption_source = getattr(fig, "caption_source", "proximity")
+                figure_number = getattr(fig, "figure_number", "")
+                parsed_caption = getattr(fig, "parsed_caption", "")
+                page_num = getattr(fig, "page_num", 0)
+
                 payload = {
                     "filename": filename,
                     "source_pdf": source_pdf,
@@ -110,6 +121,14 @@ class BiomedIngestor:
                     "context": context,
                     "modality": modality,
                     "path": path_str,
+                    # Enhancement fields
+                    "detected_regions": detected_regions,
+                    "region_confidence": region_confidence,
+                    "ocr_caption": ocr_caption,
+                    "caption_source": caption_source,
+                    "figure_number": figure_number,
+                    "parsed_caption": parsed_caption,
+                    "page_num": page_num,
                 }
 
                 points.append(

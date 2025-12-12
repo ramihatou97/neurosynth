@@ -49,8 +49,13 @@ class QdrantVisualStore:
         self.storage_path = self.settings.qdrant_path
         self.collection_name = self.settings.qdrant_collection_name
 
-        # Ensure storage directory exists
-        self.storage_path.mkdir(parents=True, exist_ok=True)
+        # Ensure storage directory exists (only if path is set)
+        if self.storage_path:
+            try:
+                self.storage_path.mkdir(parents=True, exist_ok=True)
+            except AttributeError:
+                # Handle case where path might be misconfigured as NoneType despite checks
+                pass
 
         QdrantVisualStore._initialized = True
 

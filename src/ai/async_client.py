@@ -29,7 +29,7 @@ try:
 except ImportError:
     pass  # dotenv not installed, rely on existing env vars
 
-from config import settings
+from src.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +48,8 @@ class AsyncAIClient:
 
     def __init__(
         self,
-        voyage_api_key: Optional[str] = None,
-        anthropic_api_key: Optional[str] = None,
+        voyage_api_key: str | None = None,
+        anthropic_api_key: str | None = None,
         timeout: float = 600.0,  # 10 minutes per attempt for complex synthesis
     ):
         self.voyage_key = (
@@ -64,8 +64,8 @@ class AsyncAIClient:
         self._validate_keys()
 
         # Lazy-initialized client to support multiple event loops (GUI threading)
-        self._client: Optional[httpx.AsyncClient] = None
-        self._client_loop_id: Optional[int] = None
+        self._client: httpx.AsyncClient | None = None
+        self._client_loop_id: int | None = None
         logger.info("AsyncAIClient initialized with connection pooling")
 
     def _validate_keys(self):
@@ -129,7 +129,7 @@ class AsyncAIClient:
         wait=wait_exponential(multiplier=2, min=4, max=120),
         retry=retry_if_exception_type((httpx.ConnectError, httpx.TimeoutException)),
     )
-    async def get_embedding(self, text: str, model: str = None) -> List[float]:
+    async def get_embedding(self, text: str, model: str = None) -> list[float]:
         """Get embedding for a single text (non-blocking)."""
         embeddings = await self.get_embeddings([text], model=model)
         return embeddings[0]
@@ -140,8 +140,8 @@ class AsyncAIClient:
         retry=retry_if_exception_type((httpx.ConnectError, httpx.TimeoutException)),
     )
     async def get_embeddings(
-        self, texts: List[str], model: str = None
-    ) -> List[List[float]]:
+        self, texts: list[str], model: str = None
+    ) -> list[list[float]]:
         """Get embeddings for multiple texts (non-blocking)."""
         model = model or settings.embedding_model
 
@@ -157,8 +157,8 @@ class AsyncAIClient:
         return all_embeddings
 
     async def _get_embeddings_batch(
-        self, texts: List[str], model: str
-    ) -> List[List[float]]:
+        self, texts: list[str], model: str
+    ) -> list[list[float]]:
         """Get embeddings for a batch of texts."""
         # Clean texts (Voyage has max length)
         cleaned = [self._truncate_text(t, max_chars=8000) for t in texts]
@@ -199,7 +199,7 @@ class AsyncAIClient:
     async def synthesize(
         self,
         prompt: str,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
         max_tokens: int = 4096,
         temperature: float = 0.3,
         model: str = None,
@@ -209,7 +209,7 @@ class AsyncAIClient:
 
         messages = [{"role": "user", "content": prompt}]
 
-        default_system = """You are an expert neurosurgical knowledge synthesizer. 
+        default_system = """You are an expert neurosurgical knowledge synthesizer.
 Your task is to create comprehensive, accurate medical content by combining information from multiple sources.
 
 Guidelines:

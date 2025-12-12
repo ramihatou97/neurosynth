@@ -37,18 +37,19 @@ This monorepo consolidates three previously separate tools into a unified codeba
 
 ```
 neurosynth/                      # Root
+├── app.py                       # Streamlit web app (main entry point)
 ├── src/
 │   ├── neurosynth/              # Core synthesis engine
 │   ├── deep_dx/                 # Deep diagnostic module
-│   ├── reference_library/       # Reference Library GUI
+│   ├── ui/                      # Streamlit UI components
+│   ├── reference_library/       # Search & caching logic
 │   └── bridges/                 # ETL scripts
-├── apps/                        # Entry points
-│   ├── reference-library.py     # GUI launcher
+├── apps/                        # Additional entry points
 │   ├── api.py                   # FastAPI app
 │   └── worker.py                # Worker service
 ├── data/                        # Centralized data
 │   ├── library.db               # Reference Library cache
-│   ├── neurosynth.db            # Deep-DX database
+│   ├── index.db                 # Document index database
 │   └── qdrant/                  # Vector storage
 ├── tests/                       # All tests
 └── docker-compose.yml           # Multi-service deployment
@@ -143,26 +144,25 @@ neurosynth synthesize --format markdown
 neurosynth run "Topic Name" --sources ./docs/ --output result.pdf
 ```
 
-## Additional Components
+## Web Application
 
-### Reference Library GUI
+### Streamlit UI
 
-Desktop application for searching and managing your neurosurgical PDF library:
+Launch the web application for searching, indexing, and synthesizing content:
 
 ```bash
-# Launch the Reference Library GUI
-python apps/reference-library.py
-
-# Or if installed with GUI dependencies:
-neuro-ref
+# Launch the Streamlit app
+streamlit run app.py
 ```
 
 **Features:**
-- Semantic search across PDF content
-- Visual search using ColPali embeddings
-- Automatic PDF indexing and caching
-- Category-based organization
-- Export search results to PDF
+- 📚 Reference Library - Browse and search PDFs
+- 🎯 Deep Search - Hybrid dense + BM25 → ColBERT reranking
+- 🩺 Clinical QA - Fast clinical question answering
+- ✨ Synthesis Studio - Generate textbook chapters
+- 📥 Batch Indexing - Index PDFs with progress tracking
+- 🔬 Advanced Features - Gap detection, clustering, figures
+- 📊 Analytics Dashboard - Usage metrics and insights
 
 ### ETL Bridge (Reference Library → Deep-DX)
 

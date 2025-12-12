@@ -15,9 +15,10 @@ Design:
 import asyncio
 import logging
 import threading
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Callable, Optional, Set
+from typing import Optional, Set
 
 from reference_library import config
 from reference_library.cache.database import Database
@@ -68,16 +69,16 @@ class AutoSyncManager:
         self.sync_debounce_seconds = sync_debounce_seconds
 
         # Queues (sets prevent duplicates)
-        self._index_queue: Set[Path] = set()
-        self._sync_queue: Set[Path] = set()
+        self._index_queue: set[Path] = set()
+        self._sync_queue: set[Path] = set()
 
         # Locks (prevent race conditions)
         self._index_lock = threading.Lock()
         self._sync_lock = threading.Lock()
 
         # Timers (for debouncing)
-        self._index_timer: Optional[threading.Timer] = None
-        self._sync_timer: Optional[threading.Timer] = None
+        self._index_timer: threading.Timer | None = None
+        self._sync_timer: threading.Timer | None = None
 
         # Thread pool for background operations
         self._executor = ThreadPoolExecutor(
@@ -292,7 +293,7 @@ class AutoSyncManager:
             )
         elif batch:
             self.status_callback(
-                f"Index batch completed with errors (see logs)", "warning"
+                "Index batch completed with errors (see logs)", "warning"
             )
 
         logger.info(f"Index batch complete ({successful}/{len(batch)} successful)")

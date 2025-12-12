@@ -72,7 +72,7 @@ def index_library(db):
             doc.close()
 
             # Extract figures
-            print(f"    Extracting figures...")
+            print("    Extracting figures...")
             scanner.extract_figures(pdf_path, force=True)
 
         except Exception as e:

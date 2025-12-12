@@ -20,25 +20,31 @@ else:
         cursor = conn.cursor()
 
         # Count Sources
+        source_count = 0
         try:
-            count = cursor.execute("SELECT COUNT(*) FROM sources").fetchone()[0]
-            print(f"📊 Total Sources in DB: {count}")
+            source_count = cursor.execute("SELECT COUNT(*) FROM sources").fetchone()[0]
+            print(f"📊 Total Sources in DB: {source_count}")
+        except sqlite3.OperationalError:
+            print("❌ 'sources' table not found.")
 
-            if count > 0:
-                print("\nFirst 5 Sources:")
-                rows = cursor.execute(
-                    "SELECT id, title, file_path FROM sources LIMIT 5"
-                ).fetchall()
-                for r in rows:
-                    print(f"  - [{r[0]}] {r[1]} ({r[2]})")
+        # Count Chunks
+        try:
+            chunk_count = cursor.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+            print(f"📊 Total Chunks in DB: {chunk_count}")
 
-        except sqlite3.OperationalError as e:
-            print(f"❌ Error querying sources table: {e}")
-            # List tables
-            tables = cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
-            print(f"  Tables found: {[t[0] for t in tables]}")
+            embedded_chunk_count = cursor.execute(
+                "SELECT COUNT(*) FROM chunks WHERE embedding IS NOT NULL"
+            ).fetchone()[0]
+            print(f"📊 Embedded Chunks: {embedded_chunk_count}")
+        except sqlite3.OperationalError:
+            print("❌ 'chunks' table not found.")
+
+        # Count Images
+        try:
+            image_count = cursor.execute("SELECT COUNT(*) FROM images").fetchone()[0]
+            print(f"📊 Total Images in DB: {image_count}")
+        except sqlite3.OperationalError:
+            print("❌ 'images' table not found.")
 
         conn.close()
     except Exception as e:

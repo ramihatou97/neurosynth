@@ -21,6 +21,7 @@ class OutlineEntry:
     expected_content: list[str] = field(default_factory=list)
     assigned_clusters: list[KnowledgeCluster] = field(default_factory=list)
     word_target: int = 1000
+    assigned_images: list = field(default_factory=list)
 
 
 class OutlineGenerator:

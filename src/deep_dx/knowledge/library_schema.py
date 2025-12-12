@@ -42,13 +42,13 @@ class Document:
     path: Path
     filename: str
     size_mb: float
-    page_count: Optional[int] = None
+    page_count: int | None = None
     has_toc: bool = False
     is_text_based: bool = True
 
     # Enriched Metadata (not in original schema but useful for Deep Search)
-    subspecialty: Optional[str] = None
-    condition: Optional[str] = None
+    subspecialty: str | None = None
+    condition: str | None = None
     authority_score: int = 80
 
 
@@ -73,7 +73,7 @@ class Subcollection:
     id: str
     name: str
     path: Path
-    color: Optional[SubspecialtyColor] = None
+    color: SubspecialtyColor | None = None
     conditions: list[Condition] = field(default_factory=list)
 
     @property
@@ -89,7 +89,7 @@ class BookSeries:
     path: Path
     chapter_count: int
     authority_score: int = 85
-    color: Optional[SubspecialtyColor] = None
+    color: SubspecialtyColor | None = None
 
 
 @dataclass
@@ -121,7 +121,7 @@ class LandmarkPaper:
     location: str
     key_finding: str
     authority_score: int = 100
-    subspecialty: Optional[str] = None
+    subspecialty: str | None = None
 
 
 @dataclass

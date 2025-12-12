@@ -109,6 +109,14 @@ class VisualElement:
     keyword_score: float = 0.0  # 0-1 score from 340+ keyword analysis
     keywords_matched: list[str] = field(default_factory=list)  # Matched keywords
 
+    # Anatomical region tagging (Task 1 enhancement)
+    anatomical_regions: list[str] = field(default_factory=list)  # Detected region IDs
+    region_confidence: float = 0.0  # Average confidence of detected regions
+
+    # OCR caption extraction (Task 2 enhancement)
+    ocr_caption: str = ""  # Caption extracted via OCR from image content
+    caption_source: str = "proximity"  # "proximity", "ocr", "hybrid"
+
     # Phase 3.6: Procedural Sequence Detection
     sequence_id: str | None = None  # Sequence identifier (e.g., "seq_001")
     sequence_position: int | None = None  # Position in sequence (1, 2, 3...)

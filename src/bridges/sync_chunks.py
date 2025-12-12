@@ -121,7 +121,7 @@ async def sync_library_to_qdrant():
         print(f"Starting fresh sync for {len(records)} chunks...")
 
     # Ensure Collection Exists
-    VECTOR_SIZE = 1024
+    VECTOR_SIZE = 512  # Voyage AI models use 512-dimensional embeddings
 
     collections = client.get_collections().collections
     exists = any(c.name == COLLECTION_NAME for c in collections)

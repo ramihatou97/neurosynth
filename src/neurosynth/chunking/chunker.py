@@ -8,6 +8,7 @@ from typing import Any
 from rich.console import Console
 
 from neurosynth.config import get_settings
+from neurosynth.integration.evidence import EvidenceDetector
 from neurosynth.models.document import ContentChunk, Document
 
 console = Console()
@@ -44,6 +45,7 @@ class SemanticChunker:
         self.target_size = target_size or settings.chunk_size
         self.overlap = overlap or settings.chunk_overlap
         self.strategy = strategy
+        self.evidence_detector = EvidenceDetector()
 
         # Patterns for detecting natural boundaries
         self._heading_pattern = re.compile(
@@ -67,13 +69,20 @@ class SemanticChunker:
     async def chunk_document(self, doc: Document) -> list[ContentChunk]:
         """Chunk a document using the configured strategy."""
         if self.strategy == ChunkingStrategy.STRUCTURAL:
-            return await self._chunk_structural(doc)
+            chunks = await self._chunk_structural(doc)
         elif self.strategy == ChunkingStrategy.FIXED:
-            return self._chunk_fixed(doc)
+            chunks = self._chunk_fixed(doc)
         elif self.strategy == ChunkingStrategy.HYBRID:
-            return await self._chunk_hybrid(doc)
+            chunks = await self._chunk_hybrid(doc)
         else:
-            return await self._chunk_semantic(doc)
+            chunks = await self._chunk_semantic(doc)
+
+        # Apply evidence grading
+        for chunk in chunks:
+            detection = self.evidence_detector.detect(chunk.content)
+            chunk.evidence_level = detection.level.value
+
+        return chunks
 
     async def _chunk_structural(self, doc: Document) -> list[ContentChunk]:
         """Chunk based on document structure (TOC, headings)."""

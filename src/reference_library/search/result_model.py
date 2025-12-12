@@ -142,21 +142,21 @@ class SearchResult:
     pdf_path: Path
     book_series: str
     book_title: str
-    chapter_number: Optional[int]
+    chapter_number: int | None
     chapter_title: str
     page_number: int
     match_text: str
     context: str
     # New fields for hierarchical search
     match_count: int = 1  # Number of matches on this page
-    match_locations: List[MatchLocation] = field(default_factory=list)
+    match_locations: list[MatchLocation] = field(default_factory=list)
     relevance_score: float = 50.0  # Calculated from match locations
     is_title_match: bool = False  # True if query matches chapter title
     # Legacy fields (kept for compatibility)
-    category: Optional[str] = None
-    category_group: Optional[str] = None
-    category_confidence: Optional[float] = None
-    category_reasoning: Optional[str] = None
+    category: str | None = None
+    category_group: str | None = None
+    category_confidence: float | None = None
+    category_reasoning: str | None = None
     cached: bool = False
 
     def __post_init__(self):
@@ -214,12 +214,12 @@ class ChapterResult:
     pdf_path: Path
     book_series: str
     book_title: str
-    chapter_number: Optional[int]
+    chapter_number: int | None
     chapter_title: str
     match_type: MatchType
     page_count: int
     # Pages with actual matches (for REFERENCE type) or all pages (for DEDICATED)
-    matched_pages: List[int] = field(default_factory=list)
+    matched_pages: list[int] = field(default_factory=list)
     # Best context snippet for preview
     preview_context: str = ""
     # Total keyword occurrences across all pages
@@ -228,10 +228,10 @@ class ChapterResult:
     relevance_score: float = 0.0
     # Individual page results (for drill-down)
     # Individual page results (for drill-down)
-    page_results: List[SearchResult] = field(default_factory=list)
+    page_results: list[SearchResult] = field(default_factory=list)
 
     # Enhanced Search Fields
-    matched_sections: List["DetectedSection"] = field(default_factory=list)
+    matched_sections: list["DetectedSection"] = field(default_factory=list)
     authority_score: int = 0  # 0-100 score from Master Index
     index_source: str = ""  # Source of authority (e.g., "L7")
 
@@ -308,7 +308,7 @@ class ChapterResult:
         """True if this is a dedicated chapter about the topic."""
         return self.match_type == MatchType.DEDICATED_CHAPTER
 
-    def get_all_pages(self) -> List[int]:
+    def get_all_pages(self) -> list[int]:
         """Get all pages to include when synthesizing."""
         if self.match_type == MatchType.DEDICATED_CHAPTER:
             # Include entire chapter
@@ -325,7 +325,7 @@ class ChapterMetadata:
     pdf_path: Path
     book_series: str
     book_title: str
-    chapter_number: Optional[int]
+    chapter_number: int | None
     chapter_title: str
     page_count: int = 0
     file_size: int = 0
@@ -356,7 +356,7 @@ class LibraryIndex:
     root_path: Path
     series: dict[str, BookSeries] = field(default_factory=dict)
     entire_books: list[ChapterMetadata] = field(default_factory=list)
-    last_scanned: Optional[datetime] = None
+    last_scanned: datetime | None = None
 
     @property
     def total_pdfs(self) -> int:

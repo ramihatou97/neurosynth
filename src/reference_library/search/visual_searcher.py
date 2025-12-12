@@ -70,7 +70,7 @@ class VisualSearcher:
             self.enabled = False
 
     def embed_image(
-        self, image_path: str, figure_id: str, metadata: Optional[Dict[str, Any]] = None
+        self, image_path: str, figure_id: str, metadata: dict[str, Any] | None = None
     ) -> bool:
         """Generate embedding for a single image and store in Qdrant.
 
@@ -120,8 +120,8 @@ class VisualSearcher:
 
     def embed_images_batch(
         self,
-        figures: List[Dict[str, Any]],
-        on_progress: Optional[callable] = None,
+        figures: list[dict[str, Any]],
+        on_progress: callable | None = None,
         batch_size: int = 16,
     ) -> int:
         """Batch embed multiple images.
@@ -176,8 +176,8 @@ class VisualSearcher:
         self,
         query_image_path: str,
         n_results: int = 20,
-        image_types: Optional[List[str]] = None,
-    ) -> List[Dict[str, Any]]:
+        image_types: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
         """Search for similar images using visual similarity.
 
         Args:
@@ -231,8 +231,8 @@ class VisualSearcher:
             return []
 
     def search_by_text(
-        self, query: str, n_results: int = 20, image_types: Optional[List[str]] = None
-    ) -> List[Dict[str, Any]]:
+        self, query: str, n_results: int = 20, image_types: list[str] | None = None
+    ) -> list[dict[str, Any]]:
         """Search for images using text query (if ColPali supports text-to-image).
 
         Args:
@@ -310,9 +310,7 @@ class VisualSearcher:
             print(f"Error clearing visual index: {e}")
 
 
-def get_visual_searcher(
-    database, collection_name: str = None
-) -> Optional[VisualSearcher]:
+def get_visual_searcher(database, collection_name: str = None) -> VisualSearcher | None:
     """Factory function to get a VisualSearcher if available.
 
     Args:

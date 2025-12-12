@@ -47,10 +47,10 @@ class IndexEntry:
     """A single entry from the master index."""
 
     term: str
-    references: List[str]  # Full reference strings: ["L7 Ch.5", "CB Ch.17"]
-    primary_sources: List[str]  # Just abbreviations: ["L7", "CB"]
+    references: list[str]  # Full reference strings: ["L7 Ch.5", "CB Ch.17"]
+    primary_sources: list[str]  # Just abbreviations: ["L7", "CB"]
     authority: int  # Highest authority score from sources
-    related_terms: List[str] = field(default_factory=list)
+    related_terms: list[str] = field(default_factory=list)
 
     @property
     def display_refs(self) -> str:
@@ -69,9 +69,9 @@ class MasterIndex:
         Acoustic neuroma - see Vestibular schwannoma	GH p.699
     """
 
-    def __init__(self, ini_path: Optional[Path] = None):
-        self.entries: Dict[str, IndexEntry] = {}
-        self._term_index: Dict[str, List[str]] = {}  # word -> [terms containing word]
+    def __init__(self, ini_path: Path | None = None):
+        self.entries: dict[str, IndexEntry] = {}
+        self._term_index: dict[str, list[str]] = {}  # word -> [terms containing word]
 
         if ini_path is None:
             # Default location
@@ -137,7 +137,7 @@ class MasterIndex:
         # Build word index for fuzzy matching
         self._build_word_index()
 
-    def _add_entry(self, term: str, refs: List[str], is_crossref: bool = False) -> None:
+    def _add_entry(self, term: str, refs: list[str], is_crossref: bool = False) -> None:
         """Add an entry to the index."""
         # Extract primary source abbreviations
         primary_sources = []
@@ -178,14 +178,14 @@ class MasterIndex:
                         self._term_index[word] = []
                     self._term_index[word].append(term_lower)
 
-    def find_term(self, query: str) -> List[IndexEntry]:
+    def find_term(self, query: str) -> list[IndexEntry]:
         """Find index entries matching a query.
 
         Uses simple substring matching - no fuzzy logic for MVP.
         Returns entries sorted by match quality and authority.
         """
         query_lower = query.lower().strip()
-        matches: List[IndexEntry] = []
+        matches: list[IndexEntry] = []
 
         # 1. Exact match
         if query_lower in self.entries:
@@ -240,7 +240,7 @@ class MasterIndex:
 
         return TEXT_AUTHORITY["DEFAULT"]
 
-    def get_related_terms(self, query: str, max_terms: int = 5) -> List[str]:
+    def get_related_terms(self, query: str, max_terms: int = 5) -> list[str]:
         """Get related terms from master index for 'Did you mean?' suggestions.
 
         Finds terms that share words with the query but are different,
@@ -260,7 +260,7 @@ class MasterIndex:
         if len(query_lower) < 3:
             return []
 
-        related: List[str] = []
+        related: list[str] = []
         seen_terms = {query_lower}  # Don't suggest the exact query
 
         # Find terms that share words but are different
@@ -311,7 +311,7 @@ class MasterIndex:
         expand_synonyms: bool = True,
         expand_orthographic: bool = True,
         max_expansions: int = 10,
-    ) -> List[str]:
+    ) -> list[str]:
         """Expand query with synonyms and orthographic variants.
 
         Args:
@@ -382,7 +382,7 @@ class MasterIndex:
 
         return expansions[:max_expansions]
 
-    def get_primary_sources_for_query(self, query: str) -> List[str]:
+    def get_primary_sources_for_query(self, query: str) -> list[str]:
         """Get primary source abbreviations for a query.
 
         Useful for showing which textbooks are authoritative for a topic.
@@ -408,7 +408,7 @@ class MasterIndex:
 
 
 # Module-level singleton for easy access
-_master_index: Optional[MasterIndex] = None
+_master_index: MasterIndex | None = None
 
 
 def get_master_index() -> MasterIndex:

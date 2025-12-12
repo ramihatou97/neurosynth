@@ -6,6 +6,9 @@ venv_colbert/
 __pycache__/
 *.pyc
 
+# Qdrant local data
+.qdrant_data/
+
 # Data (potentially large/sensitive - keep structure, ignore contents)
 data/sources/
 data/processed/
@@ -14,7 +17,18 @@ data/qdrant/
 data/chroma/
 data/images/
 data/thumbs/
+data/colbert_index/
+data/colbert_io/
+data/knowledge_graph/
+data/neurosynth_output/
+data/qdrant_storage/
+data/jobs/
 !data/.gitkeep
+
+# Reference Library PDF collections (very large)
+data/library/
+data/library/**/*.pdf
+data/library/**/*.PDF
 
 # Old Reference Library directories (stale code - now consolidated in src/reference_library/)
 reference-library/
@@ -83,12 +97,17 @@ additional*.ini
 *.sqlite
 *.sqlite3
 
-# Generated assets
+# Generated assets & extracted data
 assets/
 assets/extracted_images/
+assets/thumbnails/
 
-# Vector database storage
-data/qdrant_storage/
-
-# Extraction state
+# Extraction state & checkpoints
 extraction_state.json
+data/embed_visuals_checkpoint.json
+data/user_config.json
+data/knowledge_graph.json
+
+# All PDF files anywhere in repo
+*.pdf
+*.PDF

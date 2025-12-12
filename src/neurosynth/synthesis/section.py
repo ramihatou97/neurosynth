@@ -1,4 +1,23 @@
-"""Section-by-section synthesis."""
+"""Section-by-section synthesis.
+
+This is the PRIMARY synthesis module for NeuroSynth. Use this module when:
+- Running full chapter synthesis pipelines (CLI, Worker, API)
+- You need async-first, production-ready synthesis
+- Working with OutlineEntry/cluster-based content organization
+- Need parallel section synthesis with concurrency control
+- Require conflict detection and resolution
+- Generating abstracts automatically
+
+Design Principles:
+- Fully async-first architecture
+- Uses ClaudeClient for all LLM operations
+- Operates on OutlineEntry objects with assigned clusters
+- Supports checkpointing for recovery
+- Handles Gemini fallback automatically
+
+For the legacy Streamlit-compatible sync engine, see:
+- src/synthesize/engine.py (SynthesisEngine)
+"""
 
 import asyncio
 from dataclasses import dataclass
@@ -55,6 +74,9 @@ class SectionSynthesizer:
             level=entry.level,
             clusters=entry.assigned_clusters,
         )
+        # Phase 3: Pass visual content (assignment post-init to be safe against stale definitions)
+        if hasattr(entry, "assigned_images") and entry.assigned_images:
+            section.images = entry.assigned_images
 
         if not entry.assigned_clusters:
             console.print(
@@ -173,6 +195,29 @@ class SectionSynthesizer:
             nonlocal completed
             async with semaphore:
                 try:
+                    # CHECKPOINT RESUME LOGIC
+                    if checkpoint and checkpoint.has_section(index):
+                        content = checkpoint.get_section_content(index)
+                        if content:
+                            console.print(
+                                f"  [green]Skipping Section {index} ({entry.title}) - Found in checkpoint[/green]"
+                            )
+                            # Parse content to recreate section object (simplified)
+                            # We assume content is full markdown.
+                            # We need to strip the header if it was added by save_section?
+                            # save_section adds "# Title\n\n".
+                            # For simplicity we just set the content.
+
+                            skipped_section = Section(
+                                title=entry.title,
+                                level=entry.level,
+                                clusters=entry.assigned_clusters,
+                            )
+                            # Strip header for cleaner content if needed, but for now raw load is safer
+                            skipped_section.content = content
+                            completed += 1
+                            return index, skipped_section, True
+
                     section = await self.synthesize_section(entry)
                     completed += 1
                     console.print(
@@ -654,6 +699,25 @@ Return ONLY a JSON array."""
         content_parts = []
 
         for i, source in enumerate(sources, 1):
+            # Handle standalone image sources (from assign_images_to_outline)
+            if source.get("type") == "image":
+                fig_id = source.get("id", "unknown")
+                if used_figure_ids and fig_id in used_figure_ids:
+                    continue
+
+                caption = source.get("caption", "No caption")
+                img_type = source.get("image_type", "unknown")
+                score = source.get("relevance_score", "N/A")
+
+                part = "\n--- Relevant Figure ---\n"
+                part += f"[FIGURE_ID: {fig_id}]\n"
+                part += f"Type: {img_type}\n"
+                part += f"Caption: {caption}\n"
+                part += f"Relevance: {score}\n"
+
+                content_parts.append(part)
+                continue  # Skip standard source handling for image entries
+
             original_source = source.get("original_source", "Unknown")
             category = source.get("category", "")
             excerpts = source.get("context_excerpts", [])

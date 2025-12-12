@@ -17,16 +17,20 @@ class QdrantRetriever:
 
     def __init__(
         self,
-        url: str = "http://localhost:6333",
+        url: str = None,
         collection_name: str = "deep_dx_collection",
     ):
-        self.url = url
+        # Use env var or default to docker service, with localhost fallback check handled by client or user
+        import os
+
+        self.url = url or os.getenv("QDRANT_URL", "http://qdrant:6333")
         self.collection_name = collection_name
         self.client = None
 
         try:
             self.client = QdrantClient(url=self.url)
             # Verify connection
+
             self.client.get_collections()
             logger.info(f"✓ Connected to Qdrant at {self.url} [{self.collection_name}]")
         except Exception as e:
@@ -34,7 +38,11 @@ class QdrantRetriever:
             self.client = None
 
     def search(
-        self, query_embedding: list[float], top_k: int = 20, min_score: float = 0.5
+        self,
+        query_embedding: list[float],
+        top_k: int = 20,
+        min_score: float = 0.5,
+        filters: dict | None = None,
     ) -> list[SearchResult]:
         """
         Search Qdrant for similar chunks using query embedding.
@@ -44,12 +52,39 @@ class QdrantRetriever:
             return []
 
         try:
+            # Construct Filter
+            query_filter = None
+            if filters:
+                conditions = []
+                # Source Filter
+                source_ids = filters.get("source_ids")
+                if source_ids:
+                    # Convert set/list to list
+                    s_ids = list(source_ids)
+                    if len(s_ids) == 1:
+                        conditions.append(
+                            models.FieldCondition(
+                                key="source_doc_id",
+                                match=models.MatchValue(value=s_ids[0]),
+                            )
+                        )
+                    else:
+                        conditions.append(
+                            models.FieldCondition(
+                                key="source_doc_id", match=models.MatchAny(any=s_ids)
+                            )
+                        )
+
+                if conditions:
+                    query_filter = models.Filter(must=conditions)
+
             # Use query_points (compatible with v1.x)
             results = self.client.query_points(
                 collection_name=self.collection_name,
                 query=query_embedding,
                 limit=top_k,
                 with_payload=True,
+                query_filter=query_filter,
             ).points
 
             search_results = []

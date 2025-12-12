@@ -91,7 +91,7 @@ class Database:
         # Combine size and mtime for a fast "fingerprint"
         return f"{stat.st_size}_{int(stat.st_mtime)}"
 
-    def get_cached_checksum(self, pdf_path: Path) -> Optional[str]:
+    def get_cached_checksum(self, pdf_path: Path) -> str | None:
         """Get checksum from tracked_files table (fast - no file reading)."""
         with self._get_connection() as conn:
             cursor = conn.execute(
@@ -149,7 +149,7 @@ class Database:
 
     def get_cached_text(
         self, pdf_path: Path, page_num: int, checksum: str
-    ) -> Optional[str]:
+    ) -> str | None:
         """Retrieve cached text if PDF unchanged."""
         with self._get_connection() as conn:
             cursor = conn.execute(
@@ -261,7 +261,7 @@ class Database:
             )
             conn.commit()
 
-    def get_cached_categorization(self, context_hash: str) -> Optional[dict]:
+    def get_cached_categorization(self, context_hash: str) -> dict | None:
         """Retrieve cached categorization if exists."""
         with self._get_connection() as conn:
             cursor = conn.execute(
@@ -305,7 +305,7 @@ class Database:
             )
             conn.commit()
 
-    def get_cached_query_intent(self, query: str) -> Optional[dict]:
+    def get_cached_query_intent(self, query: str) -> dict | None:
         """Get cached query intent classification."""
         with self._get_connection() as conn:
             cursor = conn.execute(
@@ -374,7 +374,7 @@ class Database:
             conn.commit()
 
     def get_search_suggestions(
-        self, prefix: str, limit: int = 10, category_filter: Optional[str] = None
+        self, prefix: str, limit: int = 10, category_filter: str | None = None
     ) -> list[str]:
         """Return past searches matching prefix, optionally filtered by category."""
         with self._get_connection() as conn:
@@ -422,7 +422,7 @@ class Database:
         pdf_path: Path,
         book_series: str,
         book_title: str,
-        chapter_number: Optional[int],
+        chapter_number: int | None,
         chapter_title: str,
         file_size: int,
         page_count: int,
@@ -729,11 +729,11 @@ class Database:
         search_query: str,
         search_mode: str,
         sources: list[dict[str, object]],
-        template_used: Optional[str] = None,
-        output_path: Optional[Path] = None,
+        template_used: str | None = None,
+        output_path: Path | None = None,
         success: bool = True,
-        error_message: Optional[str] = None,
-        manifest_json: Optional[str] = None,
+        error_message: str | None = None,
+        manifest_json: str | None = None,
     ) -> int:
         """
         Log a synthesis session to the history.
@@ -824,7 +824,7 @@ class Database:
             )
             return [dict(row) for row in cursor]
 
-    def get_synthesis_detail(self, synthesis_id: int) -> Optional[dict]:
+    def get_synthesis_detail(self, synthesis_id: int) -> dict | None:
         """Get detailed info about a specific synthesis session."""
         with self._get_connection() as conn:
             # Get main record
@@ -911,12 +911,12 @@ class Database:
         element_id: str,
         pdf_path: Path,
         page_number: int,
-        image_path: Optional[Path],
+        image_path: Path | None,
         checksum: str,
         format: str = "png",
         width: int = 0,
         height: int = 0,
-        bbox: Optional[tuple] = None,
+        bbox: tuple | None = None,
         caption: str = "",
         caption_confidence: float = 0.0,
         image_type: str = "unknown",
@@ -1022,7 +1022,7 @@ class Database:
             conn.commit()
 
     def get_pdf_figures(
-        self, pdf_path: Path, checksum: Optional[str] = None
+        self, pdf_path: Path, checksum: str | None = None
     ) -> list[dict]:
         """Get all cached figures for a PDF.
 
@@ -1066,29 +1066,11 @@ class Database:
             return figures
 
     def get_page_figures(
-        self, pdf_path: Path, page_number: int, checksum: Optional[str] = None
+        self, pdf_path: Path, page_number: int, checksum: str | None = None
     ) -> list[dict]:
-        """Get all figures for a specific page."""
-        with self._get_connection() as conn:
-            if checksum:
-                cursor = conn.execute(
-                    """
-                    SELECT * FROM visual_elements
-                    WHERE pdf_path = ? AND page_number = ? AND file_checksum = ?
-                    ORDER BY id
-                """,
-                    (str(pdf_path), page_number, checksum),
-                )
-            else:
-                cursor = conn.execute(
-                    """
-                    SELECT * FROM visual_elements
-                    WHERE pdf_path = ? AND page_number = ?
-                    ORDER BY id
-                """,
-                    (str(pdf_path), page_number),
-                )
+        """Get all figures for a specific page using robust path matching."""
 
+        def _hydrate(cursor):
             figures = []
             for row in cursor:
                 fig = dict(row)
@@ -1100,7 +1082,48 @@ class Database:
                 figures.append(fig)
             return figures
 
-    def get_figure_by_id(self, element_id: str) -> Optional[dict]:
+        with self._get_connection() as conn:
+            # Tier 1: Exact Match
+            query = (
+                "SELECT * FROM visual_elements WHERE pdf_path = ? AND page_number = ?"
+            )
+            params = [str(pdf_path), page_number]
+            if checksum:
+                query += " AND file_checksum = ?"
+                params.append(checksum)
+
+            cursor = conn.execute(query + " ORDER BY id", params)
+            figures = _hydrate(cursor)
+            if figures:
+                return figures
+
+            # Tier 2: Filename Match (handles moved files or extracted buckets)
+            filename = pdf_path.name
+            query = "SELECT * FROM visual_elements WHERE pdf_path LIKE '%' || ? || '%' AND page_number = ?"
+            params = [filename, page_number]
+            if checksum:
+                query += " AND file_checksum = ?"
+                params.append(checksum)
+
+            cursor = conn.execute(query + " ORDER BY id", params)
+            figures = _hydrate(cursor)
+            if figures:
+                return figures
+
+            # Tier 3: Stem Match (handles extension changes or minor renaming)
+            stem = pdf_path.stem.split(".")[
+                0
+            ]  # Take first part of stem if multiple dots
+            query = "SELECT * FROM visual_elements WHERE pdf_path LIKE '%' || ? || '%' AND page_number = ?"
+            params = [stem, page_number]
+            if checksum:
+                query += " AND file_checksum = ?"
+                params.append(checksum)
+
+            cursor = conn.execute(query + " ORDER BY id", params)
+            return _hydrate(cursor)
+
+    def get_figure_by_id(self, element_id: str) -> dict | None:
         """Get a specific figure by ID."""
         with self._get_connection() as conn:
             cursor = conn.execute(
@@ -1117,7 +1140,7 @@ class Database:
                 return fig
             return None
 
-    def get_figure_count(self, pdf_path: Path, checksum: Optional[str] = None) -> int:
+    def get_figure_count(self, pdf_path: Path, checksum: str | None = None) -> int:
         """Get count of figures for a PDF."""
         with self._get_connection() as conn:
             if checksum:
@@ -1217,7 +1240,7 @@ class Database:
 
             return stats
 
-    def clear_visual_cache(self, pdf_path: Optional[Path] = None):
+    def clear_visual_cache(self, pdf_path: Path | None = None):
         """Clear visual cache, optionally for a specific PDF."""
         with self._get_connection() as conn:
             if pdf_path:

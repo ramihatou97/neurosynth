@@ -12,7 +12,7 @@ from typing import Dict, List
 # =============================================================================
 # 1. INSTRUMENT_SYNONYMS - Surgical instruments and equipment
 # =============================================================================
-INSTRUMENT_SYNONYMS: Dict[str, List[str]] = {
+INSTRUMENT_SYNONYMS: dict[str, list[str]] = {
     # Head Fixation
     "mayfield": [
         "skull clamp",
@@ -68,7 +68,7 @@ INSTRUMENT_SYNONYMS: Dict[str, List[str]] = {
 # =============================================================================
 # 2. POSITIONING_TERMS - Patient positioning terminology
 # =============================================================================
-POSITIONING_TERMS: Dict[str, List[str]] = {
+POSITIONING_TERMS: dict[str, list[str]] = {
     # Major Positions
     "park bench": ["lateral decubitus", "lateral position", "three-quarter prone"],
     "lateral decubitus": ["park bench", "lateral position", "side-lying"],
@@ -94,7 +94,7 @@ POSITIONING_TERMS: Dict[str, List[str]] = {
 # =============================================================================
 # 3. NEUROMONITORING_TERMS - Intraoperative monitoring vocabulary
 # =============================================================================
-NEUROMONITORING_TERMS: Dict[str, Dict] = {
+NEUROMONITORING_TERMS: dict[str, dict] = {
     "BAER": {
         "full": "brainstem auditory evoked responses",
         "synonyms": [
@@ -138,7 +138,7 @@ NEUROMONITORING_TERMS: Dict[str, Dict] = {
 # =============================================================================
 # 4. HEMOSTATIC_AGENTS - Hemostasis materials and techniques
 # =============================================================================
-HEMOSTATIC_AGENTS: Dict[str, List[str]] = {
+HEMOSTATIC_AGENTS: dict[str, list[str]] = {
     # Topical Agents
     "gelfoam": ["gelatin sponge", "absorbable gelatin", "gelatin foam"],
     "surgicel": ["oxidized cellulose", "oxidized regenerated cellulose", "ORC"],
@@ -159,7 +159,7 @@ HEMOSTATIC_AGENTS: Dict[str, List[str]] = {
 # =============================================================================
 # 5. COMPLICATION_TERMS - Surgical complications and adverse events
 # =============================================================================
-COMPLICATION_TERMS: Dict[str, Dict] = {
+COMPLICATION_TERMS: dict[str, dict] = {
     # Vascular Complications
     "hematoma": {
         "synonyms": ["blood collection", "hemorrhage", "bleeding"],
@@ -245,7 +245,7 @@ COMPLICATION_TERMS: Dict[str, Dict] = {
 # =============================================================================
 # 6. TISSUE_DESCRIPTORS - Tissue characteristics and anatomical layers
 # =============================================================================
-TISSUE_DESCRIPTORS: Dict[str, List[str]] = {
+TISSUE_DESCRIPTORS: dict[str, list[str]] = {
     # Meningeal Layers
     "dura": ["dura mater", "dural", "pachymeninx"],
     "arachnoid": ["arachnoid mater", "arachnoid membrane", "leptomeninges"],
@@ -281,7 +281,7 @@ TISSUE_DESCRIPTORS: Dict[str, List[str]] = {
 # =============================================================================
 # 7. IMAGING_INTRAOP - Intraoperative imaging modalities
 # =============================================================================
-IMAGING_INTRAOP: Dict[str, List[str]] = {
+IMAGING_INTRAOP: dict[str, list[str]] = {
     # Fluoroscopy
     "fluoroscopy": ["fluoro", "C-arm", "image intensifier", "live X-ray"],
     "c-arm": ["C-arm fluoroscopy", "mobile fluoroscopy", "image intensifier"],
@@ -312,7 +312,7 @@ IMAGING_INTRAOP: Dict[str, List[str]] = {
 # =============================================================================
 # 8. SURGICAL_PHASES - Procedural phase terminology
 # =============================================================================
-SURGICAL_PHASES: Dict[str, List[str]] = {
+SURGICAL_PHASES: dict[str, list[str]] = {
     # Preparation
     "positioning": ["patient positioning", "surgical position", "operative position"],
     "prep and drape": ["surgical prep", "sterile preparation", "draping"],
@@ -341,7 +341,7 @@ SURGICAL_PHASES: Dict[str, List[str]] = {
 # =============================================================================
 # 9. ORTHOGRAPHIC_VARIATIONS - British/American spelling variants
 # =============================================================================
-ORTHOGRAPHIC_VARIATIONS: Dict[str, str] = {
+ORTHOGRAPHIC_VARIATIONS: dict[str, str] = {
     # -our/-or variations
     "tumour": "tumor",
     "colour": "color",
@@ -411,7 +411,7 @@ ORTHOGRAPHIC_VARIATIONS: Dict[str, str] = {
 # =============================================================================
 
 
-def get_all_synonyms() -> Dict[str, List[str]]:
+def get_all_synonyms() -> dict[str, list[str]]:
     """Combine all simple synonym dictionaries into one."""
     combined = {}
     combined.update(INSTRUMENT_SYNONYMS)
@@ -423,7 +423,7 @@ def get_all_synonyms() -> Dict[str, List[str]]:
     return combined
 
 
-def get_orthographic_variants(term: str) -> List[str]:
+def get_orthographic_variants(term: str) -> list[str]:
     """Get both British and American spellings for a term.
 
     Handles:
@@ -473,7 +473,7 @@ def get_orthographic_variants(term: str) -> List[str]:
     return list(set(variants))
 
 
-def expand_with_monitoring_context(term: str) -> List[str]:
+def expand_with_monitoring_context(term: str) -> list[str]:
     """Expand neuromonitoring terms with full names and context."""
     term_upper = term.upper()
     expansions = [term]
@@ -487,7 +487,7 @@ def expand_with_monitoring_context(term: str) -> List[str]:
     return [e for e in expansions if e]
 
 
-def expand_with_complication_context(term: str) -> List[str]:
+def expand_with_complication_context(term: str) -> list[str]:
     """Expand complication terms with synonyms and types."""
     term_lower = term.lower()
     expansions = [term]

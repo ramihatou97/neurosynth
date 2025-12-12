@@ -49,7 +49,7 @@ def main():
     print(f"Unique queries: {len(pool)}")
 
     # Categorize
-    buckets = {k: [] for k in TARGETS.keys()}
+    buckets = {k: [] for k in TARGETS}
     adversarial_queries = []
 
     for q in pool:

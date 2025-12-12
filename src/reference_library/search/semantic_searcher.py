@@ -289,8 +289,8 @@ class SemanticSearcher:
             return 0
 
     def search(
-        self, query: str, n_results: int = 30, category_filter: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+        self, query: str, n_results: int = 30, category_filter: str | None = None
+    ) -> list[dict[str, Any]]:
         """
         Perform semantic search with optional category filtering.
 
@@ -508,7 +508,7 @@ class SemanticSearcher:
             return False
 
     def index_figures_batch(
-        self, figures: List[Dict[str, Any]], on_progress: Optional[callable] = None
+        self, figures: list[dict[str, Any]], on_progress: callable | None = None
     ) -> int:
         """
         Batch index figure captions.
@@ -545,8 +545,8 @@ class SemanticSearcher:
         return indexed
 
     def search_captions(
-        self, query: str, n_results: int = 20, image_types: Optional[List[str]] = None
-    ) -> List[Dict[str, Any]]:
+        self, query: str, n_results: int = 20, image_types: list[str] | None = None
+    ) -> list[dict[str, Any]]:
         """
         Search figure captions semantically.
 
@@ -611,7 +611,7 @@ class SemanticSearcher:
         n_text_results: int = 30,
         n_caption_results: int = 15,
         include_captions: bool = True,
-    ) -> Dict[str, List[Dict[str, Any]]]:
+    ) -> dict[str, list[dict[str, Any]]]:
         """
         Perform combined search across text and captions.
 

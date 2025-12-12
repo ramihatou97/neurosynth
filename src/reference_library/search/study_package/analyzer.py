@@ -33,19 +33,19 @@ class QueryAnalysis:
     original_query: str
 
     # Detected components
-    primary_region: Optional[str] = None
-    subregion: Optional[str] = None
-    domain: Optional[str] = None  # oncology, vascular, functional
+    primary_region: str | None = None
+    subregion: str | None = None
+    domain: str | None = None  # oncology, vascular, functional
 
     # Detected categories
-    detected_categories: Set[str] = field(default_factory=set)
+    detected_categories: set[str] = field(default_factory=set)
 
     # Confidence metrics
     confidence: float = 0.0
     match_count: int = 0
 
     @property
-    def region_tags(self) -> Set[str]:
+    def region_tags(self) -> set[str]:
         """Get all applicable region tags for foundation lookup."""
         tags = set()
         if self.primary_region:
@@ -57,7 +57,7 @@ class QueryAnalysis:
         return tags
 
     @property
-    def foundation_keys(self) -> List[str]:
+    def foundation_keys(self) -> list[str]:
         """Get ordered list of keys for foundation lookup."""
         # More specific first
         keys = []
@@ -95,9 +95,9 @@ class QueryAnalyzer:
 
     def __init__(
         self,
-        regions: Optional[Dict] = None,
-        categories: Optional[Dict] = None,
-        procedure_map: Optional[Dict] = None,
+        regions: dict | None = None,
+        categories: dict | None = None,
+        procedure_map: dict | None = None,
     ):
         """
         Initialize analyzer with taxonomy data.
@@ -117,7 +117,7 @@ class QueryAnalyzer:
     def _compile_patterns(self) -> None:
         """Pre-compile regex patterns for region and category detection."""
         # Compile region keyword patterns
-        self._region_keywords: Dict[str, re.Pattern] = {}
+        self._region_keywords: dict[str, re.Pattern] = {}
         for region, data in self.regions.items():
             keywords = data.get("keywords", [])
             if keywords:
@@ -126,7 +126,7 @@ class QueryAnalyzer:
                 self._region_keywords[region] = re.compile(pattern, re.IGNORECASE)
 
         # Compile subregion patterns
-        self._subregion_keywords: Dict[str, Dict] = {}
+        self._subregion_keywords: dict[str, dict] = {}
         for region, data in self.regions.items():
             for subregion, subdata in data.get("subregions", {}).items():
                 keywords = subdata.get("keywords", [])
@@ -138,7 +138,7 @@ class QueryAnalyzer:
                     }
 
         # Compile category patterns
-        self._category_patterns: Dict[str, re.Pattern] = {}
+        self._category_patterns: dict[str, re.Pattern] = {}
         for category, data in self.categories.items():
             patterns = data.get("patterns", [])
             if patterns:
@@ -197,7 +197,7 @@ class QueryAnalyzer:
         logger.debug("Query analysis: %s", analysis)
         return analysis
 
-    def _detect_region(self, query: str) -> Tuple[Optional[str], int]:
+    def _detect_region(self, query: str) -> tuple[str | None, int]:
         """
         Detect primary anatomical region from query.
 
@@ -215,9 +215,7 @@ class QueryAnalyzer:
 
         return best_region, best_count
 
-    def _detect_subregion(
-        self, query: str, parent_region: Optional[str]
-    ) -> Optional[str]:
+    def _detect_subregion(self, query: str, parent_region: str | None) -> str | None:
         """Detect subregion within the primary region."""
         for subregion, data in self._subregion_keywords.items():
             # Only match subregions of the detected parent (or if no parent detected)
@@ -229,7 +227,7 @@ class QueryAnalyzer:
 
         return None
 
-    def _detect_domain(self, query: str) -> Optional[str]:
+    def _detect_domain(self, query: str) -> str | None:
         """Detect cross-cutting domain (oncology, vascular, functional)."""
         # Check for explicit domain indicators
         domain_indicators = {
@@ -258,7 +256,7 @@ class QueryAnalyzer:
 
         return None
 
-    def _infer_from_procedure(self, query: str) -> Tuple[Optional[str], Optional[str]]:
+    def _infer_from_procedure(self, query: str) -> tuple[str | None, str | None]:
         """Infer region from procedure keywords."""
         for procedure, region in self.procedure_map.items():
             if procedure in query:
@@ -271,9 +269,9 @@ class QueryAnalyzer:
 
         return None, None
 
-    def _detect_categories(self, query: str) -> Set[str]:
+    def _detect_categories(self, query: str) -> set[str]:
         """Detect implied knowledge categories from query."""
-        categories: Set[str] = set()
+        categories: set[str] = set()
 
         for category, pattern in self._category_patterns.items():
             if pattern.search(query):
@@ -297,10 +295,10 @@ class QueryAnalyzer:
 
     def _calculate_confidence(
         self,
-        region: Optional[str],
-        subregion: Optional[str],
-        domain: Optional[str],
-        categories: Set[str],
+        region: str | None,
+        subregion: str | None,
+        domain: str | None,
+        categories: set[str],
         match_count: int,
     ) -> float:
         """Calculate confidence score for the analysis."""
@@ -326,7 +324,7 @@ class QueryAnalyzer:
 
         return min(1.0, score)
 
-    def get_foundation_terms(self, analysis: QueryAnalysis) -> Dict[str, List[str]]:
+    def get_foundation_terms(self, analysis: QueryAnalysis) -> dict[str, list[str]]:
         """
         Get foundational search terms for the detected region.
 
@@ -336,7 +334,7 @@ class QueryAnalyzer:
         Returns:
             Dict mapping category to list of search terms
         """
-        foundations: Dict[str, List[str]] = {}
+        foundations: dict[str, list[str]] = {}
 
         for key in analysis.foundation_keys:
             if key in REGION_FOUNDATIONS:
@@ -348,8 +346,8 @@ class QueryAnalyzer:
 
         # Deduplicate while preserving order
         for category in foundations:
-            seen: Set[str] = set()
-            unique: List[str] = []
+            seen: set[str] = set()
+            unique: list[str] = []
             for term in foundations[category]:
                 if term not in seen:
                     seen.add(term)
@@ -363,7 +361,7 @@ class QueryAnalyzer:
 # CONVENIENCE FUNCTIONS
 # =============================================================================
 
-_default_analyzer: Optional[QueryAnalyzer] = None
+_default_analyzer: QueryAnalyzer | None = None
 
 
 def get_analyzer() -> QueryAnalyzer:
@@ -379,7 +377,7 @@ def analyze_query(query: str) -> QueryAnalysis:
     return get_analyzer().analyze(query)
 
 
-def get_foundations_for_query(query: str) -> Dict[str, List[str]]:
+def get_foundations_for_query(query: str) -> dict[str, list[str]]:
     """Convenience function to get foundational terms for a query."""
     analyzer = get_analyzer()
     analysis = analyzer.analyze(query)

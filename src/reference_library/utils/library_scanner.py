@@ -1,8 +1,9 @@
 """Library directory structure scanner and parser."""
 
 import re
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Optional
 
 import fitz  # PyMuPDF
 
@@ -27,7 +28,7 @@ class LibraryScanner:
         r"^Chapter\s*(\d+)[_:\s]+(.+)\.pdf$", re.IGNORECASE
     )
 
-    def __init__(self, library_path: Path, database: Optional[Database] = None):
+    def __init__(self, library_path: Path, database: Database | None = None):
         self.library_path = library_path
         self.database = database
         self._cancelled = False  # Extraction cancellation flag
@@ -55,14 +56,14 @@ class LibraryScanner:
 
         return index
 
-    def _find_subdir(self, name_prefix: str) -> Optional[Path]:
+    def _find_subdir(self, name_prefix: str) -> Path | None:
         """Find subdirectory by prefix (handles trailing spaces)."""
         for item in self.library_path.iterdir():
             if item.is_dir() and item.name.strip().lower() == name_prefix.lower():
                 return item
         return None
 
-    def _scan_series(self, series_dir: Path) -> Optional[BookSeries]:
+    def _scan_series(self, series_dir: Path) -> BookSeries | None:
         """Scan a book series directory."""
         series_name = self._identify_series(series_dir.name)
         display_name = config.KNOWN_SERIES.get(series_name, series_name)
@@ -98,7 +99,7 @@ class LibraryScanner:
         series_name: str,
         book_title: str,
         skip_page_count: bool = False,
-    ) -> Optional[ChapterMetadata]:
+    ) -> ChapterMetadata | None:
         """Parse chapter metadata from PDF filename.
 
         Args:
@@ -146,7 +147,7 @@ class LibraryScanner:
 
     def _parse_entire_book(
         self, pdf_path: Path, skip_page_count: bool = False
-    ) -> Optional[ChapterMetadata]:
+    ) -> ChapterMetadata | None:
         """Parse metadata for a complete book PDF."""
         filename = pdf_path.stem
         try:
@@ -302,7 +303,7 @@ class LibraryScanner:
     def sync_library(
         self,
         max_workers: int = 4,
-        progress_callback: Optional[Callable[[int, int], None]] = None,
+        progress_callback: Callable[[int, int], None] | None = None,
         force: bool = False,
     ) -> dict:
         """
@@ -480,7 +481,7 @@ class LibraryScanner:
     def extract_figures(
         self,
         pdf_path: Path,
-        output_dir: Optional[Path] = None,
+        output_dir: Path | None = None,
         force: bool = False,
         hybrid: bool = True,
     ) -> list[dict]:
@@ -588,8 +589,8 @@ class LibraryScanner:
 
     def extract_figures_batch(
         self,
-        pdf_paths: Optional[list[Path]] = None,
-        on_progress: Optional[Callable[[str, int, int], None]] = None,
+        pdf_paths: list[Path] | None = None,
+        on_progress: Callable[[str, int, int], None] | None = None,
         force: bool = False,
     ) -> dict:
         """Extract figures from multiple PDFs with batch processing.

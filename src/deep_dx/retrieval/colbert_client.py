@@ -138,7 +138,8 @@ class ColBERTClient:
             return []
 
         with open(output_path_host) as f:
-            return json.load(f)["results"]
+            data = json.load(f)
+            return data.get("results") or []
 
     def index(self, index_name: str, documents: list[str]):
         """Runs index.py inside the container."""

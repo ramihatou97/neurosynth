@@ -1,0 +1,793 @@
+{#
+  imaging.md.j2 - Neuroradiology/Imaging Synthesis Template v1.0
+  NeuroSynth Diagnostic Imaging Engine
+
+  Purpose: Generate comprehensive neuroradiology and diagnostic imaging chapters
+  Used by: SynthesisEngine for imaging-focused content
+
+  Expected Context Variables:
+    ctx.topic               -> The imaging topic (modality, condition, or region)
+    ctx.modality_focus      -> PRIMARY modality: MRI / CT / ANGIOGRAPHY / MULTIMODAL
+    ctx.clinical_context    -> The clinical/surgical context for imaging
+    ctx.imaging_purpose     -> DIAGNOSTIC / PREOPERATIVE / INTRAOPERATIVE / SURVEILLANCE
+    ctx.sources             -> List[TemplateSource] with source_id, source_name, content, figures
+    ctx.figures             -> List[TemplateFigure] with id, image_type, caption
+    ctx.target_audience     -> NEUROSURGEON / NEURORADIOLOGIST / TRAINEE
+#}
+---SYSTEM---
+You are synthesizing a neuroradiology/diagnostic imaging chapter matching the quality standards of:
+
+**Reference Textbooks**:
+- Osborn's Brain (3rd Edition) — Comprehensive neuroimaging reference
+- Brant and Helms Fundamentals of Diagnostic Radiology
+- Diagnostic Imaging: Brain (Amirsys/Elsevier)
+- Atlas of Neuroradiologic Embryology, Anatomy, and Variants
+
+**Quality Standards**:
+1. **Systematic Protocol Coverage**: Complete imaging protocols with sequences, parameters, and rationale
+2. **Pattern Recognition**: Key imaging patterns with differential diagnosis
+3. **Anatomical Correlation**: Imaging-anatomical correlation for surgical planning
+4. **Evidence-Based Sensitivity/Specificity**: Quantitative performance data with citations
+5. **Pitfalls and Mimics**: Common diagnostic traps and confounders
+6. **Surgical Relevance**: Imaging findings that change surgical approach
+
+**Writing Style**:
+- Technical precision with clinical applicability
+- Structured finding descriptions: Location → Signal/Density → Enhancement → Associated Features
+- Quantitative measurements where applicable (size thresholds, enhancement ratios)
+- Clear differential diagnosis reasoning
+
+---USER---
+# Neuroradiology/Imaging Chapter Synthesis
+
+## Imaging Topic
+
+<topic>{{ ctx.topic }}</topic>
+
+{% if ctx.modality_focus %}
+## Primary Modality Focus
+
+<modality_focus>{{ ctx.modality_focus }}</modality_focus>
+
+{% if ctx.modality_focus == 'MRI' %}
+**MRI-Focused Chapter**: Emphasize pulse sequences, signal characteristics, advanced techniques (perfusion, spectroscopy, DTI).
+{% elif ctx.modality_focus == 'CT' %}
+**CT-Focused Chapter**: Emphasize density characteristics, bone windows, CTA protocols, radiation optimization.
+{% elif ctx.modality_focus == 'ANGIOGRAPHY' %}
+**Angiography-Focused Chapter**: Emphasize vascular anatomy, catheter techniques, DSA interpretation, interventional correlation.
+{% elif ctx.modality_focus == 'MULTIMODAL' %}
+**Multimodal Chapter**: Integrate MRI, CT, and angiography with comparative strengths for each indication.
+{% endif %}
+{% endif %}
+
+{% if ctx.clinical_context %}
+## Clinical/Surgical Context
+
+<clinical_context>{{ ctx.clinical_context }}</clinical_context>
+{% endif %}
+
+{% if ctx.imaging_purpose %}
+## Imaging Purpose
+
+<imaging_purpose>{{ ctx.imaging_purpose }}</imaging_purpose>
+
+{% if ctx.imaging_purpose == 'DIAGNOSTIC' %}
+Focus on: Detection, characterization, differential diagnosis, staging.
+{% elif ctx.imaging_purpose == 'PREOPERATIVE' %}
+Focus on: Surgical planning, anatomical relationships, approach selection, risk assessment.
+{% elif ctx.imaging_purpose == 'INTRAOPERATIVE' %}
+Focus on: Real-time guidance, navigation correlation, extent of resection, complication detection.
+{% elif ctx.imaging_purpose == 'SURVEILLANCE' %}
+Focus on: Recurrence detection, treatment response, interval change assessment.
+{% endif %}
+{% endif %}
+
+---
+
+# SOURCE MATERIALS
+
+<source_material>
+{% for source in ctx.sources %}
+## Source: {{ source.source_name }} [ID: {{ source.source_id }}]
+
+{{ source.content }}
+
+{% if source.figures %}
+### Figures from this source:
+{% for fig in source.figures %}
+- [FIGURE_ID: {{ fig.id }}] Type: {{ fig.image_type }}, Caption: {{ fig.caption | default('No caption') | replace('\n', ' ') | truncate(100) }}
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+</source_material>
+
+---
+
+# Available Figures Catalog
+
+| ID | Type | Caption |
+|----|------|---------|
+{% for fig in ctx.figures %}
+| {{ fig.id }} | {{ fig.image_type }} | {{ fig.caption | default('No caption') | replace('\n', ' ') | truncate(80) }} |
+{% endfor %}
+
+---
+
+# FIGURE INTEGRATION PROTOCOL
+
+**CRITICAL**: Imaging chapters require MAXIMUM figure density.
+
+**Density Target**: 1 figure per 100-150 words (higher than other chapter types)
+- Imaging content is inherently visual — every finding needs illustration
+
+**Figure Placement Rules**:
+1. EVERY imaging finding described must have `[FIGURE: <id>]`
+2. EVERY sequence/protocol comparison needs side-by-side figures
+3. EVERY differential diagnosis needs comparative figure examples
+4. EVERY measurement criterion needs annotated figure
+
+**Figure Type Mapping for Imaging Chapters**:
+
+| Content Type | Required Figure Types |
+|--------------|----------------------|
+| Protocol description | Protocol diagram, sequence comparison |
+| Signal characteristics | Annotated MRI showing signal on each sequence |
+| Density characteristics | CT windows showing lesion appearance |
+| Enhancement pattern | Pre/post contrast comparison |
+| Differential diagnosis | Side-by-side comparison of mimics |
+| Anatomical correlation | Imaging-anatomy overlay |
+| Measurement criteria | Annotated measurement example |
+
+---
+
+# CITATION FORMAT
+
+Use XML citation anchoring: `<cite source="SOURCE_ID"/>`
+
+**Citation Requirements**:
+- Sensitivity/specificity values require citation
+- Protocol recommendations require citation
+- Diagnostic criteria require citation
+- Measurement thresholds require citation
+
+---
+
+# IMAGING CHAPTER SCHEMA
+
+Generate the chapter following this structure:
+
+---
+
+## Executive Summary
+
+### Key Imaging Points
+| # | Finding | Clinical Significance |
+|---|---------|----------------------|
+| 1 | [Key finding 1] | [Impact on diagnosis/management] |
+| 2 | [Key finding 2] | [Impact on diagnosis/management] |
+| 3 | [Key finding 3] | [Impact on diagnosis/management] |
+
+### Quick Reference: Imaging Protocol
+
+| Modality | Key Sequences/Protocol | Primary Finding |
+|----------|----------------------|-----------------|
+| MRI | [Sequences] | [What to look for] |
+| CT | [Protocol] | [What to look for] |
+| Angio | [Technique] | [What to look for] |
+
+---
+
+## Section 1: Introduction to Imaging of {{ ctx.topic }}
+
+### Clinical Indications for Imaging
+- [Indication 1]: [When imaging is warranted]
+- [Indication 2]: [Specific clinical scenario]
+- [Indication 3]: [Emergency vs elective]
+
+### Modality Selection Algorithm
+
+```
+IF [Clinical scenario A]:
+  → Modality X as first-line
+  → Modality Y if inconclusive
+IF [Clinical scenario B]:
+  → Modality Z preferred
+```
+
+[FIGURE: modality_selection_algorithm]
+
+> **🎯 KEY POINT**
+> [Single most important imaging principle for this topic]
+
+---
+
+## Section 2: Imaging Protocols
+
+{% if ctx.modality_focus == 'MRI' or ctx.modality_focus == 'MULTIMODAL' %}
+### MRI Protocol
+
+#### Standard Protocol
+
+| Sequence | Parameters | Plane | Key Features Assessed |
+|:---------|:-----------|:------|:---------------------|
+| T1 | TR/TE: [ms/ms], Slice: [mm] | [Axial/Sagittal/Coronal] | [What this shows] |
+| T2 | TR/TE: [ms/ms], Slice: [mm] | [Plane] | [What this shows] |
+| FLAIR | TR/TE/TI: [ms/ms/ms] | [Plane] | [What this shows] |
+| T1 + Gad | [Same as T1] | [Planes] | [Enhancement pattern] |
+| DWI/ADC | b-value: [0, 1000] | Axial | [Diffusion restriction] |
+
+[FIGURE: mri_protocol_comparison]
+
+#### Advanced Sequences (When Indicated)
+
+| Sequence | Indication | What It Shows | Source |
+|:---------|:-----------|:--------------|:-------|
+| SWI/GRE | [Indication] | [Hemorrhage, calcification, etc.] | <cite source="X"/> |
+| MRS | [Indication] | [Metabolite ratios: NAA, Cho, Cr, Lac] | <cite source="X"/> |
+| Perfusion (DSC) | [Indication] | [rCBV, rCBF patterns] | <cite source="X"/> |
+| DTI/Tractography | [Indication] | [White matter tract integrity] | <cite source="X"/> |
+| ASL | [Indication] | [Perfusion without contrast] | <cite source="X"/> |
+
+[FIGURE: advanced_mri_sequences]
+
+{% endif %}
+
+{% if ctx.modality_focus == 'CT' or ctx.modality_focus == 'MULTIMODAL' %}
+### CT Protocol
+
+#### Standard Protocol
+
+| Phase | Parameters | Window | Key Features |
+|:------|:-----------|:-------|:-------------|
+| Non-contrast | [kVp, mAs, slice] | Brain (W:80 H:40) | [Density, calcification, acute blood] |
+| Bone | Same | Bone (W:2000 H:500) | [Bony anatomy, erosion, hyperostosis] |
+| CTA | [Bolus timing] | Vascular | [Vessel patency, aneurysm, stenosis] |
+| Post-contrast | [Delay] | Brain | [Enhancement pattern] |
+
+[FIGURE: ct_window_comparison]
+
+#### CTA Technique
+
+| Parameter | Specification | Rationale |
+|:----------|:--------------|:----------|
+| Contrast volume | [mL] | [Based on patient weight] |
+| Injection rate | [mL/s] | [Optimal opacification] |
+| Bolus tracking | [HU threshold, ROI location] | [Timing] |
+| Coverage | [Skull base to vertex / Arch to vertex] | [Indication-dependent] |
+
+{% endif %}
+
+{% if ctx.modality_focus == 'ANGIOGRAPHY' or ctx.modality_focus == 'MULTIMODAL' %}
+### Angiography Protocol
+
+#### DSA Technique
+
+| Injection | Volume/Rate | Views | Structures Assessed |
+|:----------|:------------|:------|:--------------------|
+| [Vessel] | [mL at mL/s] | [AP, Lateral, Oblique] | [Specific structures] |
+| [Vessel 2] | [mL at mL/s] | [Views] | [Structures] |
+
+[FIGURE: angiography_views]
+
+#### Standard Projections
+
+| Projection | Best For | Pitfalls |
+|:-----------|:---------|:---------|
+| AP | [Structures] | [What can be missed] |
+| Lateral | [Structures] | [Superimposition issues] |
+| Oblique | [Structures] | [Angle requirements] |
+| Working view | [Intervention-specific] | [Foreshortening] |
+
+{% endif %}
+
+---
+
+## Section 3: Normal Imaging Anatomy
+
+### Key Anatomical Landmarks
+
+| Structure | MRI Appearance | CT Appearance | Clinical Relevance |
+|:----------|:---------------|:--------------|:------------------|
+| [Structure 1] | T1: [signal], T2: [signal] | [HU range] | [Surgical landmark] |
+| [Structure 2] | T1: [signal], T2: [signal] | [HU range] | [Relation to pathology] |
+
+[FIGURE: normal_anatomy_mri]
+[FIGURE: normal_anatomy_ct]
+
+### Anatomical Variants
+
+| Variant | Prevalence | Imaging Appearance | Surgical Implications |
+|:--------|:-----------|:-------------------|:---------------------|
+| [Variant 1] | [%] | [Description] | [What surgeon needs to know] |
+| [Variant 2] | [%] | [Description] | [Implications] |
+
+[FIGURE: anatomical_variants]
+
+---
+
+## Section 4: Pathological Imaging Findings
+
+### Signal/Density Characteristics
+
+{% if ctx.modality_focus == 'MRI' or ctx.modality_focus == 'MULTIMODAL' %}
+#### MRI Signal Characteristics
+
+| Sequence | Typical Finding | Significance | Source |
+|:---------|:----------------|:-------------|:-------|
+| T1 | [Hypo/Iso/Hyperintense] | [What this indicates] | <cite source="X"/> |
+| T2 | [Signal pattern] | [Interpretation] | <cite source="X"/> |
+| FLAIR | [Signal pattern] | [Edema, gliosis, etc.] | <cite source="X"/> |
+| T1+Gad | [Enhancement pattern] | [BBB breakdown, tumor grade] | <cite source="X"/> |
+| DWI | [Restricted/Facilitated] | [Cellularity, ischemia] | <cite source="X"/> |
+| ADC | [Low/High] | [Confirmation of DWI] | <cite source="X"/> |
+
+[FIGURE: mri_t1_typical]
+[FIGURE: mri_t2_typical]
+[FIGURE: mri_flair_typical]
+[FIGURE: mri_contrast_typical]
+[FIGURE: mri_dwi_typical]
+
+{% endif %}
+
+{% if ctx.modality_focus == 'CT' or ctx.modality_focus == 'MULTIMODAL' %}
+#### CT Density Characteristics
+
+| Phase | Typical Finding | HU Range | Significance |
+|:------|:----------------|:---------|:-------------|
+| Non-contrast | [Hypo/Iso/Hyperdense] | [HU] | [Interpretation] |
+| Post-contrast | [Enhancement degree] | [Δ HU] | [Vascularity] |
+
+[FIGURE: ct_noncontrast_typical]
+[FIGURE: ct_contrast_typical]
+
+{% endif %}
+
+### Enhancement Patterns
+
+| Pattern | Description | Differential Diagnosis | Source |
+|:--------|:------------|:----------------------|:-------|
+| Homogeneous | Uniform enhancement throughout | [DDx list] | <cite source="X"/> |
+| Ring/Peripheral | Rim enhancement with central non-enhancement | [DDx list] | <cite source="X"/> |
+| Heterogeneous | Patchy, irregular enhancement | [DDx list] | <cite source="X"/> |
+| Non-enhancing | No appreciable enhancement | [DDx list] | <cite source="X"/> |
+| Nodular | Multiple enhancing nodules | [DDx list] | <cite source="X"/> |
+
+[FIGURE: enhancement_patterns_comparison]
+
+### Associated Imaging Features
+
+| Feature | Imaging Appearance | Clinical Significance |
+|:--------|:-------------------|:---------------------|
+| Edema | [T2/FLAIR hyperintense, hypodense CT] | [Mass effect, grade] |
+| Mass effect | [Midline shift mm, effacement] | [Surgical urgency] |
+| Hemorrhage | [Signal by age] | [Etiology clues] |
+| Calcification | [CT hyperdense, MRI signal void] | [DDx implications] |
+| Cyst formation | [CSF signal] | [Tumor type] |
+| Necrosis | [Non-enhancing center] | [High grade features] |
+
+[FIGURE: associated_features]
+
+---
+
+## Section 5: Diagnostic Criteria and Grading
+
+### Imaging-Based Diagnostic Criteria
+
+| Criterion | Imaging Finding | Required/Supportive | Sensitivity | Specificity |
+|:----------|:----------------|:--------------------|:------------|:------------|
+| Major 1 | [Finding] | Required | [%] | [%] |
+| Major 2 | [Finding] | Required | [%] | [%] |
+| Minor 1 | [Finding] | Supportive | [%] | [%] |
+| Minor 2 | [Finding] | Supportive | [%] | [%] |
+
+> **📊 DIAGNOSTIC ACCURACY**
+> - Sensitivity: [%] (95% CI: [range]) for [criteria set]
+> - Specificity: [%] (95% CI: [range])
+> - PPV/NPV: [%]/[%]
+> - Source: <cite source="X"/>
+
+### Imaging-Based Classification/Grading
+
+| Grade/Stage | Imaging Features | Clinical Correlation |
+|:------------|:-----------------|:--------------------|
+| Grade I | [Imaging criteria] | [Prognosis/behavior] |
+| Grade II | [Imaging criteria] | [Prognosis/behavior] |
+| Grade III | [Imaging criteria] | [Prognosis/behavior] |
+| Grade IV | [Imaging criteria] | [Prognosis/behavior] |
+
+[FIGURE: grading_comparison]
+
+### Size and Measurement Criteria
+
+| Measurement | Technique | Threshold | Clinical Implication |
+|:------------|:----------|:----------|:--------------------|
+| Maximum diameter | [Sequence/plane] | [mm] | [Treatment threshold] |
+| Volume | [3D volumetric] | [cm³] | [Staging] |
+| Enhancement ratio | [(Post-Pre)/Pre × 100] | [%] | [Grade correlation] |
+| rCBV ratio | [Lesion/NAWM] | [ratio] | [Grade prediction] |
+
+[FIGURE: measurement_technique]
+
+---
+
+## Section 6: Differential Diagnosis
+
+### Primary Differential Diagnosis
+
+| Entity | Key Discriminating Features | Distinguishing from {{ ctx.topic }} |
+|:-------|:---------------------------|:------------------------------------|
+| [DDx 1] | [Imaging hallmarks] | [Specific differences] |
+| [DDx 2] | [Imaging hallmarks] | [Specific differences] |
+| [DDx 3] | [Imaging hallmarks] | [Specific differences] |
+| [DDx 4] | [Imaging hallmarks] | [Specific differences] |
+
+[FIGURE: differential_comparison]
+
+### Imaging Mimics and Pitfalls
+
+> **⚠️ IMAGING PITFALL**: [Common Mimic]
+> **Appearance**: [How it looks similar]
+> **Key Discriminator**: [How to tell them apart]
+> **Clinical Pearl**: [When to suspect the mimic]
+
+| Mimic | Shared Features | Distinguishing Features | Clinical Context |
+|:------|:----------------|:-----------------------|:-----------------|
+| [Mimic 1] | [Overlapping appearance] | [Differentiating feature] | [When to suspect] |
+| [Mimic 2] | [Overlapping appearance] | [Differentiating feature] | [When to suspect] |
+
+[FIGURE: mimics_comparison]
+
+### Pattern-Based Differential Algorithm
+
+```
+IF [Signal/Density pattern]:
+  AND IF [Enhancement pattern]:
+    AND IF [Location]:
+      → Most likely: [Diagnosis]
+      → Also consider: [Alternative]
+```
+
+[FIGURE: differential_algorithm]
+
+---
+
+## Section 7: Preoperative/Surgical Planning Imaging
+
+{% if ctx.imaging_purpose == 'PREOPERATIVE' or ctx.imaging_purpose == 'DIAGNOSTIC' %}
+### Critical Preoperative Information
+
+| Information Needed | Imaging Technique | How to Assess |
+|:-------------------|:------------------|:--------------|
+| Lesion margins | [Sequence] | [Methodology] |
+| Vascular relationships | [MRA/CTA] | [Vessels to identify] |
+| Eloquent cortex | [fMRI paradigms] | [Motor, language localization] |
+| White matter tracts | [DTI/Tractography] | [Tracts at risk] |
+| Venous anatomy | [MRV/CTV] | [Critical veins] |
+
+[FIGURE: preop_planning_mri]
+
+### Surgical Approach Implications
+
+| Imaging Finding | Surgical Implication | Alternative Approach |
+|:----------------|:--------------------|:--------------------|
+| [Finding 1] | [Standard approach A] | [If this changes] |
+| [Finding 2] | [Modification needed] | [Alternative] |
+| [Finding 3] | [Contraindication to X] | [Use Y instead] |
+
+[FIGURE: approach_selection_imaging]
+
+### Measurements for Surgical Planning
+
+| Measurement | From/To | Typical Value | Surgical Relevance |
+|:------------|:--------|:--------------|:------------------|
+| [Distance 1] | [Landmark A] → [Landmark B] | [mm ± SD] | [Trajectory planning] |
+| [Distance 2] | [Surface] → [Lesion] | [mm] | [Depth of dissection] |
+| [Angle] | [Reference] | [degrees] | [Approach angle] |
+
+{% endif %}
+
+---
+
+## Section 8: Advanced Imaging Techniques
+
+### Perfusion Imaging
+
+| Parameter | Calculation | Normal Value | Abnormal Threshold | Interpretation |
+|:----------|:------------|:-------------|:-------------------|:---------------|
+| rCBV | [Method] | [1.0 reference] | [>1.75 or >2.0] | [Tumor grade] |
+| rCBF | [Method] | [Ratio] | [Threshold] | [Interpretation] |
+| MTT | [Method] | [seconds] | [Threshold] | [Ischemia] |
+| Ktrans | [DCE method] | [value] | [Threshold] | [Permeability] |
+
+[FIGURE: perfusion_maps]
+
+### Spectroscopy (MRS)
+
+| Metabolite | Peak (ppm) | Normal Ratio | Abnormal Pattern | Significance |
+|:-----------|:-----------|:-------------|:-----------------|:-------------|
+| NAA | 2.0 | NAA/Cr: [1.5-2.0] | Decreased | [Neuronal loss] |
+| Choline | 3.2 | Cho/Cr: [0.5-1.0] | Increased | [Membrane turnover] |
+| Creatine | 3.0 | Reference | Stable | [Internal reference] |
+| Lactate | 1.3 | Absent | Present (doublet) | [Anaerobic metabolism] |
+| Lipid | 0.9-1.3 | Absent | Present | [Necrosis] |
+| Myoinositol | 3.5 | [Normal range] | Increased | [Gliosis] |
+
+[FIGURE: mrs_spectrum_comparison]
+
+### Diffusion Tensor Imaging (DTI)
+
+| Metric | Significance | Application |
+|:-------|:-------------|:------------|
+| FA (Fractional Anisotropy) | [White matter integrity] | [Tract involvement] |
+| MD (Mean Diffusivity) | [Cellularity, edema] | [Tumor characterization] |
+| Tractography | [3D tract visualization] | [Surgical planning] |
+
+[FIGURE: dti_tractography]
+
+### Functional MRI (fMRI)
+
+| Paradigm | Eloquent Area Mapped | Threshold | Surgical Distance Recommendation |
+|:---------|:--------------------|:----------|:---------------------------------|
+| Motor (finger tap) | Primary motor cortex | [t-value] | [>10mm from resection] |
+| Language (verb generation) | Broca's, Wernicke's | [t-value] | [>10mm] |
+| Sensory | Primary sensory cortex | [t-value] | [Distance] |
+
+[FIGURE: fmri_activation_maps]
+
+---
+
+## Section 9: Intraoperative Imaging
+
+{% if ctx.imaging_purpose == 'INTRAOPERATIVE' or ctx.imaging_purpose == 'PREOPERATIVE' %}
+### Intraoperative MRI (iMRI)
+
+| Application | Technique | Key Information | Impact on Surgery |
+|:------------|:----------|:----------------|:------------------|
+| Extent of resection | [T1+Gad, T2, FLAIR] | [Residual tumor detection] | [Continue resection Y/N] |
+| Brain shift compensation | [Re-registration] | [Updated navigation] | [Accuracy restoration] |
+| Complication detection | [DWI, T2*] | [Ischemia, hemorrhage] | [Immediate intervention] |
+
+[FIGURE: iMRI_workflow]
+
+### Intraoperative Ultrasound (IOUS)
+
+| Finding | Echogenicity | Surgical Correlation |
+|:--------|:-------------|:--------------------|
+| Tumor | [Hyper/Hypo/Isoechoic] | [Margin definition] |
+| Edema | [Appearance] | [Boundary of abnormality] |
+| Vessels | [Doppler color] | [Preserve/coagulate] |
+| Resection cavity | [Anechoic] | [Completeness check] |
+
+[FIGURE: intraop_ultrasound]
+
+### Intraoperative Angiography
+
+| Indication | Technique | Assessed Parameters |
+|:-----------|:----------|:-------------------|
+| Aneurysm clipping | [ICG, DSA] | [Complete occlusion, parent patency] |
+| AVM resection | [ICG, DSA] | [Residual nidus, draining veins] |
+| Bypass | [ICG, Doppler] | [Graft patency, flow] |
+
+[FIGURE: intraop_angiography]
+
+{% endif %}
+
+---
+
+## Section 10: Post-Treatment Imaging and Surveillance
+
+### Immediate Postoperative Imaging
+
+| Timing | Modality | Key Findings | Interpretation |
+|:-------|:---------|:-------------|:---------------|
+| <24 hours | [MRI T1+Gad] | [Enhancement at margins] | [Residual vs blood products] |
+| <48 hours | [CT non-con] | [Blood, pneumocephalus] | [Expected vs complication] |
+| <72 hours | [DWI] | [Restriction patterns] | [Ischemia assessment] |
+
+[FIGURE: immediate_postop_imaging]
+
+### Treatment Response Criteria
+
+| Criteria System | Application | Response Categories |
+|:----------------|:------------|:-------------------|
+| RANO | [Gliomas] | CR, PR, SD, PD |
+| MacDonald | [Gliomas (older)] | [Categories] |
+| RECIST | [Metastases] | CR, PR, SD, PD |
+| mRANO | [LGG] | [Modified criteria] |
+
+> **📋 RANO CRITERIA**
+> **Complete Response**: Disappearance of all enhancing disease
+> **Partial Response**: ≥50% decrease in sum of products
+> **Stable Disease**: <50% decrease to <25% increase
+> **Progressive Disease**: ≥25% increase OR new lesion
+
+[FIGURE: response_assessment]
+
+### Pseudoprogression vs True Progression
+
+| Feature | Pseudoprogression | True Progression |
+|:--------|:------------------|:-----------------|
+| Timing | [2-6 months post-RT] | [Any time] |
+| Perfusion (rCBV) | [Normal to low] | [Elevated >2.0] |
+| MRS (Cho/NAA) | [Variable] | [Elevated] |
+| DWI/ADC | [Facilitated diffusion] | [Restricted] |
+| Clinical | [Stable/improving] | [Declining] |
+
+[FIGURE: pseudo_vs_true_progression]
+
+### Surveillance Protocol
+
+| Indication | Initial Surveillance | Ongoing Surveillance | Imaging Protocol |
+|:-----------|:--------------------|:--------------------|:-----------------|
+| [Condition 1] | [Q3 months × 2 years] | [Q6 months × 3 years, then annual] | [Sequences] |
+| [Condition 2] | [Schedule] | [Long-term] | [Protocol] |
+
+---
+
+## Section 11: Reporting Standards
+
+### Structured Reporting Template
+
+```markdown
+**CLINICAL HISTORY**: [Relevant history and indication]
+
+**TECHNIQUE**: [Sequences/protocol performed]
+
+**COMPARISON**: [Prior studies if available]
+
+**FINDINGS**:
+
+Location: [Anatomical location with precision]
+Size: [Max dimensions, volume if applicable]
+Signal/Density:
+  - T1: [Description]
+  - T2: [Description]
+  - FLAIR: [Description]
+  - DWI/ADC: [Restricted/Facilitated/Normal]
+  - Enhancement: [Pattern, degree]
+Mass Effect: [Midline shift mm, effacement]
+Associated Features: [Edema, hemorrhage, etc.]
+Comparison: [Change from prior]
+
+**IMPRESSION**:
+1. [Primary diagnosis with confidence level]
+2. [Differential considerations]
+3. [Recommendations for further workup/follow-up]
+```
+
+### Critical Findings Communication
+
+| Critical Finding | Urgency | Communication Required |
+|:-----------------|:--------|:----------------------|
+| Acute hemorrhage with mass effect | STAT | [Direct verbal to surgeon] |
+| Hydrocephalus with transependymal flow | STAT | [Direct verbal] |
+| Herniation | STAT | [Immediate escalation] |
+| Vascular occlusion | STAT | [Stroke team activation] |
+| New enhancement suggesting progression | Urgent | [Same-day communication] |
+
+---
+
+## Section 12: Evidence and Quality Metrics
+
+### Diagnostic Performance Summary
+
+| Study Type | Sensitivity | Specificity | Accuracy | n | Source |
+|:-----------|:------------|:------------|:---------|:--|:-------|
+| MRI for [indication] | [%] | [%] | [%] | [n] | <cite source="X"/> |
+| CT for [indication] | [%] | [%] | [%] | [n] | <cite source="X"/> |
+| Advanced technique | [%] | [%] | [%] | [n] | <cite source="X"/> |
+
+### Key Studies
+
+> **🔬 LANDMARK STUDY**: [Study Name/First Author, Year]
+> **Design**: [Study type, n]
+> **Key Finding**: [Primary result]
+> **Clinical Impact**: [How this changed practice]
+> **Source**: <cite source="X"/>
+
+---
+
+## Conclusions
+
+### Key Imaging Takeaways
+
+1. **Protocol**: [Most important protocol point]
+2. **Findings**: [Key diagnostic finding]
+3. **Differential**: [Most important DDx consideration]
+4. **Pitfall**: [Critical pitfall to avoid]
+5. **Surgical**: [Key preoperative information from imaging]
+
+### Imaging Algorithm Summary
+
+[FIGURE: imaging_algorithm_summary]
+
+---
+
+# QUALITY METRICS
+
+| Metric | Target | Requirement |
+|:-------|:-------|:------------|
+| Word count | {{ ctx.word_target | default(8000) }} ± 10% | Mandatory |
+| Figure density | 1 per 100-150 words | Mandatory (higher than other chapters) |
+| Citations | Every sensitivity/specificity value | Mandatory |
+| Tables | ≥2 per major section | Mandatory |
+| Protocol details | Complete for all modalities | Mandatory |
+| Differential diagnosis | ≥4 entities with comparison | Mandatory |
+
+---
+
+# SPECIALIZED IMAGING CONTENT
+
+{% if ctx.topic | lower | regex_search('tumor|neoplasm|glioma|meningioma|metastasis') %}
+## Tumor-Specific Imaging
+
+### WHO Grade Correlation
+
+| Grade | Enhancement | Perfusion (rCBV) | MRS (Cho/NAA) | Diffusion |
+|:------|:------------|:-----------------|:--------------|:----------|
+| I | [Pattern] | [Ratio] | [Ratio] | [Pattern] |
+| II | [Pattern] | [Ratio] | [Ratio] | [Pattern] |
+| III | [Pattern] | [Ratio] | [Ratio] | [Pattern] |
+| IV | [Pattern] | [Ratio] | [Ratio] | [Pattern] |
+
+[FIGURE: tumor_grade_imaging]
+
+{% endif %}
+
+{% if ctx.topic | lower | regex_search('vascular|aneurysm|avm|fistula|stroke') %}
+## Vascular-Specific Imaging
+
+### Aneurysm Characterization
+
+| Feature | Measurement | Significance |
+|:--------|:------------|:-------------|
+| Size | [Max diameter mm] | [Rupture risk] |
+| Morphology | [Saccular/Fusiform/Blister] | [Treatment planning] |
+| Neck width | [mm] | [Coiling feasibility] |
+| Dome-to-neck ratio | [Ratio] | [Device selection] |
+| PHASES score | [Score] | [Risk stratification] |
+
+[FIGURE: aneurysm_characterization]
+
+### Flow Dynamics
+
+| Parameter | Technique | Clinical Correlation |
+|:----------|:----------|:--------------------|
+| Inflow zone | [4D Flow MRI] | [Coil placement] |
+| Wall shear stress | [CFD] | [Rupture risk] |
+| Flow pattern | [DSA frame rate] | [Treatment planning] |
+
+{% endif %}
+
+{% if ctx.topic | lower | regex_search('spine|spinal|cord|vertebral') %}
+## Spine-Specific Imaging
+
+### Spinal Cord Signal Patterns
+
+| Finding | T1 Signal | T2 Signal | Interpretation |
+|:--------|:----------|:----------|:---------------|
+| Myelomalacia | [Hypointense] | [Hyperintense] | [Chronic injury] |
+| Edema | [Iso to hypo] | [Hyperintense] | [Acute/subacute] |
+| Hemorrhage | [Age-dependent] | [Age-dependent] | [Trauma, vascular] |
+| Syrinx | [Hypointense] | [Hyperintense, well-defined] | [CSF signal] |
+
+[FIGURE: spinal_cord_signal]
+
+{% endif %}
+
+---
+
+# OUTPUT FORMAT
+
+Generate the chapter in clean markdown format following the schema above.
+
+**Mandatory Elements**:
+- [ ] All figures integrated with [FIGURE: id] tags
+- [ ] All protocol tables completed
+- [ ] All sensitivity/specificity values cited
+- [ ] Differential diagnosis with imaging features
+- [ ] Structured reporting template
+- [ ] Measurement criteria defined
+
+Return the complete imaging chapter.
