@@ -99,11 +99,19 @@ from index.proposition_chunker import PropositionChunker
 # Restore real modules so other tests are unaffected
 import importlib
 
-sys.modules["src"] = importlib.import_module("src")
-sys.modules["src.config"] = importlib.import_module("src.config")
-sys.modules["neurosynth.config"] = importlib.import_module("neurosynth.config")
-sys.modules["neurosynth.models"] = importlib.import_module("neurosynth.models")
-sys.modules["structlog"] = importlib.import_module("structlog")
+try:
+    sys.modules["src"] = importlib.import_module("src")
+    sys.modules["src.config"] = importlib.import_module("src.config")
+    sys.modules["neurosynth.config"] = importlib.import_module("neurosynth.config")
+    sys.modules["neurosynth.models"] = importlib.import_module("neurosynth.models")
+    sys.modules["structlog"] = importlib.import_module("structlog")
+except ImportError:
+    sys.modules.pop("src", None)
+    sys.modules.pop("src.config", None)
+    sys.modules.pop("neurosynth.config", None)
+    sys.modules.pop("neurosynth.models", None)
+    sys.modules.pop("structlog", None)
+
 sys.modules.pop("index.chunker", None)
 sys.modules.pop("index.precision_search", None)
 sys.modules.pop("index.search", None)

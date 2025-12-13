@@ -83,11 +83,11 @@ from index.unified_search import SearchMode, UnifiedSearchEngine
 # Restore real modules so later tests aren't affected
 import importlib
 
-sys.modules["src"] = importlib.import_module("src")
-sys.modules["src.config"] = importlib.import_module("src.config")
-sys.modules["neurosynth.config"] = importlib.import_module("neurosynth.config")
-sys.modules["neurosynth.models"] = importlib.import_module("neurosynth.models")
-sys.modules["structlog"] = importlib.import_module("structlog")
+try:
+    sys.modules["structlog"] = importlib.import_module("structlog")
+except ImportError:
+    sys.modules.pop("structlog", None)
+
 sys.modules.pop("index.precision_search", None)
 sys.modules.pop("index.search", None)
 sys.modules.pop("index.chunker", None)
@@ -97,9 +97,19 @@ sys.modules.pop("neurosynth.ai.biomed_searcher", None)
 sys.modules.pop("deep_dx.retrieval.colbert_client", None)
 sys.modules.pop("deep_dx.retrieval.qdrant_retriever", None)
 sys.modules.pop("deep_dx.retrieval.bm25", None)
-import neurosynth as _neurosynth_pkg
+try:
+    import neurosynth as _neurosynth_pkg
 
-_neurosynth_pkg.config = sys.modules["neurosynth.config"]
+    sys.modules["src"] = importlib.import_module("src")
+    sys.modules["src.config"] = importlib.import_module("src.config")
+    sys.modules["neurosynth.config"] = importlib.import_module("neurosynth.config")
+    sys.modules["neurosynth.models"] = importlib.import_module("neurosynth.models")
+    _neurosynth_pkg.config = sys.modules["neurosynth.config"]
+except ImportError:
+    sys.modules.pop("src", None)
+    sys.modules.pop("src.config", None)
+    sys.modules.pop("neurosynth.config", None)
+    sys.modules.pop("neurosynth.models", None)
 
 
 @pytest.fixture

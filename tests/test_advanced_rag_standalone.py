@@ -10,7 +10,9 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 # Mock networkx
 mock_nx = MagicMock()
-mock_nx.__spec__ = importlib.util.find_spec("networkx")
+networkx_spec = importlib.util.find_spec("networkx")
+if networkx_spec:
+    mock_nx.__spec__ = networkx_spec
 sys.modules["networkx"] = mock_nx
 # Mock DiGraph behavior minimally
 mock_graph = MagicMock()
@@ -29,7 +31,10 @@ from src.index.raptor import Cluster, RecursiveSummarizer
 from src.models import Chunk, ChunkType
 
 # Restore real networkx for other tests
-sys.modules["networkx"] = importlib.import_module("networkx")
+try:
+    sys.modules["networkx"] = importlib.import_module("networkx")
+except ImportError:
+    sys.modules.pop("networkx", None)
 
 
 async def test_raptor_summarization():
