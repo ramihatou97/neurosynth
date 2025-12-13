@@ -1,4 +1,6 @@
 import asyncio
+import importlib
+import importlib.util
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -6,21 +8,11 @@ from unittest.mock import AsyncMock, MagicMock
 # Add src to path
 sys.path.append(str(Path(__file__).parent.parent))
 
-# MOCK DEPENDENCIES BEFORE IMPORTS
-sys.modules["structlog"] = MagicMock()
-sys.modules["neurosynth.config"] = MagicMock()
-sys.modules["src.config"] = MagicMock()
-sys.modules["rich"] = MagicMock()
-sys.modules["rich.console"] = MagicMock()
-# Mock rich and AI clients
-sys.modules["rich"] = MagicMock()
-sys.modules["rich.console"] = MagicMock()
-
-# REMOVED SKLEARN MOCK TO TEST FALLBACK PATH
-# sys.modules["sklearn"] = MagicMock()
-
 # Mock networkx
 mock_nx = MagicMock()
+networkx_spec = importlib.util.find_spec("networkx")
+if networkx_spec:
+    mock_nx.__spec__ = networkx_spec
 sys.modules["networkx"] = mock_nx
 # Mock DiGraph behavior minimally
 mock_graph = MagicMock()
@@ -37,6 +29,12 @@ mock_subgraph.edges.return_value = [("Aspirin", "Headache", {"relation": "TREATS
 from src.index.graph import KnowledgeGraphBuilder
 from src.index.raptor import Cluster, RecursiveSummarizer
 from src.models import Chunk, ChunkType
+
+# Restore real networkx for other tests
+try:
+    sys.modules["networkx"] = importlib.import_module("networkx")
+except ImportError:
+    sys.modules.pop("networkx", None)
 
 
 async def test_raptor_summarization():

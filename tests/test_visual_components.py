@@ -42,6 +42,27 @@ from index.late_fusion import LateFusionRanker, VisualCandidate
 from ingest.extraction_node import ExtractionNode
 from neurosynth.ai.visual_verifier import VerificationResult, VisualVerifier
 
+# Restore real modules for later tests
+import importlib
+import neurosynth as _neurosynth_pkg
+
+try:
+    sys.modules["src.config"] = importlib.import_module("src.config")
+    sys.modules["neurosynth.config"] = importlib.import_module("neurosynth.config")
+    _neurosynth_pkg.config = sys.modules["neurosynth.config"]
+except ImportError:
+    sys.modules.pop("src.config", None)
+    sys.modules.pop("neurosynth.config", None)
+
+try:
+    sys.modules["structlog"] = importlib.import_module("structlog")
+except ImportError:
+    sys.modules.pop("structlog", None)
+sys.modules.pop("index.precision_search", None)
+sys.modules.pop("src.index.precision_search", None)
+sys.modules.pop("src.ingest.image_extractor", None)
+sys.modules.pop("src.ingest.smart_extractor", None)
+
 # -----------------------------------------------------------------------------
 # 1. ExtractionNode Tests
 # -----------------------------------------------------------------------------
