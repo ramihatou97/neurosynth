@@ -96,6 +96,19 @@ import pytest
 # END MOCKING
 from index.proposition_chunker import PropositionChunker
 
+# Restore real modules so other tests are unaffected
+import importlib
+
+sys.modules["src"] = importlib.import_module("src")
+sys.modules["src.config"] = importlib.import_module("src.config")
+sys.modules["neurosynth.config"] = importlib.import_module("neurosynth.config")
+sys.modules["neurosynth.models"] = importlib.import_module("neurosynth.models")
+sys.modules["structlog"] = importlib.import_module("structlog")
+sys.modules.pop("index.chunker", None)
+sys.modules.pop("index.precision_search", None)
+sys.modules.pop("index.search", None)
+sys.modules.pop("index.database", None)
+sys.modules.pop("neurosynth.integration.evidence", None)
 
 @pytest.fixture
 def chunker():
